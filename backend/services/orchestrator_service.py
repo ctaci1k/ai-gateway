@@ -42,11 +42,23 @@ class OrchestratorService:
 
         selected_model = None
 
+        selected_model_data = None
+
         selector_scores = {}
 
         selector_reason = None
 
-        if selector_enabled:
+        successful_providers = list(
+            all_responses.keys()
+        )
+
+        total_requested_models = (
+            len(provider_names)
+            if provider_names
+            else len(successful_providers)
+        )
+
+        if selector_enabled and all_responses:
 
             selector_input = {}
 
@@ -73,12 +85,26 @@ class OrchestratorService:
             )
 
             selector_scores = (
-                selector_result["scores"]
+                selector_result.get(
+                    "scores",
+                    {}
+                )
             )
 
             selector_reason = (
-                selector_result["reason"]
+                selector_result.get(
+                    "reason"
+                )
             )
+
+            if (
+                selected_model
+                and selected_model in all_responses
+            ):
+
+                selected_model_data = (
+                    all_responses[selected_model]
+                )
 
         else:
 
@@ -88,22 +114,68 @@ class OrchestratorService:
                     iter(all_responses)
                 )
 
-                best_response = (
-                    all_responses[
-                        selected_model
-                    ]["response"]
+                selected_model_data = (
+                    all_responses[selected_model]
                 )
 
+                best_response = (
+                    selected_model_data["response"]
+                )
+
+        compare_summary = {
+
+            "total_requested_models": (
+                total_requested_models
+            ),
+
+            "successful_models": len(
+                successful_providers
+            ),
+
+            "failed_models": len(
+                failed_providers
+            ),
+
+            "selected_model": selected_model
+        }
+
         response_payload = {
+
             "best_response": best_response,
+
             "selected_model": selected_model,
+
+            "selected_model_data": (
+                selected_model_data
+            ),
+
             "all_responses": all_responses,
-            "failed_providers": failed_providers,
-            "execution_metadata": execution_metadata,
+
+            "failed_providers": (
+                failed_providers
+            ),
+
+            "execution_metadata": (
+                execution_metadata
+            ),
+
             "compare_mode": compare_mode,
-            "selector_enabled": selector_enabled,
-            "selector_scores": selector_scores,
-            "selector_reason": selector_reason,
+
+            "selector_enabled": (
+                selector_enabled
+            ),
+
+            "selector_scores": (
+                selector_scores
+            ),
+
+            "selector_reason": (
+                selector_reason
+            ),
+
+            "compare_summary": (
+                compare_summary
+            ),
         }
 
         if compare_mode:

@@ -52,20 +52,63 @@ async def chat(request: ChatRequest):
             orchestration_result["selected_model"]
         )
 
+        selected_model_data = (
+            orchestration_result[
+                "selected_model_data"
+            ]
+        )
+
         all_responses = (
             orchestration_result["all_responses"]
         )
 
         failed_providers = (
-            orchestration_result["failed_providers"]
+            orchestration_result[
+                "failed_providers"
+            ]
+        )
+
+        execution_metadata = (
+            orchestration_result[
+                "execution_metadata"
+            ]
         )
 
         compare_mode = (
-            orchestration_result["compare_mode"]
+            orchestration_result[
+                "compare_mode"
+            ]
         )
 
         selector_enabled = (
-            orchestration_result["selector_enabled"]
+            orchestration_result[
+                "selector_enabled"
+            ]
+        )
+
+        selector_scores = (
+            orchestration_result[
+                "selector_scores"
+            ]
+        )
+
+        selector_reason = (
+            orchestration_result[
+                "selector_reason"
+            ]
+        )
+
+        compare_summary = (
+            orchestration_result[
+                "compare_summary"
+            ]
+        )
+
+        comparison_count = (
+            orchestration_result.get(
+                "comparison_count",
+                0
+            )
         )
 
         chat_buffer.add_message(
@@ -84,12 +127,46 @@ async def chat(request: ChatRequest):
         )
 
         return {
+
             "response": best_response,
+
             "selected_model": selected_model,
+
+            "selected_model_data": (
+                selected_model_data
+            ),
+
             "all_responses": all_responses,
-            "failed_providers": failed_providers,
+
+            "failed_providers": (
+                failed_providers
+            ),
+
+            "execution_metadata": (
+                execution_metadata
+            ),
+
             "compare_mode": compare_mode,
-            "selector_enabled": selector_enabled,
+
+            "selector_enabled": (
+                selector_enabled
+            ),
+
+            "selector_scores": (
+                selector_scores
+            ),
+
+            "selector_reason": (
+                selector_reason
+            ),
+
+            "compare_summary": (
+                compare_summary
+            ),
+
+            "comparison_count": (
+                comparison_count
+            ),
         }
 
     except Exception as error:
@@ -130,7 +207,10 @@ async def chat_stream(request: ChatRequest):
                 selected_model=request.provider,
 
                 all_responses={
-                    request.provider: full_response
+                    request.provider: {
+                        "response": full_response,
+                        "model": event["model"],
+                    }
                 },
 
                 failed_providers=[],

@@ -26,6 +26,8 @@ export default function Home() {
 
   const [providersInfo, setProvidersInfo] = useState([]);
 
+const [compareViewMode, setCompareViewMode] = useState("cards");
+
   const [memory, setMemory] = useState([]);
 
   const [streamingProvider, setStreamingProvider] = useState("");
@@ -45,6 +47,12 @@ export default function Home() {
   const [selectorScores, setSelectorScores] = useState({});
 
   const [selectorReason, setSelectorReason] = useState("");
+
+  const [compareSummary, setCompareSummary] = useState(null);
+
+  const [showAllResponses, setShowAllResponses] = useState(true);
+
+  const [selectedResponseCard, setSelectedResponseCard] = useState(null);
 
 
   useEffect(() => {
@@ -142,6 +150,8 @@ export default function Home() {
     setSelectorScores({});
 
     setSelectorReason("");
+
+    setCompareSummary(null);
   }
 
 
@@ -170,6 +180,8 @@ export default function Home() {
     setSelectorScores({});
 
     setSelectorReason("");
+
+    setCompareSummary(null);
 
     try {
 
@@ -206,7 +218,7 @@ export default function Home() {
         );
 
         setExecutionMetadata(
-          data.execution_metadata
+          data.execution_metadata || []
         );
 
         setSelectorScores(
@@ -215,6 +227,10 @@ export default function Home() {
 
         setSelectorReason(
           data.selector_reason || ""
+        );
+
+        setCompareSummary(
+          data.compare_summary || null
         );
 
       } else {
@@ -366,7 +382,7 @@ export default function Home() {
 
     <div className="min-h-screen bg-gray-950 text-white p-8">
 
-      <div className="max-w-7xl mx-auto flex flex-col gap-6">
+      <div className="max-w-7xl mx-auto flex flex-col gap-6 pb-20">
 
         <h1 className="text-5xl font-bold text-center">
           AI Gateway
@@ -453,7 +469,7 @@ export default function Home() {
           }}
         />
 
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap items-center gap-4">
 
           <button
             onClick={sendMessage}
@@ -485,6 +501,38 @@ export default function Home() {
         </div>
 
         <div className="border border-gray-700 p-5 rounded bg-gray-900 min-h-[260px]">
+
+  {!compareMode && streamingProvider && (
+
+    <div className="flex items-center justify-between mb-5 border border-gray-800 rounded p-3 bg-gray-950">
+
+      <div>
+
+        <p className="text-sm text-gray-400">
+          Streaming Provider
+        </p>
+
+        <p className="text-blue-400 font-bold">
+          {streamingProvider}
+        </p>
+
+      </div>
+
+      <div className="text-right">
+
+        <p className="text-sm text-gray-400">
+          Active Model
+        </p>
+
+        <p className="text-green-400 font-bold">
+          {streamingModel}
+        </p>
+
+      </div>
+
+    </div>
+
+  )}
 
           <div className="flex items-center justify-between mb-4">
 
@@ -522,24 +570,351 @@ export default function Home() {
 
           </div>
 
-          <p className="text-gray-200 whitespace-pre-wrap leading-7">
+<div className="flex flex-col gap-4">
 
-            {response}
+  {selectedModel && (
 
-            {loading && !compareMode && (
+    <div className="flex items-center gap-3">
 
-              <span className="animate-pulse text-blue-400">
-                ▋
-              </span>
+      <span className="bg-green-500 text-black px-3 py-1 rounded font-bold text-sm">
+        Best Response
+      </span>
 
-            )}
+      <span className="text-gray-400 text-sm">
+        {selectedModel}
+      </span>
 
-          </p>
+    </div>
+
+  )}
+
+  <p className="text-gray-200 whitespace-pre-wrap leading-7">
+
+    {response}
+
+    {loading && !compareMode && (
+
+      <span className="animate-pulse text-blue-400">
+        ▋
+      </span>
+
+    )}
+
+  </p>
+
+</div>
 
           <div ref={messagesEndRef} />
 
         </div>
 
+        {compareSummary && (
+
+          <div className="border border-blue-700 bg-gray-900 rounded p-5">
+
+            <h2 className="text-2xl font-bold text-blue-400 mb-4">
+              Compare Summary
+            </h2>
+
+            <div className="grid md:grid-cols-2 gap-4">
+
+              <div className="border border-gray-700 rounded p-4">
+                <p className="text-gray-400 text-sm">
+                  Successful Models
+                </p>
+
+                <p className="text-2xl font-bold text-green-400">
+                  {compareSummary.successful_models}
+                </p>
+              </div>
+
+              <div className="border border-gray-700 rounded p-4">
+                <p className="text-gray-400 text-sm">
+                  Failed Models
+                </p>
+
+                <p className="text-2xl font-bold text-red-400">
+                  {compareSummary.failed_models}
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
+        {Object.keys(allResponses).length > 0 && (
+
+          <div className="border border-purple-700 bg-gray-900 rounded p-5 shadow-2xl">
+
+<div className="flex items-center justify-between mb-6">
+
+  <div>
+
+    <h2 className="text-3xl font-bold text-purple-400">
+      Show All Responses
+    </h2>
+
+    <p className="text-gray-400 text-sm mt-1">
+      {Object.keys(allResponses).length} models
+    </p>
+
+  </div>
+
+  <div className="flex items-center gap-3">
+
+    <button
+
+      onClick={() => setCompareViewMode(
+        "cards"
+      )}
+
+      className={`px-3 py-2 rounded text-sm font-bold transition ${
+        compareViewMode === "cards"
+          ? "bg-blue-600"
+          : "bg-gray-800"
+      }`}
+    >
+
+      Cards
+
+    </button>
+
+    <button
+
+      onClick={() => setCompareViewMode(
+        "compact"
+      )}
+
+      className={`px-3 py-2 rounded text-sm font-bold transition ${
+        compareViewMode === "compact"
+          ? "bg-blue-600"
+          : "bg-gray-800"
+      }`}
+    >
+
+      Compact
+
+    </button>
+
+    <button
+
+      onClick={() => setShowAllResponses(
+        !showAllResponses
+      )}
+
+      className="bg-purple-600 hover:bg-purple-500 transition px-4 py-2 rounded font-bold text-sm"
+    >
+
+      {showAllResponses
+        ? "Hide Responses"
+        : "Show Responses"
+      }
+
+    </button>
+
+  </div>
+
+</div>
+            {showAllResponses && (
+              <div className="flex flex-col gap-5">
+
+                {Object.entries(allResponses).map(
+                  ([providerName, data]) => (
+
+<div
+
+  key={providerName}
+
+  onClick={() => setSelectedResponseCard(
+    providerName
+  )}
+
+className={`
+
+  border rounded-xl cursor-pointer transition bg-gray-950
+
+  ${compareViewMode === "compact"
+    ? "p-3"
+    : "p-5"
+  }
+    ${selectedResponseCard === providerName
+      ? "border-blue-500"
+      : "border-gray-700 hover:border-gray-500"
+    }
+
+  `}
+>
+
+                      <div className="flex items-center justify-between mb-4">
+
+                        <div>
+
+                          <p className="text-xl font-bold text-blue-400">
+                            {providerName}
+                          </p>
+
+<div className="flex flex-wrap gap-2 mt-2">
+
+  <span className="bg-gray-800 px-2 py-1 rounded text-xs text-gray-300">
+    {data.model}
+  </span>
+
+  <span className="bg-gray-800 px-2 py-1 rounded text-xs text-cyan-300">
+    {providerName}
+  </span>
+
+  <span className="bg-gray-800 px-2 py-1 rounded text-xs text-green-300">
+    {data.execution_time}s
+  </span>
+
+</div>
+
+                        </div>
+
+
+                      </div>
+
+                      <div className="border border-gray-800 rounded p-4 bg-gray-900/50">
+
+                        <p className="whitespace-pre-wrap leading-8 text-gray-200 text-[15px]">
+                          {data.response}
+                        </p>
+
+                      </div>
+
+<div className="mt-4 flex flex-wrap gap-3">
+
+  {selectedModel === providerName && (
+
+    <span className="bg-green-500 text-black px-3 py-1 rounded font-bold text-sm">
+      Selected Best Response
+    </span>
+
+  )}
+
+  {selectedResponseCard === providerName && (
+
+    <span className="bg-blue-500 text-black px-3 py-1 rounded font-bold text-sm">
+      Active Card
+    </span>
+
+  )}
+
+</div>
+                    </div>
+
+                  ))}
+
+              </div>
+            )}
+          </div>
+
+        )}
+
+{compareSummary?.failed_models > 0 && (
+
+  <div className="border border-red-700 p-5 rounded bg-gray-900">
+
+    <h2 className="text-2xl font-bold text-red-400 mb-4">
+      Failed Providers
+    </h2>
+
+    <div className="flex flex-col gap-4">
+
+      {executionMetadata
+
+        .filter((item) => !item.success)
+
+        .map((item) => (
+
+        <div
+
+          key={item.provider}
+
+          className="border border-gray-700 rounded p-4"
+        >
+
+          <p className="text-red-400 font-bold">
+            {item.provider}
+          </p>
+
+          <p className="text-gray-400 text-sm mt-2">
+            {item.error || "Unknown error"}
+          </p>
+
+        </div>
+
+      ))}
+
+    </div>
+
+  </div>
+
+)}
+
+{executionMetadata.length > 0 && (
+
+  <div className="border border-cyan-700 p-5 rounded bg-gray-900">
+
+    <h2 className="text-3xl font-bold mb-5 text-cyan-400">
+      Execution Metadata
+    </h2>
+
+    <div className="flex flex-col gap-4">
+
+      {executionMetadata.map((item) => (
+
+        <div
+
+          key={item.provider}
+
+          className="border border-gray-700 rounded p-4 flex items-center justify-between"
+        >
+
+          <div>
+
+            <p className="text-blue-400 font-bold">
+              {item.provider}
+            </p>
+
+            <p className="text-sm text-gray-400">
+              {item.model || "Unknown model"}
+            </p>
+
+          </div>
+
+          <div className="text-right">
+
+            <p className="text-green-400 font-bold">
+              {item.execution_time}s
+            </p>
+
+            <p className={`text-sm ${
+              item.success
+                ? "text-green-400"
+                : "text-red-400"
+            }`}>
+
+              {item.success
+                ? "Success"
+                : "Failed"
+              }
+
+            </p>
+
+          </div>
+
+        </div>
+
+      ))}
+
+    </div>
+
+  </div>
+
+)}
         {selectorEnabled && Object.keys(selectorScores).length > 0 && (
 
           <div className="border border-green-700 p-5 rounded bg-gray-900">
@@ -553,22 +928,22 @@ export default function Home() {
               {Object.entries(selectorScores).map(
                 ([providerName, score]) => (
 
-                <div
-                  key={providerName}
-                  className="border border-gray-700 rounded p-4 flex items-center justify-between"
-                >
+                  <div
+                    key={providerName}
+                    className="border border-gray-700 rounded p-4 flex items-center justify-between"
+                  >
 
-                  <p className="text-blue-400 font-bold">
-                    {providerName}
-                  </p>
+                    <p className="text-blue-400 font-bold">
+                      {providerName}
+                    </p>
 
-                  <p className="text-green-400">
-                    Score: {score}
-                  </p>
+                    <p className="text-green-400">
+                      Score: {score}
+                    </p>
 
-                </div>
+                  </div>
 
-              ))}
+                ))}
 
             </div>
 
