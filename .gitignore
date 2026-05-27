@@ -1,0 +1,47 @@
+# Frontend
+frontend/node_modules
+frontend/.next
+
+# Backend
+backend/venv
+backend/__pycache__
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+*.env
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+
+# Build
+dist
+build
+
+# Cache
+.cache
+
+# Next.js
+frontend/.turbo
+
+# Testing
+coverage
+
+# SQLite
+*.db
+
+# Temporary files
+*.tmp
+*.temp
