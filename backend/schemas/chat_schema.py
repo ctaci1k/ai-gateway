@@ -32,3 +32,4 @@ class ChatRequest(BaseModel):
     include_selector_analysis: bool = True
 
     include_all_responses: bool = True
+    
