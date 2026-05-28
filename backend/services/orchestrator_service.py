@@ -4,8 +4,8 @@ from services.provider_service import (
     ProviderService
 )
 
-from selector.ai_selector import (
-    AISelector
+from selector.response_selector import (
+    ResponseSelector
 )
 
 
@@ -38,6 +38,10 @@ class OrchestratorService:
             execution_result["execution_metadata"]
         )
 
+        execution_summary = (
+            execution_result["execution_summary"]
+        )
+
         best_response = ""
 
         selected_model = None
@@ -47,6 +51,14 @@ class OrchestratorService:
         selector_scores = {}
 
         selector_reason = None
+
+        selector_confidence = 0
+
+        selector_provider = None
+
+        selector_model = None
+
+        selector_fallback_used = False
 
         successful_providers = list(
             all_responses.keys()
@@ -71,17 +83,23 @@ class OrchestratorService:
                 )
 
             selector_result = (
-                AISelector.select_best_response(
+                await ResponseSelector.select_best_response(
+                    user_message=message,
                     responses=selector_input
                 )
             )
 
             selected_model = (
-                selector_result["selected_model"]
+                selector_result.get(
+                    "selected_model"
+                )
             )
 
             best_response = (
-                selector_result["best_response"]
+                selector_result.get(
+                    "best_response",
+                    ""
+                )
             )
 
             selector_scores = (
@@ -94,6 +112,32 @@ class OrchestratorService:
             selector_reason = (
                 selector_result.get(
                     "reason"
+                )
+            )
+
+            selector_confidence = (
+                selector_result.get(
+                    "confidence",
+                    0
+                )
+            )
+
+            selector_provider = (
+                selector_result.get(
+                    "selector_provider"
+                )
+            )
+
+            selector_model = (
+                selector_result.get(
+                    "selector_model"
+                )
+            )
+
+            selector_fallback_used = (
+                selector_result.get(
+                    "fallback_used",
+                    False
                 )
             )
 
@@ -136,20 +180,65 @@ class OrchestratorService:
                 failed_providers
             ),
 
-            "selected_model": selected_model
+            "selected_model": (
+                selected_model
+            ),
+
+            "selector_enabled": (
+                selector_enabled
+            ),
+
+            "total_compared_responses": len(
+                all_responses
+            )
+        }
+
+        selector_metadata = {
+
+            "selector_provider": (
+                selector_provider
+            ),
+
+            "selector_model": (
+                selector_model
+            ),
+
+            "selector_confidence": (
+                selector_confidence
+            ),
+
+            "fallback_used": (
+                selector_fallback_used
+            ),
+
+            "selected_model": (
+                selected_model
+            ),
+
+            "selection_reason": (
+                selector_reason
+            ),
+
+            "scores": (
+                selector_scores
+            )
         }
 
         response_payload = {
 
             "best_response": best_response,
 
-            "selected_model": selected_model,
+            "selected_model": (
+                selected_model
+            ),
 
             "selected_model_data": (
                 selected_model_data
             ),
 
-            "all_responses": all_responses,
+            "all_responses": (
+                all_responses
+            ),
 
             "failed_providers": (
                 failed_providers
@@ -159,7 +248,13 @@ class OrchestratorService:
                 execution_metadata
             ),
 
-            "compare_mode": compare_mode,
+            "execution_summary": (
+                execution_summary
+            ),
+
+            "compare_mode": (
+                compare_mode
+            ),
 
             "selector_enabled": (
                 selector_enabled
@@ -171,6 +266,10 @@ class OrchestratorService:
 
             "selector_reason": (
                 selector_reason
+            ),
+
+            "selector_metadata": (
+                selector_metadata
             ),
 
             "compare_summary": (

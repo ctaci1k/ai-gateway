@@ -3,9 +3,14 @@
 import asyncio
 import time
 
+from config.selector_config import (
+    SELECTOR_TIMEOUT
+)
+
 from providers.groq_provider import GroqProvider
 from providers.cerebras_provider import CerebrasProvider
 from providers.sambanova_provider import SambaNovaProvider
+from providers.gemini_provider import GeminiProvider
 
 
 class ProviderService:
@@ -80,9 +85,11 @@ class ProviderService:
 
         if not provider_names:
 
-            provider_names = (
-                ProviderService.get_all_providers()
-            )
+            provider_names = [
+                "groq",
+                "cerebras",
+                "sambanova"
+            ]
 
         unique_provider_names = list(
             dict.fromkeys(provider_names)
@@ -353,4 +360,35 @@ class ProviderService:
 
         return await provider.generate_structured(
             message
+        )
+
+    @staticmethod
+    async def execute_selector_ai(
+        message: str,
+        provider_name: str = "gemini"
+    ):
+
+        if provider_name == "gemini":
+
+            provider = GeminiProvider()
+
+        else:
+
+            provider = ProviderService.get_provider(
+                provider_name
+            )
+
+            if not provider:
+
+                provider = (
+                    ProviderService.get_default_provider()
+                )
+
+        return await asyncio.wait_for(
+
+            provider.generate_selector_response(
+                message
+            ),
+
+            timeout=SELECTOR_TIMEOUT
         )

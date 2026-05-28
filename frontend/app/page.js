@@ -26,7 +26,7 @@ export default function Home() {
 
   const [providersInfo, setProvidersInfo] = useState([]);
 
-const [compareViewMode, setCompareViewMode] = useState("cards");
+  const [compareViewMode, setCompareViewMode] = useState("cards");
 
   const [memory, setMemory] = useState([]);
 
@@ -46,6 +46,36 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
 
   const [selectorScores, setSelectorScores] = useState({});
 
+
+  const [
+    selectorMetadata,
+    setSelectorMetadata
+  ] = useState(null);
+
+  const [
+    selectorConfidence,
+    setSelectorConfidence
+  ] = useState(0);
+
+  const [
+    selectorProvider,
+    setSelectorProvider
+  ] = useState("");
+
+  const [
+    selectorJudgeModel,
+    setSelectorJudgeModel
+  ] = useState("");
+
+  const [
+    selectorFallbackUsed,
+    setSelectorFallbackUsed
+  ] = useState(false);
+  const [
+    executionSummary,
+    setExecutionSummary
+  ] = useState(null);
+
   const [selectorReason, setSelectorReason] = useState("");
 
   const [compareSummary, setCompareSummary] = useState(null);
@@ -53,6 +83,11 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
   const [showAllResponses, setShowAllResponses] = useState(true);
 
   const [selectedResponseCard, setSelectedResponseCard] = useState(null);
+
+  const [
+    userPreferences,
+    setUserPreferences
+  ] = useState(null);
 
 
   useEffect(() => {
@@ -96,6 +131,8 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
 
     loadMemory();
 
+    loadPreferences();
+
   }, []);
 
 
@@ -107,7 +144,6 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
 
   }, [response]);
 
-
   async function loadMemory() {
 
     const res = await fetch(
@@ -118,6 +154,19 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
 
     setMemory(data.memory);
   }
+
+async function loadPreferences() {
+
+  const res = await fetch(
+    "http://127.0.0.1:8000/preferences"
+  );
+
+  const data = await res.json();
+
+  setUserPreferences(
+    data.preferences
+  );
+}
 
 
   async function newChat() {
@@ -149,6 +198,10 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
 
     setSelectorScores({});
 
+    setSelectorMetadata(null);
+
+    setExecutionSummary(null);
+
     setSelectorReason("");
 
     setCompareSummary(null);
@@ -178,6 +231,10 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
     setExecutionMetadata([]);
 
     setSelectorScores({});
+
+    setSelectorMetadata(null);
+
+    setExecutionSummary(null);
 
     setSelectorReason("");
 
@@ -225,6 +282,33 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
           data.selector_scores || {}
         );
 
+        setSelectorMetadata(
+          data.selector_metadata || null
+        );
+
+        setSelectorConfidence(
+          data.selector_metadata
+            ?.selector_confidence || 0
+        );
+
+        setSelectorProvider(
+          data.selector_metadata
+            ?.selector_provider || ""
+        );
+
+        setSelectorJudgeModel(
+          data.selector_metadata
+            ?.selector_model || ""
+        );
+
+        setSelectorFallbackUsed(
+          data.selector_metadata
+            ?.fallback_used || false
+        );
+
+        setExecutionSummary(
+          data.execution_summary || null
+        );
         setSelectorReason(
           data.selector_reason || ""
         );
@@ -319,6 +403,8 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
       setMessage("");
 
       await loadMemory();
+
+      await loadPreferences();
 
     } catch (error) {
 
@@ -502,37 +588,37 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
 
         <div className="border border-gray-700 p-5 rounded bg-gray-900 min-h-[260px]">
 
-  {!compareMode && streamingProvider && (
+          {!compareMode && streamingProvider && (
 
-    <div className="flex items-center justify-between mb-5 border border-gray-800 rounded p-3 bg-gray-950">
+            <div className="flex items-center justify-between mb-5 border border-gray-800 rounded p-3 bg-gray-950">
 
-      <div>
+              <div>
 
-        <p className="text-sm text-gray-400">
-          Streaming Provider
-        </p>
+                <p className="text-sm text-gray-400">
+                  Streaming Provider
+                </p>
 
-        <p className="text-blue-400 font-bold">
-          {streamingProvider}
-        </p>
+                <p className="text-blue-400 font-bold">
+                  {streamingProvider}
+                </p>
 
-      </div>
+              </div>
 
-      <div className="text-right">
+              <div className="text-right">
 
-        <p className="text-sm text-gray-400">
-          Active Model
-        </p>
+                <p className="text-sm text-gray-400">
+                  Active Model
+                </p>
 
-        <p className="text-green-400 font-bold">
-          {streamingModel}
-        </p>
+                <p className="text-green-400 font-bold">
+                  {streamingModel}
+                </p>
 
-      </div>
+              </div>
 
-    </div>
+            </div>
 
-  )}
+          )}
 
           <div className="flex items-center justify-between mb-4">
 
@@ -570,39 +656,39 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
 
           </div>
 
-<div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4">
 
-  {selectedModel && (
+            {selectedModel && (
 
-    <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
 
-      <span className="bg-green-500 text-black px-3 py-1 rounded font-bold text-sm">
-        Best Response
-      </span>
+                <span className="bg-green-500 text-black px-3 py-1 rounded font-bold text-sm">
+                  Best Response
+                </span>
 
-      <span className="text-gray-400 text-sm">
-        {selectedModel}
-      </span>
+                <span className="text-gray-400 text-sm">
+                  {selectedModel}
+                </span>
 
-    </div>
+              </div>
 
-  )}
+            )}
 
-  <p className="text-gray-200 whitespace-pre-wrap leading-7">
+            <p className="text-gray-200 whitespace-pre-wrap leading-7">
 
-    {response}
+              {response}
 
-    {loading && !compareMode && (
+              {loading && !compareMode && (
 
-      <span className="animate-pulse text-blue-400">
-        ▋
-      </span>
+                <span className="animate-pulse text-blue-400">
+                  ▋
+                </span>
 
-    )}
+              )}
 
-  </p>
+            </p>
 
-</div>
+          </div>
 
           <div ref={messagesEndRef} />
 
@@ -648,104 +734,102 @@ const [compareViewMode, setCompareViewMode] = useState("cards");
 
           <div className="border border-purple-700 bg-gray-900 rounded p-5 shadow-2xl">
 
-<div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6">
 
-  <div>
+              <div>
 
-    <h2 className="text-3xl font-bold text-purple-400">
-      Show All Responses
-    </h2>
+                <h2 className="text-3xl font-bold text-purple-400">
+                  Show All Responses
+                </h2>
 
-    <p className="text-gray-400 text-sm mt-1">
-      {Object.keys(allResponses).length} models
-    </p>
+                <p className="text-gray-400 text-sm mt-1">
+                  {Object.keys(allResponses).length} models
+                </p>
 
-  </div>
+              </div>
 
-  <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
 
-    <button
+                <button
 
-      onClick={() => setCompareViewMode(
-        "cards"
-      )}
+                  onClick={() => setCompareViewMode(
+                    "cards"
+                  )}
 
-      className={`px-3 py-2 rounded text-sm font-bold transition ${
-        compareViewMode === "cards"
-          ? "bg-blue-600"
-          : "bg-gray-800"
-      }`}
-    >
+                  className={`px-3 py-2 rounded text-sm font-bold transition ${compareViewMode === "cards"
+                      ? "bg-blue-600"
+                      : "bg-gray-800"
+                    }`}
+                >
 
-      Cards
+                  Cards
 
-    </button>
+                </button>
 
-    <button
+                <button
 
-      onClick={() => setCompareViewMode(
-        "compact"
-      )}
+                  onClick={() => setCompareViewMode(
+                    "compact"
+                  )}
 
-      className={`px-3 py-2 rounded text-sm font-bold transition ${
-        compareViewMode === "compact"
-          ? "bg-blue-600"
-          : "bg-gray-800"
-      }`}
-    >
+                  className={`px-3 py-2 rounded text-sm font-bold transition ${compareViewMode === "compact"
+                      ? "bg-blue-600"
+                      : "bg-gray-800"
+                    }`}
+                >
 
-      Compact
+                  Compact
 
-    </button>
+                </button>
 
-    <button
+                <button
 
-      onClick={() => setShowAllResponses(
-        !showAllResponses
-      )}
+                  onClick={() => setShowAllResponses(
+                    !showAllResponses
+                  )}
 
-      className="bg-purple-600 hover:bg-purple-500 transition px-4 py-2 rounded font-bold text-sm"
-    >
+                  className="bg-purple-600 hover:bg-purple-500 transition px-4 py-2 rounded font-bold text-sm"
+                >
 
-      {showAllResponses
-        ? "Hide Responses"
-        : "Show Responses"
-      }
+                  {showAllResponses
+                    ? "Hide Responses"
+                    : "Show Responses"
+                  }
 
-    </button>
+                </button>
 
-  </div>
+              </div>
 
-</div>
+            </div>
             {showAllResponses && (
               <div className="flex flex-col gap-5">
 
                 {Object.entries(allResponses).map(
                   ([providerName, data]) => (
 
-<div
+                    <div
 
-  key={providerName}
+                      key={providerName}
 
-  onClick={() => setSelectedResponseCard(
-    providerName
-  )}
+                      onClick={() => setSelectedResponseCard(
+                        providerName
+                      )}
 
-className={`
+                      className={`
 
   border rounded-xl cursor-pointer transition bg-gray-950
 
   ${compareViewMode === "compact"
-    ? "p-3"
-    : "p-5"
-  }
+                          ? "p-3"
+                          : "p-5"
+                        }
     ${selectedResponseCard === providerName
-      ? "border-blue-500"
-      : "border-gray-700 hover:border-gray-500"
-    }
+                          ? "border-blue-500"
+                          : "border-gray-700 hover:border-gray-500"
+                        }
 
   `}
->
+                    >
 
                       <div className="flex items-center justify-between mb-4">
 
@@ -755,21 +839,21 @@ className={`
                             {providerName}
                           </p>
 
-<div className="flex flex-wrap gap-2 mt-2">
+                          <div className="flex flex-wrap gap-2 mt-2">
 
-  <span className="bg-gray-800 px-2 py-1 rounded text-xs text-gray-300">
-    {data.model}
-  </span>
+                            <span className="bg-gray-800 px-2 py-1 rounded text-xs text-gray-300">
+                              {data.model}
+                            </span>
 
-  <span className="bg-gray-800 px-2 py-1 rounded text-xs text-cyan-300">
-    {providerName}
-  </span>
+                            <span className="bg-gray-800 px-2 py-1 rounded text-xs text-cyan-300">
+                              {providerName}
+                            </span>
 
-  <span className="bg-gray-800 px-2 py-1 rounded text-xs text-green-300">
-    {data.execution_time}s
-  </span>
+                            <span className="bg-gray-800 px-2 py-1 rounded text-xs text-green-300">
+                              {data.execution_time}s
+                            </span>
 
-</div>
+                          </div>
 
                         </div>
 
@@ -784,25 +868,25 @@ className={`
 
                       </div>
 
-<div className="mt-4 flex flex-wrap gap-3">
+                      <div className="mt-4 flex flex-wrap gap-3">
 
-  {selectedModel === providerName && (
+                        {selectedModel === providerName && (
 
-    <span className="bg-green-500 text-black px-3 py-1 rounded font-bold text-sm">
-      Selected Best Response
-    </span>
+                          <span className="bg-green-500 text-black px-3 py-1 rounded font-bold text-sm">
+                            Selected Best Response
+                          </span>
 
-  )}
+                        )}
 
-  {selectedResponseCard === providerName && (
+                        {selectedResponseCard === providerName && (
 
-    <span className="bg-blue-500 text-black px-3 py-1 rounded font-bold text-sm">
-      Active Card
-    </span>
+                          <span className="bg-blue-500 text-black px-3 py-1 rounded font-bold text-sm">
+                            Active Card
+                          </span>
 
-  )}
+                        )}
 
-</div>
+                      </div>
                     </div>
 
                   ))}
@@ -813,108 +897,242 @@ className={`
 
         )}
 
-{compareSummary?.failed_models > 0 && (
+        {compareSummary?.failed_models > 0 && (
 
-  <div className="border border-red-700 p-5 rounded bg-gray-900">
+          <div className="border border-red-700 p-5 rounded bg-gray-900">
 
-    <h2 className="text-2xl font-bold text-red-400 mb-4">
-      Failed Providers
-    </h2>
+            <h2 className="text-2xl font-bold text-red-400 mb-4">
+              Failed Providers
+            </h2>
 
-    <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4">
 
-      {executionMetadata
+              {executionMetadata
 
-        .filter((item) => !item.success)
+                .filter((item) => !item.success)
 
-        .map((item) => (
+                .map((item) => (
 
-        <div
+                  <div
 
-          key={item.provider}
+                    key={item.provider}
 
-          className="border border-gray-700 rounded p-4"
-        >
+                    className="border border-gray-700 rounded p-4"
+                  >
 
-          <p className="text-red-400 font-bold">
-            {item.provider}
-          </p>
+                    <p className="text-red-400 font-bold">
+                      {item.provider}
+                    </p>
 
-          <p className="text-gray-400 text-sm mt-2">
-            {item.error || "Unknown error"}
-          </p>
+                    <p className="text-gray-400 text-sm mt-2">
+                      {item.error || "Unknown error"}
+                    </p>
 
-        </div>
+                  </div>
 
-      ))}
+                ))}
 
-    </div>
-
-  </div>
-
-)}
-
-{executionMetadata.length > 0 && (
-
-  <div className="border border-cyan-700 p-5 rounded bg-gray-900">
-
-    <h2 className="text-3xl font-bold mb-5 text-cyan-400">
-      Execution Metadata
-    </h2>
-
-    <div className="flex flex-col gap-4">
-
-      {executionMetadata.map((item) => (
-
-        <div
-
-          key={item.provider}
-
-          className="border border-gray-700 rounded p-4 flex items-center justify-between"
-        >
-
-          <div>
-
-            <p className="text-blue-400 font-bold">
-              {item.provider}
-            </p>
-
-            <p className="text-sm text-gray-400">
-              {item.model || "Unknown model"}
-            </p>
+            </div>
 
           </div>
 
-          <div className="text-right">
+        )}
+        {executionSummary && (
 
-            <p className="text-green-400 font-bold">
-              {item.execution_time}s
-            </p>
+          <div className="border border-yellow-700 p-5 rounded bg-gray-900">
 
-            <p className={`text-sm ${
-              item.success
-                ? "text-green-400"
-                : "text-red-400"
-            }`}>
+            <h2 className="text-3xl font-bold mb-5 text-yellow-400">
+              Execution Summary
+            </h2>
 
-              {item.success
-                ? "Success"
-                : "Failed"
-              }
+            <div className="grid md:grid-cols-3 gap-4">
 
-            </p>
+              <div className="border border-gray-700 rounded p-4">
+
+                <p className="text-gray-400 text-sm">
+                  Total Models
+                </p>
+
+                <p className="text-2xl font-bold text-blue-400">
+                  {executionSummary.total_models}
+                </p>
+
+              </div>
+
+              <div className="border border-gray-700 rounded p-4">
+
+                <p className="text-gray-400 text-sm">
+                  Successful
+                </p>
+
+                <p className="text-2xl font-bold text-green-400">
+                  {executionSummary.successful_models}
+                </p>
+
+              </div>
+
+              <div className="border border-gray-700 rounded p-4">
+
+                <p className="text-gray-400 text-sm">
+                  Average Time
+                </p>
+
+                <p className="text-2xl font-bold text-cyan-400">
+                  {executionSummary.average_execution_time}s
+                </p>
+
+              </div>
+
+            </div>
 
           </div>
 
-        </div>
+        )}
+        {executionMetadata.length > 0 && (
 
-      ))}
+          <div className="border border-cyan-700 p-5 rounded bg-gray-900">
 
-    </div>
+            <h2 className="text-3xl font-bold mb-5 text-cyan-400">
+              Execution Metadata
+            </h2>
 
-  </div>
+            <div className="flex flex-col gap-4">
 
-)}
+              {executionMetadata.map((item) => (
+
+                <div
+
+                  key={item.provider}
+
+                  className="border border-gray-700 rounded p-4 flex items-center justify-between"
+                >
+
+                  <div>
+
+                    <p className="text-blue-400 font-bold">
+                      {item.provider}
+                    </p>
+
+                    <p className="text-sm text-gray-400">
+                      {item.model || "Unknown model"}
+                    </p>
+
+                  </div>
+
+                  <div className="text-right">
+
+                    <p className="text-green-400 font-bold">
+                      {item.execution_time}s
+                    </p>
+
+                    <p className={`text-sm ${item.success
+                        ? "text-green-400"
+                        : "text-red-400"
+                      }`}>
+
+                      {item.success
+                        ? "Success"
+                        : "Failed"
+                      }
+
+                    </p>
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        )}
+        {userPreferences && (
+
+          <div className="border border-pink-700 p-5 rounded bg-gray-900">
+
+            <h2 className="text-3xl font-bold mb-5 text-pink-400">
+              User Preferences
+            </h2>
+
+            <div className="grid md:grid-cols-3 gap-4">
+
+              <div className="border border-gray-700 rounded p-4">
+
+                <p className="text-gray-400 text-sm">
+                  Total Messages
+                </p>
+
+                <p className="text-2xl font-bold text-blue-400">
+                  {userPreferences.total_messages}
+                </p>
+
+              </div>
+
+              <div className="border border-gray-700 rounded p-4">
+
+                <p className="text-gray-400 text-sm">
+                  Selector Usage
+                </p>
+
+                <p className="text-2xl font-bold text-yellow-400">
+                  {userPreferences.selector_usage_count}
+                </p>
+
+              </div>
+
+              <div className="border border-gray-700 rounded p-4">
+
+                <p className="text-gray-400 text-sm">
+                  Compare Usage
+                </p>
+
+                <p className="text-2xl font-bold text-green-400">
+                  {userPreferences.compare_mode_usage_count}
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="mt-5">
+
+              <h3 className="text-xl font-bold text-cyan-400 mb-3">
+                Preferred Models
+              </h3>
+
+              <div className="flex flex-wrap gap-3">
+
+                {Object.entries(
+                  userPreferences.preferred_models || {}
+                ).map(([model, count]) => (
+
+                  <div
+                    key={model}
+                    className="border border-gray-700 rounded px-4 py-2 bg-gray-950"
+                  >
+
+                    <p className="text-blue-400 font-bold">
+                      {model}
+                    </p>
+
+                    <p className="text-gray-400 text-sm">
+                      Selected {count} times
+                    </p>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
         {selectorEnabled && Object.keys(selectorScores).length > 0 && (
 
           <div className="border border-green-700 p-5 rounded bg-gray-900">
@@ -937,16 +1155,47 @@ className={`
                       {providerName}
                     </p>
 
-                    <p className="text-green-400">
-                      Score: {score}
-                    </p>
+                    <div className="text-right">
+
+                      <p className="text-green-400 font-bold">
+                        Score: {score}
+                      </p>
+
+
+                    </div>
 
                   </div>
 
                 ))}
 
             </div>
+<div className="mb-5 border border-gray-700 rounded p-4 bg-gray-950">
 
+  <div className="flex flex-wrap gap-3">
+
+<div className="bg-purple-600 px-3 py-1 rounded text-sm font-bold">
+  Judge: Gemini
+</div>
+
+<div className="bg-cyan-600 px-3 py-1 rounded text-sm font-bold">
+  gemini-2.5-flash-lite
+</div>
+
+    <div className="bg-green-600 px-3 py-1 rounded text-sm font-bold">
+      Confidence: {selectorConfidence}
+    </div>
+
+    {selectorFallbackUsed && (
+
+      <div className="bg-red-600 px-3 py-1 rounded text-sm font-bold">
+        FALLBACK USED
+      </div>
+
+    )}
+
+  </div>
+
+</div>
             {selectorReason && (
 
               <div className="mt-5 border border-gray-700 rounded p-4">

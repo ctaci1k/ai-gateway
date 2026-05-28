@@ -27,6 +27,8 @@ class CerebrasProvider(BaseProvider):
 
     supports_vision = False
 
+    supports_selector_execution = True
+
     max_context_window = 8192
 
     def __init__(self):
@@ -147,5 +149,48 @@ class CerebrasProvider(BaseProvider):
 
             return {
                 "error": "Invalid JSON response",
+                "raw_response": content
+            }
+
+    async def generate_selector_response(
+        self,
+        message: str
+    ):
+
+        response = self.client.chat.completions.create(
+
+            model=self.model,
+
+            temperature=0.1,
+
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an AI response evaluator. "
+                        "Return ONLY valid JSON."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": message
+                }
+            ]
+        )
+
+        content = response.choices[0].message.content
+
+        content = self.clean_json_response(
+            content
+        )
+
+        try:
+
+            return json.loads(content)
+
+        except Exception:
+
+            return {
+                "error": "Invalid selector JSON",
                 "raw_response": content
             }

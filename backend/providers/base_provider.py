@@ -1,7 +1,8 @@
 # backend/providers/base_provider.py
 
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Any
+from typing import AsyncGenerator
+from typing import Any
 
 
 class BaseProvider(ABC):
@@ -17,6 +18,8 @@ class BaseProvider(ABC):
     supports_tool_calling = False
 
     supports_vision = False
+
+    supports_selector_execution = True
 
     max_context_window = 8192
 
@@ -41,14 +44,44 @@ class BaseProvider(ABC):
     ) -> AsyncGenerator[str, None]:
         pass
 
+    async def generate_selector_response(
+        self,
+        message: str
+    ) -> Any:
+
+        return await self.generate_structured(
+            message
+        )
+
     def get_provider_info(self):
 
         return {
+
             "provider": self.provider_name,
+
             "model": self.model_name,
-            "supports_streaming": self.supports_streaming,
-            "supports_structured_output": self.supports_structured_output,
-            "supports_tool_calling": self.supports_tool_calling,
-            "supports_vision": self.supports_vision,
-            "max_context_window": self.max_context_window,
+
+            "supports_streaming": (
+                self.supports_streaming
+            ),
+
+            "supports_structured_output": (
+                self.supports_structured_output
+            ),
+
+            "supports_tool_calling": (
+                self.supports_tool_calling
+            ),
+
+            "supports_vision": (
+                self.supports_vision
+            ),
+
+            "supports_selector_execution": (
+                self.supports_selector_execution
+            ),
+
+            "max_context_window": (
+                self.max_context_window
+            ),
         }

@@ -74,6 +74,12 @@ async def chat(request: ChatRequest):
             ]
         )
 
+        execution_summary = (
+            orchestration_result[
+                "execution_summary"
+            ]
+        )
+
         compare_mode = (
             orchestration_result[
                 "compare_mode"
@@ -89,6 +95,12 @@ async def chat(request: ChatRequest):
         selector_scores = (
             orchestration_result[
                 "selector_scores"
+            ]
+        )
+
+        selector_metadata = (
+            orchestration_result[
+                "selector_metadata"
             ]
         )
 
@@ -111,6 +123,32 @@ async def chat(request: ChatRequest):
             )
         )
 
+        selector_provider = (
+            selector_metadata.get(
+                "selector_provider"
+            )
+        )
+
+        selector_model = (
+            selector_metadata.get(
+                "selector_model"
+            )
+        )
+
+        selector_confidence = (
+            selector_metadata.get(
+                "selector_confidence",
+                0
+            )
+        )
+
+        selector_fallback_used = (
+            selector_metadata.get(
+                "fallback_used",
+                False
+            )
+        )
+
         chat_buffer.add_message(
 
             user_message=request.message,
@@ -123,7 +161,47 @@ async def chat(request: ChatRequest):
 
             failed_providers=failed_providers,
 
-            selector_used=selector_enabled
+            selector_used=selector_enabled,
+
+            execution_metadata=(
+                execution_metadata
+            ),
+
+            execution_summary=(
+                execution_summary
+            ),
+
+            selector_scores=(
+                selector_scores
+            ),
+
+            selector_reason=(
+                selector_reason
+            ),
+
+            selector_metadata=(
+                selector_metadata
+            ),
+
+            compare_mode=(
+                compare_mode
+            ),
+
+            selector_provider=(
+                selector_provider
+            ),
+
+            selector_model=(
+                selector_model
+            ),
+
+            selector_confidence=(
+                selector_confidence
+            ),
+
+            selector_fallback_used=(
+                selector_fallback_used
+            )
         )
 
         return {
@@ -146,6 +224,10 @@ async def chat(request: ChatRequest):
                 execution_metadata
             ),
 
+            "execution_summary": (
+                execution_summary
+            ),
+
             "compare_mode": compare_mode,
 
             "selector_enabled": (
@@ -154,6 +236,10 @@ async def chat(request: ChatRequest):
 
             "selector_scores": (
                 selector_scores
+            ),
+
+            "selector_metadata": (
+                selector_metadata
             ),
 
             "selector_reason": (
@@ -215,7 +301,27 @@ async def chat_stream(request: ChatRequest):
 
                 failed_providers=[],
 
-                selector_used=False
+                selector_used=False,
+
+                execution_metadata=[],
+
+                execution_summary={},
+
+                selector_scores={},
+
+                selector_reason=None,
+
+                selector_metadata={},
+
+                compare_mode=False,
+
+                selector_provider=None,
+
+                selector_model=None,
+
+                selector_confidence=0,
+
+                selector_fallback_used=False
             )
 
         except Exception as error:
@@ -281,6 +387,16 @@ def get_memory():
 
     return {
         "memory": chat_buffer.get_messages()
+    }
+
+
+@router.get("/preferences")
+def get_preferences():
+
+    return {
+        "preferences": (
+            chat_buffer.get_user_preferences()
+        )
     }
 
 
