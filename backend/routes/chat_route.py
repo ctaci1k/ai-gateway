@@ -35,12 +35,19 @@ async def chat(request: ChatRequest):
                 request.provider
             ]
 
+        personalization_profile = (
+            chat_buffer.get_personalization_profile()
+        )
+
         orchestration_result = (
             await OrchestratorService.process_chat(
                 message=request.message,
                 provider_names=provider_names,
                 compare_mode=request.compare_mode,
-                selector_enabled=request.selector_enabled
+                selector_enabled=request.selector_enabled,
+                personalization_profile=(
+                    personalization_profile
+                )
             )
         )
 
@@ -149,6 +156,27 @@ async def chat(request: ChatRequest):
             )
         )
 
+        personalization_used = (
+            selector_metadata.get(
+                "personalization_enabled",
+                False
+            )
+        )
+
+        if (
+            request.manual_override
+            and request.manually_selected_model
+        ):
+
+            chat_buffer.track_manual_selection(
+
+                selected_model=(
+                    request.manually_selected_model
+                ),
+
+                selector_model=selected_model
+            )
+
         chat_buffer.add_message(
 
             user_message=request.message,
@@ -201,7 +229,19 @@ async def chat(request: ChatRequest):
 
             selector_fallback_used=(
                 selector_fallback_used
+            ),
+
+            manual_override=(
+                request.manual_override
+            ),
+
+            manually_selected_model=(
+                request.manually_selected_model
             )
+        )
+
+        updated_personalization_profile = (
+            chat_buffer.get_personalization_profile()
         )
 
         return {
@@ -253,6 +293,22 @@ async def chat(request: ChatRequest):
             "comparison_count": (
                 comparison_count
             ),
+
+            "personalization_profile": (
+                updated_personalization_profile
+            ),
+
+            "personalization_enabled": (
+                personalization_used
+            ),
+
+            "manual_override": (
+                request.manual_override
+            ),
+
+            "manually_selected_model": (
+                request.manually_selected_model
+            )
         }
 
     except Exception as error:
@@ -363,7 +419,51 @@ async def structured_chat(request: ChatRequest):
             "error": str(error)
         }
 
+@router.post("/preferences/manual-selection")
+async def manual_selection_feedback(
 
+    payload: dict
+
+):
+
+    try:
+
+        selected_model = payload.get(
+            "selected_model"
+        )
+
+        selector_model = payload.get(
+            "selector_model"
+        )
+
+        if not selected_model:
+
+            return {
+                "error": "selected_model required"
+            }
+
+        chat_buffer.track_manual_selection(
+
+            selected_model=selected_model,
+
+            selector_model=selector_model
+        )
+
+        return {
+
+            "success": True,
+
+            "personalization_profile": (
+
+                chat_buffer.get_personalization_profile()
+            )
+        }
+
+    except Exception as error:
+
+        return {
+            "error": str(error)
+        }
 @router.get("/providers")
 def get_providers():
 
@@ -396,6 +496,10 @@ def get_preferences():
     return {
         "preferences": (
             chat_buffer.get_user_preferences()
+        ),
+
+        "personalization_profile": (
+            chat_buffer.get_personalization_profile()
         )
     }
 

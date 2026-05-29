@@ -34,17 +34,66 @@ class ResponseSelector:
     ]
 
     @staticmethod
+    def build_personalization_context(
+        personalization_profile: dict
+    ):
+
+        if not personalization_profile:
+
+            return {}
+
+        return {
+
+            "preferred_models": (
+                personalization_profile.get(
+                    "preferred_models",
+                    {}
+                )
+            ),
+
+            "manual_model_selections": (
+                personalization_profile.get(
+                    "manual_model_selections",
+                    {}
+                )
+            ),
+
+            "favorite_response_style": (
+                personalization_profile.get(
+                    "favorite_response_style"
+                )
+            ),
+
+            "response_style_preferences": (
+                personalization_profile.get(
+                    "response_style_preferences",
+                    {}
+                )
+            )
+        }
+
+    @staticmethod
     async def select_best_response(
         user_message: str,
-        responses: dict
+        responses: dict,
+        personalization_profile: dict | None = None
     ):
 
         try:
 
+            personalization_context = (
+                ResponseSelector.build_personalization_context(
+                    personalization_profile or {}
+                )
+            )
+
             selector_prompt = (
                 SelectorPromptBuilder.build_selector_prompt(
                     user_message=user_message,
-                    responses=responses
+                    responses=responses,
+                    personalization_context=(
+                        personalization_context
+                    )
                 )
             )
 
@@ -124,6 +173,14 @@ class ResponseSelector:
 
                 "selector_model": (
                     SELECTOR_MODEL
+                ),
+
+                "personalization_used": bool(
+                    personalization_context
+                ),
+
+                "personalization_context": (
+                    personalization_context
                 )
             }
 

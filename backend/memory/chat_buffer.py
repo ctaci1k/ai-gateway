@@ -14,6 +14,21 @@ class ChatBuffer:
 
             "preferred_models": {},
 
+            "manual_model_selections": {},
+
+            "response_style_preferences": {},
+
+            "response_interactions": {
+
+                "viewed_responses": 0,
+
+                "manual_selections": 0,
+
+                "selector_agreements": 0,
+
+                "selector_disagreements": 0
+            },
+
             "selector_usage_count": 0,
 
             "compare_mode_usage_count": 0,
@@ -65,6 +80,115 @@ class ChatBuffer:
                 current_count + 1
             )
 
+    def track_manual_selection(
+
+        self,
+        selected_model,
+        selector_model=None
+
+    ):
+
+        interactions = (
+            self.user_preferences[
+                "response_interactions"
+            ]
+        )
+
+        interactions[
+            "manual_selections"
+        ] += 1
+
+        current_count = (
+            self.user_preferences[
+                "manual_model_selections"
+            ].get(
+                selected_model,
+                0
+            )
+        )
+
+        self.user_preferences[
+            "manual_model_selections"
+        ][selected_model] = (
+            current_count + 1
+        )
+
+        if selector_model:
+
+            if selected_model == selector_model:
+
+                interactions[
+                    "selector_agreements"
+                ] += 1
+
+            else:
+
+                interactions[
+                    "selector_disagreements"
+                ] += 1
+
+    def track_response_interaction(
+
+        self,
+        interaction_type
+
+    ):
+
+        interactions = (
+            self.user_preferences[
+                "response_interactions"
+            ]
+        )
+
+        current_value = interactions.get(
+            interaction_type,
+            0
+        )
+
+        interactions[
+            interaction_type
+        ] = current_value + 1
+
+    def get_personalization_profile(self):
+
+        return {
+
+            "preferred_models": (
+
+                self.user_preferences[
+                    "preferred_models"
+                ]
+            ),
+
+            "manual_model_selections": (
+
+                self.user_preferences[
+                    "manual_model_selections"
+                ]
+            ),
+
+            "response_style_preferences": (
+
+                self.user_preferences[
+                    "response_style_preferences"
+                ]
+            ),
+
+            "favorite_response_style": (
+
+                self.user_preferences[
+                    "favorite_response_style"
+                ]
+            ),
+
+            "response_interactions": (
+
+                self.user_preferences[
+                    "response_interactions"
+                ]
+            )
+        }
+
     def add_message(
 
         self,
@@ -83,7 +207,9 @@ class ChatBuffer:
         selector_provider=None,
         selector_model=None,
         selector_confidence=0,
-        selector_fallback_used=False
+        selector_fallback_used=False,
+        manual_override=False,
+        manually_selected_model=None
 
     ):
 
@@ -128,6 +254,17 @@ class ChatBuffer:
 
             compare_mode=compare_mode
         )
+
+        if manually_selected_model:
+
+            self.track_manual_selection(
+
+                selected_model=(
+                    manually_selected_model
+                ),
+
+                selector_model=selected_model
+            )
 
         message = {
 
@@ -183,6 +320,14 @@ class ChatBuffer:
 
             "compare_summary": (
                 compare_summary
+            ),
+
+            "manual_override": (
+                manual_override
+            ),
+
+            "manually_selected_model": (
+                manually_selected_model
             )
         }
 
@@ -266,6 +411,21 @@ class ChatBuffer:
         self.user_preferences = {
 
             "preferred_models": {},
+
+            "manual_model_selections": {},
+
+            "response_style_preferences": {},
+
+            "response_interactions": {
+
+                "viewed_responses": 0,
+
+                "manual_selections": 0,
+
+                "selector_agreements": 0,
+
+                "selector_disagreements": 0
+            },
 
             "selector_usage_count": 0,
 

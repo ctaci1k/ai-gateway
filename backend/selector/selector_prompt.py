@@ -8,8 +8,13 @@ class SelectorPromptBuilder:
     @staticmethod
     def build_selector_prompt(
         user_message: str,
-        responses: dict
+        responses: dict,
+        personalization_context: dict | None = None
     ) -> str:
+
+        if personalization_context is None:
+
+            personalization_context = {}
 
         formatted_responses = []
 
@@ -31,6 +36,53 @@ MODEL RESPONSE:
         responses_block = "\n\n".join(
             formatted_responses
         )
+
+        preferred_models = (
+            personalization_context.get(
+                "preferred_models",
+                {}
+            )
+        )
+
+        favorite_response_style = (
+            personalization_context.get(
+                "favorite_response_style"
+            )
+        )
+
+        response_style_preferences = (
+            personalization_context.get(
+                "response_style_preferences",
+                {}
+            )
+        )
+
+        personalization_block = ""
+
+        if personalization_context:
+
+            personalization_block = f"""
+
+USER PERSONALIZATION PROFILE:
+
+Preferred Models:
+{json.dumps(preferred_models, indent=2)}
+
+Favorite Response Style:
+{favorite_response_style}
+
+Response Style Preferences:
+{json.dumps(response_style_preferences, indent=2)}
+
+IMPORTANT PERSONALIZATION RULES:
+
+- Personalization should ONLY be a secondary factor.
+- Response quality is ALWAYS the highest priority.
+- Do NOT select a weaker response only because
+  it matches user preferences.
+- Use preferences only as a small weighting signal
+  when multiple responses are similarly strong.
+"""
 
         output_schema = {
 
@@ -79,7 +131,7 @@ IMPORTANT RULES:
 
 - You ONLY evaluate the existing responses.
 
-Evaluate based on:
+Evaluate primarily based on:
 
 - correctness
 - completeness
@@ -87,6 +139,8 @@ Evaluate based on:
 - usefulness
 - structure
 - reasoning quality
+
+{personalization_block}
 
 USER QUESTION:
 {user_message}

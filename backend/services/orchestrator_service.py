@@ -16,8 +16,13 @@ class OrchestratorService:
         message: str,
         provider_names: list[str] | None = None,
         compare_mode: bool = False,
-        selector_enabled: bool = False
+        selector_enabled: bool = False,
+        personalization_profile: dict | None = None
     ):
+
+        if personalization_profile is None:
+
+            personalization_profile = {}
 
         execution_result = (
             await ProviderService.execute_many(
@@ -85,7 +90,10 @@ class OrchestratorService:
             selector_result = (
                 await ResponseSelector.select_best_response(
                     user_message=message,
-                    responses=selector_input
+                    responses=selector_input,
+                    personalization_profile=(
+                        personalization_profile
+                    )
                 )
             )
 
@@ -221,6 +229,10 @@ class OrchestratorService:
 
             "scores": (
                 selector_scores
+            ),
+
+            "personalization_enabled": bool(
+                personalization_profile
             )
         }
 
@@ -275,6 +287,10 @@ class OrchestratorService:
             "compare_summary": (
                 compare_summary
             ),
+
+            "personalization_profile": (
+                personalization_profile
+            )
         }
 
         if compare_mode:

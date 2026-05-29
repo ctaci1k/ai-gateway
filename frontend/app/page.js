@@ -89,6 +89,20 @@ export default function Home() {
     setUserPreferences
   ] = useState(null);
 
+  const [
+    personalizationProfile,
+    setPersonalizationProfile
+  ] = useState(null);
+
+  const [
+    personalizationEnabled,
+    setPersonalizationEnabled
+  ] = useState(false);
+
+  const [
+    manuallySelectedModel,
+    setManuallySelectedModel
+  ] = useState("");
 
   useEffect(() => {
 
@@ -155,19 +169,22 @@ export default function Home() {
     setMemory(data.memory);
   }
 
-async function loadPreferences() {
+  async function loadPreferences() {
 
-  const res = await fetch(
-    "http://127.0.0.1:8000/preferences"
-  );
+    const res = await fetch(
+      "http://127.0.0.1:8000/preferences"
+    );
 
-  const data = await res.json();
+    const data = await res.json();
 
-  setUserPreferences(
-    data.preferences
-  );
-}
+    setUserPreferences(
+      data.preferences
+    );
 
+    setPersonalizationProfile(
+      data.personalization_profile || null
+    );
+  }
 
   async function newChat() {
 
@@ -205,6 +222,13 @@ async function loadPreferences() {
     setSelectorReason("");
 
     setCompareSummary(null);
+
+    setPersonalizationEnabled(false);
+
+    setManuallySelectedModel("");
+
+    setPersonalizationProfile(null);
+
   }
 
 
@@ -253,12 +277,19 @@ async function loadPreferences() {
               "Content-Type": "application/json",
             },
 
-            body: JSON.stringify({
-              message: message,
-              providers: providers,
-              compare_mode: true,
-              selector_enabled: selectorEnabled,
-            }),
+body: JSON.stringify({
+  message: message,
+  providers: providers,
+  compare_mode: true,
+  selector_enabled: selectorEnabled,
+
+  manual_override: Boolean(
+    manuallySelectedModel
+  ),
+
+  manually_selected_model:
+    manuallySelectedModel || null,
+}),
           }
         );
 
@@ -315,6 +346,13 @@ async function loadPreferences() {
 
         setCompareSummary(
           data.compare_summary || null
+        );
+        setPersonalizationProfile(
+          data.personalization_profile || null
+        );
+
+        setPersonalizationEnabled(
+          data.personalization_enabled || false
         );
 
       } else {
@@ -404,7 +442,7 @@ async function loadPreferences() {
 
       await loadMemory();
 
-      await loadPreferences();
+      
 
     } catch (error) {
 
@@ -418,7 +456,58 @@ async function loadPreferences() {
     }
   }
 
+async function saveManualSelection(
 
+  providerName
+
+) {
+
+  try {
+
+    await fetch(
+
+      "http://127.0.0.1:8000/preferences/manual-selection",
+
+      {
+
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+
+          selected_model: providerName,
+
+          selector_model: selectedModel,
+        }),
+      }
+    );
+setManuallySelectedModel(
+  providerName
+);
+
+    try {
+
+  await loadPreferences();
+
+} catch (error) {
+
+  console.error(
+    "Preferences reload failed:",
+    error
+  );
+}
+
+  } catch (error) {
+
+    console.error(
+      "Manual selection error:",
+      error
+    );
+  }
+}
   async function sendStructuredMessage() {
 
     if (!message.trim()) {
@@ -646,9 +735,21 @@ async function loadPreferences() {
 
               {selectorEnabled && (
 
-                <p className="text-xs text-yellow-400">
-                  AI Selector Enabled
-                </p>
+                <div className="flex flex-col items-end gap-1">
+
+                  <p className="text-xs text-yellow-400">
+                    AI Selector Enabled
+                  </p>
+
+                  {personalizationEnabled && (
+
+                    <p className="text-xs text-pink-400">
+                      Personalized Selection Active
+                    </p>
+
+                  )}
+
+                </div>
 
               )}
 
@@ -757,8 +858,8 @@ async function loadPreferences() {
                   )}
 
                   className={`px-3 py-2 rounded text-sm font-bold transition ${compareViewMode === "cards"
-                      ? "bg-blue-600"
-                      : "bg-gray-800"
+                    ? "bg-blue-600"
+                    : "bg-gray-800"
                     }`}
                 >
 
@@ -773,8 +874,8 @@ async function loadPreferences() {
                   )}
 
                   className={`px-3 py-2 rounded text-sm font-bold transition ${compareViewMode === "compact"
-                      ? "bg-blue-600"
-                      : "bg-gray-800"
+                    ? "bg-blue-600"
+                    : "bg-gray-800"
                     }`}
                 >
 
@@ -869,15 +970,43 @@ async function loadPreferences() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-3">
+<div className="flex flex-wrap gap-2">
 
-                        {selectedModel === providerName && (
+  {selectedModel === providerName && (
 
-                          <span className="bg-green-500 text-black px-3 py-1 rounded font-bold text-sm">
-                            Selected Best Response
-                          </span>
+    <span className="bg-green-500 text-black px-3 py-1 rounded font-bold text-sm">
+      Selected Best Response
+    </span>
 
-                        )}
+  )}
 
+  {manuallySelectedModel === providerName && (
+
+    <span className="bg-pink-500 text-black px-3 py-1 rounded font-bold text-sm">
+      User Preferred
+    </span>
+
+  )}
+
+{selectedModel === providerName &&
+ selectedResponseCard === providerName &&
+ manuallySelectedModel === providerName && (
+
+    <span className="bg-yellow-500 text-black px-3 py-1 rounded font-bold text-sm">
+      Selector Agreed
+    </span>
+
+  )}
+
+  {personalizationEnabled && (
+
+    <span className="bg-purple-500 text-black px-3 py-1 rounded font-bold text-sm">
+      Personalized
+    </span>
+
+  )}
+
+</div>
                         {selectedResponseCard === providerName && (
 
                           <span className="bg-blue-500 text-black px-3 py-1 rounded font-bold text-sm">
@@ -885,6 +1014,36 @@ async function loadPreferences() {
                           </span>
 
                         )}
+
+ <button
+
+  onClick={(e) => {
+
+    e.stopPropagation();
+
+    saveManualSelection(
+      providerName
+    );
+  }}
+
+  className="
+    bg-pink-600
+    hover:bg-pink-500
+    transition
+    px-4
+    py-2
+    rounded
+    font-bold
+    text-sm
+    text-white
+  "
+
+>
+
+  Prefer This Response
+
+</button>
+
 
                       </div>
                     </div>
@@ -1026,8 +1185,8 @@ async function loadPreferences() {
                     </p>
 
                     <p className={`text-sm ${item.success
-                        ? "text-green-400"
-                        : "text-red-400"
+                      ? "text-green-400"
+                      : "text-red-400"
                       }`}>
 
                       {item.success
@@ -1097,7 +1256,52 @@ async function loadPreferences() {
             </div>
 
             <div className="mt-5">
+              {personalizationProfile && (
 
+                <div className="mb-6">
+
+                  <h3 className="text-xl font-bold text-pink-400 mb-3">
+                    Personalization Profile
+                  </h3>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+
+                    <div className="border border-gray-700 rounded p-4 bg-gray-950">
+
+                      <p className="text-gray-400 text-sm">
+                        Favorite Response Style
+                      </p>
+
+                      <p className="text-pink-400 font-bold text-lg mt-2">
+                        {personalizationProfile.favorite_response_style || "Unknown"}
+                      </p>
+
+                    </div>
+
+                    <div className="border border-gray-700 rounded p-4 bg-gray-950">
+
+                      <p className="text-gray-400 text-sm">
+                        Manual Model Selections
+                      </p>
+
+<p className="text-cyan-400 font-bold text-lg mt-2">
+
+  {Object.values(
+    personalizationProfile.manual_model_selections || {}
+  ).reduce(
+    (acc, value) => Number(acc) + Number(value),
+    0
+  )}
+
+</p>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              )}
               <h3 className="text-xl font-bold text-cyan-400 mb-3">
                 Preferred Models
               </h3>
@@ -1169,33 +1373,33 @@ async function loadPreferences() {
                 ))}
 
             </div>
-<div className="mb-5 border border-gray-700 rounded p-4 bg-gray-950">
+            <div className="mb-5 border border-gray-700 rounded p-4 bg-gray-950">
 
-  <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3">
 
-<div className="bg-purple-600 px-3 py-1 rounded text-sm font-bold">
-  Judge: Gemini
-</div>
+                <div className="bg-purple-600 px-3 py-1 rounded text-sm font-bold">
+                  Judge: Gemini
+                </div>
 
-<div className="bg-cyan-600 px-3 py-1 rounded text-sm font-bold">
-  gemini-2.5-flash-lite
-</div>
+                <div className="bg-cyan-600 px-3 py-1 rounded text-sm font-bold">
+                  gemini-2.5-flash-lite
+                </div>
 
-    <div className="bg-green-600 px-3 py-1 rounded text-sm font-bold">
-      Confidence: {selectorConfidence}
-    </div>
+                <div className="bg-green-600 px-3 py-1 rounded text-sm font-bold">
+                  Confidence: {selectorConfidence}
+                </div>
 
-    {selectorFallbackUsed && (
+                {selectorFallbackUsed && (
 
-      <div className="bg-red-600 px-3 py-1 rounded text-sm font-bold">
-        FALLBACK USED
-      </div>
+                  <div className="bg-red-600 px-3 py-1 rounded text-sm font-bold">
+                    FALLBACK USED
+                  </div>
 
-    )}
+                )}
 
-  </div>
+              </div>
 
-</div>
+            </div>
             {selectorReason && (
 
               <div className="mt-5 border border-gray-700 rounded p-4">
