@@ -14,6 +14,12 @@ backend/__pycache__
 # Environment variables
 .env
 *.env
+.env.local
+.env*.local
+.env.production
+!.env.example
+!*/.env.example
+!.env.production.example
 
 # Logs
 *.log
@@ -41,6 +47,10 @@ coverage
 
 # SQLite
 *.db
+
+# RAG vector store (ChromaDB, PH10)
+chroma_data/
+backend/chroma_data/
 
 # Temporary files
 *.tmp

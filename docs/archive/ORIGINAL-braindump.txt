@@ -1,0 +1,1401 @@
+PEŁNY FUNKCJONAL PROJEKTU
+Personalized Multi-Model AI Gateway / AI Router
+
+1. GŁÓWNA IDEA SYSTEMU
+System jest web application z AI chatem, która:
+działa online przez własny serwer,
+obsługuje wiele modeli AI jednocześnie,
+pobiera wiele odpowiedzi na jeden prompt,
+wykorzystuje oddzielny AI Selector do wyboru najlepszej odpowiedzi,
+pozwala użytkownikowi porównywać odpowiedzi modeli,
+zapamiętuje preferencje użytkownika,
+działa jako personalized AI system.
+Projekt NIE jest zwykłym chatbotem.
+To:
+AI Gateway,
+AI Router,
+Multi-Model Assistant,
+Personalized AI System.
+
+2. WEB INTERFACE
+Użytkownik korzysta z systemu przez przeglądarkę.
+Frontend zawiera:
+chat UI,
+sidebar z chatami,
+input promptów,
+przycisk Send,
+przycisk New Chat,
+przycisk Delete Chat,
+przycisk Show All Responses,
+upload plików/PDF,
+streaming odpowiedzi.
+Frontend budowany jest przy użyciu:
+React,
+Next.js,
+Tailwind CSS.
+
+3. CHAT SYSTEM
+System obsługuje:
+tworzenie nowych chatów,
+przełączanie między chatami,
+usuwanie chatów,
+osobną historię dla każdego chatu,
+persistent chat history,
+session isolation.
+Każdy użytkownik posiada:
+własne chaty,
+własną pamięć,
+własne preferences,
+własny context history.
+
+4. MESSAGE SYSTEM
+Użytkownik może:
+wysyłać wiadomości,
+usuwać wiadomości,
+czyścić historię,
+czyścić responses,
+czyścić all_responses.
+
+5. MULTI-MODEL REQUEST SYSTEM
+Backend równolegle wysyła prompt do:
+GPT,
+Claude,
+Gemini,
+przyszłych modeli AI.
+Zapytania wykonywane są async przez:
+asyncio,
+httpx,
+LiteLLM.
+
+6. RESPONSE STORAGE
+System przechowuje:
+user_message,
+best_response,
+selected_model,
+all_responses.
+Przykład:
+responses = {
+   "gpt": "...",
+   "claude": "...",
+   "gemini": "..."
+}
+
+7. ALL RESPONSES VIEW
+Użytkownik może:
+widzieć tylko best_response,
+lub otworzyć wszystkie odpowiedzi modeli.
+Frontend posiada:
+Show All Responses
+
+8. AI SELECTOR SYSTEM
+System posiada oddzielny AI Selector.
+Selector AI:
+otrzymuje wszystkie odpowiedzi,
+analizuje je,
+wybiera best_response.
+Selector ocenia:
+poprawność,
+kompletność,
+styl,
+czytelność,
+jakość wyjaśnienia,
+zgodność z preferencjami użytkownika.
+
+9. USER PREFERENCE MEMORY
+System zapamiętuje:
+które modele użytkownik wybiera,
+które odpowiedzi otwiera,
+jaki styl odpowiedzi preferuje.
+Preferences wykorzystywane są przez:
+AI Selector,
+response ranking system.
+
+10. PERSONALIZED RESPONSE SELECTION
+AI Selector uwzględnia:
+previous preferences,
+preferred response style,
+history model selections.
+System personalizuje wybór odpowiedzi pod użytkownika.
+
+11. CHAT MEMORY SYSTEM
+System posiada:
+ChatBuffer
+ChatBuffer:
+przechowuje historię,
+działa przez sliding window,
+automatycznie usuwa stare wiadomości,
+serializuje dane do JSON.
+
+12. SLIDING WINDOW SYSTEM
+Jeśli historia rozmowy przekroczy limit:
+najstarsze wiadomości są automatycznie usuwane.
+System:
+ogranicza memory usage,
+ogranicza token usage,
+stabilizuje backend.
+
+13. PROVIDER ARCHITECTURE
+Każdy model działa przez provider layer:
+OpenAIProvider,
+ClaudeProvider,
+GeminiProvider,
+future providers.
+
+14. BASE PROVIDER CONTRACT
+Wszystkie provider’y:
+posiadają wspólny interfejs,
+implementują generate(),
+obsługują streaming,
+działają przez BaseProvider.
+
+15. LITELLM INTEGRATION
+LiteLLM:
+standaryzuje provider layer,
+umożliwia wspólną obsługę modeli,
+upraszcza multi-model orchestration.
+
+16. STREAMING RESPONSES
+Odpowiedzi mogą być streamowane:
+token-by-token,
+jak w ChatGPT.
+Frontend aktualizuje odpowiedź w czasie rzeczywistym.
+
+17. RAG SYSTEM
+System obsługuje:
+upload PDF,
+upload dokumentów,
+upload plików tekstowych.
+Backend wykonuje:
+chunking,
+embeddings,
+vector search,
+retrieval context injection.
+
+18. VECTOR DATABASE
+System wykorzystuje:
+ChromaDB.
+Vector DB przechowuje:
+embeddings,
+chunks,
+metadata,
+retrieval indexes.
+
+19. DATABASE SYSTEM
+Projekt wykorzystuje:
+SQLite (start),
+PostgreSQL (future upgrade).
+Baza danych przechowuje:
+users,
+chats,
+messages,
+preferences,
+sessions.
+
+20. ORM
+Projekt wykorzystuje:
+SQLAlchemy
+Do:
+modeli bazy danych,
+relacji,
+persistent storage.
+
+21. FASTAPI BACKEND
+Backend działa przez:
+FastAPI
+Główne endpointy:
+/chat
+/new-chat
+/delete-chat
+/all-responses
+/upload-document
+
+22. JSON API
+Frontend i backend komunikują się przez:
+JSON requests,
+JSON responses.
+
+23. SECURITY SYSTEM
+System posiada:
+request limits,
+spam protection,
+safe validation,
+safe file upload,
+memory cleanup,
+history limits,
+error isolation.
+
+24. ERROR HANDLING
+Backend:
+nie może crashować przy błędach modeli,
+obsługuje failed responses,
+zwraca stabilne odpowiedzi użytkownikowi.
+
+25. PERSISTENT STORAGE
+Dane:
+nie znikają po restarcie,
+są przechowywane permanentnie.
+
+26. DOCKER DEPLOYMENT
+System działa przez:
+Docker,
+Docker Compose.
+
+27. UBUNTU VPS DEPLOYMENT
+Projekt jest przygotowany pod:
+Ubuntu VPS,
+production deployment,
+public access.
+
+28. NGINX + SSL
+Deployment zawiera:
+Nginx reverse proxy,
+HTTPS,
+SSL,
+domain support.
+
+29. TESTING
+Projekt posiada:
+unit tests,
+ChatBuffer tests,
+selector tests,
+aggregation tests,
+API tests.
+
+30. FINALNY CEL SYSTEMU
+Projekt jest:
+production-like AI application,
+multi-model AI gateway,
+personalized AI assistant,
+AI orchestration platform,
+scalable web AI system.
+
+
+
+TECHNOLOGY STACK — PERSONALIZED MULTI-MODEL AI GATEWAY
+GŁÓWNY JĘZYK BACKENDU
+Python 3.12+
+
+BACKEND FRAMEWORK
+FastAPI
+Używany do:
+API backend,
+endpoints,
+async architecture,
+communication frontend ↔ backend.
+
+FRONTEND
+React + Next.js
+Frontend odpowiada za:
+chat UI,
+sidebar chatów,
+streaming messages,
+Show All Responses,
+upload files,
+chat management.
+
+UI STYLING
+Tailwind CSS
+
+MULTI-MODEL AI LAYER
+LiteLLM
+Obsługuje:
+OpenAI GPT,
+Claude,
+Gemini,
+future AI providers.
+
+HTTP REQUESTS
+httpx
+Używany do:
+async requests,
+parallel model calls.
+
+VALIDATION & SCHEMAS
+Pydantic
+Używany do:
+request validation,
+response validation,
+structured outputs,
+API schemas.
+
+DATABASE
+Start:
+SQLite
+Future upgrade:
+PostgreSQL
+Przechowuje:
+users,
+chats,
+messages,
+preferences,
+sessions.
+
+ORM
+SQLAlchemy
+Używany do:
+database models,
+chats,
+messages,
+user data.
+
+VECTOR DATABASE
+ChromaDB
+Używany do:
+embeddings,
+RAG,
+vector search,
+document retrieval.
+
+AI MEMORY SYSTEM
+Custom ChatBuffer
+Funkcjonalność:
+chat history,
+sliding window,
+all_responses,
+best_response,
+user preferences.
+
+ASYNC SYSTEM
+asyncio
+Używany do:
+parallel AI requests,
+async orchestration.
+
+STREAMING
+Python Generators + FastAPI StreamingResponse
+
+FILE PROCESSING
+PyPDF
+Używany do:
+PDF reading,
+document extraction.
+
+YAML CONFIGURATION
+PyYAML
+Używany do:
+prompts.yaml,
+configuration files.
+
+DEPLOYMENT
+Docker
+Docker Compose
+
+SERVER
+Ubuntu VPS
+
+REVERSE PROXY
+Nginx
+
+SSL / HTTPS
+Let's Encrypt
+
+TESTING
+Pytest
+
+PROJECT TYPE
+Production-like AI Web Application
+
+PROJECT ARCHITECTURE TYPE
+AI Gateway
+AI Router
+Multi-Model Assistant
+Personalized AI System
+
+MAIN AI FEATURES
+Multi-model responses
+System simultaneously queries:
+GPT,
+Claude,
+Gemini.
+
+AI Selector
+Separate AI model chooses:
+best_response
+
+All Responses System
+System stores:
+responses = {
+   "gpt": "...",
+   "claude": "...",
+   "gemini": "..."
+}
+
+Personalized Selection
+System learns:
+user preferences,
+preferred response styles,
+preferred models.
+
+Chat Management
+Users can:
+create chats,
+delete chats,
+switch chats,
+clear history.
+
+RAG
+Users can:
+upload documents,
+ask questions about files,
+use retrieval-based AI answers.
+
+FINAL DEPLOYMENT TARGET
+Public web application hosted on Ubuntu VPS using Docker.
+
+MASTER PLAN — PERSONALIZED MULTI-MODEL AI GATEWAY
+14-DNIOWY PLAN ROZWOJU SYSTEMU
+GŁÓWNY CEL PROJEKTU
+Budowa production-like AI system:
+działającego online,
+dostępnego przez przeglądarkę,
+pracującego z wieloma modelami AI jednocześnie,
+posiadającego AI Selector,
+posiadającego pamięć użytkownika,
+działającego przez Docker na Ubuntu VPS.
+Projekt NIE jest zwykłym chatbotem.
+To:
+AI Gateway,
+Multi-Model Assistant,
+Personalized AI Router.
+
+GŁÓWNA ZASADA PROJEKTU
+Użytkownik widzi:
+prosty chat.
+Backend wykonuje:
+orchestration,
+multi-model requests,
+AI judging,
+memory management,
+RAG,
+async processing,
+response selection.
+
+FINALNY FLOW SYSTEMU
+Frontend
+↓
+FastAPI Backend
+↓
+Chat Orchestrator
+↓
+Providers Layer
+↓
+GPT / Claude / Gemini
+↓
+AI Selector
+↓
+Best Response
+↓
+ChatBuffer + Preferences
+↓
+Frontend
+
+FINALNY FUNKCJONAL SYSTEMU
+System musi posiadać:
+CHAT SYSTEM
+tworzenie nowych chatów,
+usuwanie chatów,
+przełączanie między chatami,
+osobną pamięć dla każdego chatu.
+MULTI-MODEL SYSTEM
+GPT,
+Claude,
+Gemini,
+możliwość dodania kolejnych modeli.
+RESPONSE SYSTEM
+best_response,
+all_responses,
+selected_model,
+Show All Responses.
+AI SELECTOR
+Oddzielna AI wybierająca najlepszą odpowiedź.
+USER PREFERENCES
+System zapamiętuje:
+które odpowiedzi użytkownik wybiera,
+jaki styl preferuje,
+które modele mu się podobają.
+MEMORY
+ChatBuffer,
+sliding window,
+session memory.
+RAG
+upload PDF,
+embeddings,
+vector search,
+retrieval.
+DEPLOYMENT
+Docker,
+Docker Compose,
+Ubuntu VPS,
+Nginx,
+SSL.
+
+NAJWAŻNIEJSZA ZMIANA W PLANIE
+Projekt musi dawać widoczny efekt jak najszybciej.
+Dlatego:
+frontend pojawia się wcześniej,
+użytkownik może korzystać z systemu już po kilku dniach,
+backend później jest stopniowo rozbudowywany.
+
+TECH STACK (OBOWIĄZKOWY)
+BACKEND
+Python 3.12+
+FastAPI
+Pydantic
+httpx
+LiteLLM
+SQLAlchemy
+asyncio
+FRONTEND
+Next.js
+React
+Tailwind CSS
+DATABASE
+SQLite (start)
+PostgreSQL (future upgrade)
+VECTOR DATABASE
+ChromaDB
+DEPLOYMENT
+Docker
+Docker Compose
+Ubuntu VPS
+Nginx
+SSL (Let's Encrypt)
+
+FINALNA STRUKTURA PROJEKTU
+project/
+│
+├── backend/
+│ ├── providers/
+│ ├── selector/
+│ ├── memory/
+│ ├── schemas/
+│ ├── routes/
+│ ├── services/
+│ ├── database/
+│ ├── rag/
+│ ├── prompts/
+│ ├── main.py
+│ └── requirements.txt
+│
+├── frontend/
+│ ├── app/
+│ ├── components/
+│ ├── services/
+│ └── package.json
+│
+├── docker-compose.yml
+├── Dockerfile
+└── .env
+
+FINALNY SYSTEM MUSI OBSŁUGIWAĆ
+USERS
+oddzielne sesje użytkowników,
+oddzielne chaty,
+oddzielne preferences.
+CHATS
+new chat,
+delete chat,
+rename chat,
+chat history.
+AI RESPONSES
+best_response,
+all_responses,
+selected_model,
+AI Selector.
+MEMORY
+sliding window,
+session memory,
+JSON serialization.
+FRONTEND FEATURES
+streaming,
+sidebar,
+show all responses,
+upload PDF,
+responsive UI.
+SECURITY
+request limits,
+validation,
+error handling,
+safe file upload,
+memory cleanup.
+
+DZIEŃ 1 — OOP + PIERWSZY DZIAŁAJĄCY CHAT
+CEL
+Po pierwszym dniu:
+aplikacja MUSI się uruchamiać,
+użytkownik MUSI zobaczyć prosty web chat.
+
+PYTHON PRO
+ABC
+abstractmethod
+init
+super()
+Type Hinting
+
+BACKEND
+Budujemy:
+providers/
+base_provider.py
+openai_provider.py
+
+FRONTEND
+Minimalny frontend:
+input,
+przycisk Send,
+wyświetlenie odpowiedzi.
+Może być:
+prosty HTML,
+albo minimalny React.
+
+FASTAPI
+Pierwszy endpoint:
+POST /chat
+
+EFEKT DNIA 1
+Użytkownik:
+wpisuje prompt,
+dostaje odpowiedź AI.
+Nawet jeśli:
+frontend jest prosty,
+backend jest minimalny.
+Ale system już działa online lokalnie.
+
+DZIEŃ 2 — CLEAN ARCHITECTURE
+CEL
+Uporządkowanie systemu providerów.
+
+DODAJEMY
+ClaudeProvider,
+GeminiProvider,
+wspólny BaseProvider.
+
+EFEKT
+System może:
+przełączać modele,
+używać wielu providerów.
+
+DZIEŃ 3 — CHATBUFFER + MEMORY
+CEL
+Prawdziwa pamięć rozmowy.
+
+PYTHON PRO
+list
+dict
+deque
+json.dumps
+json.loads
+
+IMPLEMENTACJA
+memory/
+chat_buffer.py
+
+SYSTEM
+ChatBuffer przechowuje:
+{
+"user_message": "...",
+"best_response": "...",
+"all_responses": {}
+}
+
+DODAJEMY
+sliding window,
+usuwanie starych wiadomości,
+serializację JSON.
+
+FRONTEND
+Dodajemy:
+sidebar chatów,
+New Chat,
+Delete Chat.
+
+EFEKT
+System już wygląda jak prawdziwy chat AI.
+
+DZIEŃ 4 — TOOL CALLING
+CEL
+Structured Output.
+
+PYTHON PRO
+Pydantic
+BaseModel
+Field
+
+IMPLEMENTACJA
+schemas/
+tool schemas
+validation layer.
+
+SYSTEM
+AI może zwracać:
+poprawny JSON,
+tool calls.
+
+DZIEŃ 5 — STREAMING
+CEL
+Streaming odpowiedzi token-by-token.
+
+PYTHON PRO
+yield
+generators
+iter
+next
+
+IMPLEMENTACJA
+generate_stream()
+stream responses.
+
+FRONTEND
+Odpowiedź pojawia się stopniowo.
+Jak ChatGPT.
+
+DZIEŃ 6 — ASYNC FUNDAMENTY
+CEL
+Równoległe requesty.
+
+PYTHON PRO
+async
+await
+asyncio
+httpx.AsyncClient
+
+IMPLEMENTACJA
+System wysyła prompt:
+do GPT,
+Claude,
+Gemini.
+Jednocześnie.
+
+DZIEŃ 7 — MULTI-MODEL RESPONSES
+CEL
+Przechowywanie wszystkich odpowiedzi.
+
+IMPLEMENTACJA
+responses = {
+"gpt": "...",
+"claude": "...",
+"gemini": "..."
+}
+
+FRONTEND
+Dodajemy:
+Show All Responses
+
+EFEKT
+Użytkownik może:
+zobaczyć best_response,
+porównać wszystkie modele.
+
+DZIEŃ 8 — AI SELECTOR
+CEL
+Oddzielna AI wybiera najlepszą odpowiedź.
+
+IMPLEMENTACJA
+selector/
+response_selector.py
+
+FLOW
+Selector AI:
+dostaje wszystkie odpowiedzi,
+wybiera najlepszą.
+
+DZIEŃ 9 — USER PREFERENCES
+CEL
+Personalized AI.
+
+SYSTEM
+Backend zapamiętuje:
+które modele użytkownik wybiera,
+jaki styl preferuje.
+
+AI SELECTOR
+Uwzględnia:
+previous preferences,
+preferred style.
+
+DZIEŃ 10 — PROMPT ENGINEERING + YAML
+PYTHON PRO
+PyYAML
+pathlib
+
+IMPLEMENTACJA
+prompts/
+prompts.yaml
+
+SYSTEM
+Prompt versioning.
+
+DZIEŃ 11 — RAG
+CEL
+Praca z dokumentami.
+
+IMPLEMENTACJA
+upload PDF,
+chunking,
+embeddings,
+vector search.
+
+VECTOR DB
+ChromaDB lub FAISS.
+
+FRONTEND
+Dodajemy:
+upload dokumentów.
+
+DZIEŃ 12 — FASTAPI PRODUCTION
+CEL
+Prawdziwy backend API.
+
+IMPLEMENTACJA
+Endpointy:
+/chat
+/new-chat
+/delete-chat
+/all-responses
+/upload-document
+
+DODAJEMY
+validation,
+error handling,
+request limits.
+
+DZIEŃ 13 — DOCKER + UBUNTU VPS
+CEL
+Deployment online.
+
+IMPLEMENTACJA
+Dockerfile,
+docker-compose.yml,
+Nginx,
+SSL.
+
+SYSTEM
+Uruchomienie na Ubuntu VPS.
+
+DZIEŃ 14 — TESTY + MOCK INTERVIEW
+TESTY
+ChatBuffer,
+selector,
+aggregation,
+API.
+
+MOCK INTERVIEW
+Python,
+async,
+OOP,
+RAG,
+architecture,
+deployment.
+
+FINALNY EFEKT
+Po 14 dniach system posiada:
+web interface,
+FastAPI backend,
+Docker deployment,
+Ubuntu VPS support,
+GPT/Claude/Gemini,
+async requests,
+AI selector,
+all responses memory,
+user preferences,
+RAG,
+streaming,
+production-like architecture.
+
+GŁÓWNA ZASADA CAŁEGO PLANU
+Każdy dzień:
+daje widoczny progres,
+daje działającą funkcję,
+rozwija istniejący system,
+nie tworzy losowych mini-projektów.
+System od pierwszych dni:
+działa,
+ma frontend,
+daje realną interakcję użytkownika.
+Dopracowałem plan:
+dodałem pełny tech stack,
+finalną strukturę projektu,
+architekturę backend/frontend,
+database layer,
+security,
+session system,
+frontend features,
+deployment requirements,
+dokładne moduły projektu.
+Teraz plan jest znacznie bliżej:
+prawdziwego production-ready AI web application,
+ a nie tylko roadmapy nauki.
+
+AI GATEWAY FRONTEND ARCHITECTURE
+Ти Senior Frontend Architect.
+Працюєш над проектом:
+Personalized Multi-Model AI Gateway.
+ГОЛОВНЕ ПРАВИЛО:
+Проект НЕ є звичайним AI Chat.
+Проект є:
+AI Gateway
+Multi-Model Assistant
+AI Router
+Personalized AI System
+Архітектура повинна бути максимально модульною, масштабованою та легкою для підтримки.
+
+ОСНОВНА СТРУКТУРА FRONTEND
+frontend/
+src/
+├── app/
+│
+├── layouts/
+│ ├── MainLayout
+│ └── ChatLayout
+│
+├── components/
+│ ├── sidebar/
+│ ├── chat/
+│ ├── compare/
+│ ├── selector/
+│ ├── common/
+│ └── settings/
+│
+├── features/
+│ ├── chat/
+│ ├── compare/
+│ ├── selector/
+│ ├── preferences/
+│ └── localization/
+│
+├── services/
+│ ├── chatApi.ts
+│ ├── providerApi.ts
+│ ├── selectorApi.ts
+│ └── preferencesApi.ts
+│
+├── hooks/
+│
+├── store/
+│
+├── theme/
+│
+├── i18n/
+│
+├── types/
+│
+└── utils/
+
+THEME SYSTEM
+Всі кольори винесені окремо.
+theme/
+├── colors.ts
+├── spacing.ts
+├── radius.ts
+├── shadows.ts
+└── typography.ts
+Компоненти не повинні містити хардкод кольорів.
+Використовуються лише design tokens.
+
+LOCALIZATION SYSTEM
+i18n/
+├── uk.json
+├── pl.json
+└── en.json
+В інтерфейсі заборонено використовувати текст напряму.
+Використовується:
+t("key")
+для всіх написів.
+
+SIDEBAR
+components/sidebar/
+├── Sidebar.tsx
+├── ProfileCard.tsx
+├── LanguageSwitcher.tsx
+├── ChatModeSelector.tsx
+├── ChatList.tsx
+├── NewChatButton.tsx
+└── AccountCard.tsx
+Sidebar відповідає лише за навігацію.
+Не містить логіки чату.
+
+PROFILE CARD
+Верхній блок.
+Містить:
+ім'я автора
+назву проекту
+перемикач мов
+Має бути максимально компактним.
+
+LANGUAGE SWITCHER
+Окремий компонент.
+Підтримує:
+Українську
+Польську
+Англійську
+Повинен легко розширюватися новими мовами.
+
+CHAT MODE SELECTOR
+Перемикач між режимами:
+Single Chat
+Compare Mode
+У майбутньому:
+RAG Mode
+Повинен працювати через конфігурацію, а не через хардкод.
+
+CHAT LIST
+Відображає список чатів.
+Для тестової версії:
+максимум 3 чати.
+Кожен чат — окремий компонент.
+
+MAIN CHAT AREA
+components/chat/
+├── ChatContainer.tsx
+├── MessageList.tsx
+├── MessageBubble.tsx
+├── PromptInput.tsx
+├── StatusBanner.tsx
+└── ErrorBanner.tsx
+Це універсальний шаблон.
+Використовується і для Single Chat і для Compare Mode.
+
+STATUS BANNER
+Верхній інформаційний рядок.
+Відображає:
+активний режим
+кількість моделей
+статус системи
+Повинен бути універсальним.
+
+ERROR BANNER
+Відображає:
+помилки Gemini Selector
+fallback selector
+системні помилки
+Повинен з'являтися лише при необхідності.
+
+COMPARE MODE
+components/compare/
+├── CompareModal.tsx
+├── CompareColumn.tsx
+├── CompareHeader.tsx
+├── ModelScoreCard.tsx
+└── ManualSelectionButton.tsx
+Всі колонки будуються через map().
+Заборонено дублювати JSX для кожної моделі.
+
+COMPARE COLUMN
+Відображає:
+назву моделі
+модель
+швидкість відповіді
+текст відповіді
+Одна колонка = один шаблон.
+
+MODEL SCORE CARD
+Відображає:
+оцінку Gemini Selector
+confidence
+execution time
+Лише інформація про модель.
+
+MANUAL SELECTION BUTTON
+Кнопка:
+"Обрати цю відповідь"
+або
+"Вибрано"
+Працює для навчання personalization system.
+
+SERVICES
+services/
+chatApi.ts
+Всі chat endpoints.
+providerApi.ts
+Робота з моделями.
+selectorApi.ts
+Робота з AI Selector.
+preferencesApi.ts
+Робота з персоналізацією.
+Компоненти не повинні напряму викликати fetch.
+
+TYPES
+types/
+├── Chat.ts
+├── Message.ts
+├── Provider.ts
+├── Selector.ts
+└── Preferences.ts
+Усі дані повинні бути типізовані.
+
+ГОЛОВНА ВИМОГА
+Будь-який компонент повинен легко перевикористовуватися.
+Заборонено:
+дублювання JSX
+дублювання стилів
+дублювання кольорів
+дублювання текстів
+Усе будується через:
+компоненти
+шаблони
+конфігурації
+локалізацію
+design tokens
+Frontend повинен виглядати як production-ready система, а не навчальний проект.
+
+AI GATEWAY FRONTEND REBUILD PLAN
+PROJECT STATUS
+Backend вже працює:
+Multi Model Requests
+Compare Mode
+AI Selector (Gemini Judge)
+Selector Fallback
+Streaming
+Personalization Profile
+User Preferences
+Execution Metadata
+Frontend буде переписаний майже повністю.
+Основна ціль:
+Створити production-like frontend з правильною архітектурою, модульністю та підтримкою майбутнього масштабування.
+
+PHASE 1 — FOUNDATION
+Ціль:
+Створити фундамент, який не доведеться переписувати.
+Створити структуру:
+src/
+├── app/
+├── layouts/
+├── components/
+├── features/
+├── services/
+├── hooks/
+├── store/
+├── types/
+├── theme/
+├── i18n/
+└── utils/
+Створити:
+theme/
+├── colors.ts
+├── spacing.ts
+├── radius.ts
+├── typography.ts
+├── shadows.ts
+Створити:
+i18n/
+├── uk.json
+├── pl.json
+└── en.json
+Створити:
+Language Context
+Theme Context
+На цьому етапі ще не створювати складний UI.
+
+PHASE 2 — MAIN LAYOUT
+Ціль:
+Побудувати каркас майбутнього інтерфейсу.
+Створити:
+MainLayout
+Створити Sidebar.
+Створити:
+ProfileCard
+LanguageSwitcher
+ChatModeSelector
+NewChatButton
+AccountCard
+Всі блоки поки можуть містити заглушки.
+Головне:
+правильна структура.
+
+PHASE 3 — CHAT TEMPLATE
+Ціль:
+Створити універсальний шаблон чату.
+Створити:
+ChatContainer
+MessageList
+MessageBubble
+PromptInput
+StatusBanner
+ErrorBanner
+Цей шаблон повинен працювати:
+Single Chat
+Compare Mode
+Future RAG Mode
+без дублювання компонентів.
+
+PHASE 4 — SINGLE CHAT
+Ціль:
+Перенести поточний функціонал.
+Підключити:
+POST /chat/stream
+Відобразити:
+streaming
+messages
+selected provider
+Після завершення цього етапу система повинна вже працювати як звичайний AI Chat.
+
+PHASE 5 — COMPARE MODE
+Ціль:
+Перенести головну функцію проекту.
+Створити:
+CompareModal
+CompareColumn
+ModelScoreCard
+ManualSelectionButton
+Всі колонки створюються через map().
+Ніякого копіювання JSX.
+Після завершення:
+користувач бачить всі відповіді моделей одночасно.
+
+PHASE 6 — AI SELECTOR UI
+Ціль:
+Показати силу проекту.
+Відобразити:
+Gemini Judge
+confidence
+selected model
+fallback state
+selector reasoning
+Особливо важливо:
+fallback banner.
+Якщо Gemini недоступний:
+користувач повинен це бачити.
+
+PHASE 7 — USER PREFERENCES
+Ціль:
+Показати personalization.
+Відобразити:
+preferred models
+manual selections
+compare usage
+selector usage
+Використати дані бекенду.
+
+PHASE 8 — REAL CHAT SYSTEM
+Ціль:
+Підготувати проект до майбутньої бази даних.
+Поки що UI.
+Створити:
+Chat List
+Chat Card
+Chat Switcher
+Delete Chat
+Rename Chat
+Поки можна використовувати mock data.
+Архітектура повинна бути готова до SQLite/PostgreSQL.
+
+PHASE 9 — RESPONSIVE DESIGN
+Ціль:
+Підготувати проект до різних екранів.
+Desktop
+Tablet
+Mobile
+Sidebar повинна коректно згортатися.
+
+PHASE 10 — FUTURE FEATURES PREPARATION
+Підготувати місце під:
+Upload PDF
+RAG
+User Accounts
+Settings Page
+Theme Switcher
+Future AI Providers
+Без реалізації логіки.
+Лише правильна архітектура.
+
+GOLDEN RULES
+Заборонено:
+дублювати JSX
+дублювати стилі
+дублювати кольори
+дублювати тексти
+писати fetch напряму в компонентах
+Дозволено:
+reusable components
+services layer
+design tokens
+localization
+typed interfaces
+Кожен новий компонент повинен легко перевикористовуватися.
+Frontend повинен виглядати як production-ready AI application.
+
+DESIGN VISION
+Автор хоче мінімалістичний AI Gateway інтерфейс.
+Натхнення:
+ChatGPT
+сучасні AI продукти
+чистий мінімалістичний UI
+Але проект НЕ повинен бути копією ChatGPT.
+Основний акцент:
+Compare Mode.
+
+SIDEBAR
+Ліва колонка.
+Містить:
+Profile Card
+Верхній блок.
+Містить:
+ім'я автора
+назву проекту
+перемикач мов
+Chat Selector
+Перемикач:
+Single Chat
+Compare Mode
+New Chat
+Кнопка створення нового чату.
+Тестова версія:
+максимум 3 чати.
+Account Card
+Нижній блок.
+Зарезервований під майбутні функції.
+
+MAIN AREA
+Права частина інтерфейсу.
+Верх:
+Status Banner
+Показує:
+режим роботи
+статус системи
+іншу службову інформацію
+Середина:
+Chat Area
+Основна область відповіді.
+Низ:
+Prompt Input
+Поле введення запиту.
+
+ERROR SYSTEM
+У верхній частині Chat Area.
+Якщо Gemini Selector недоступний:
+відображається повідомлення:
+"Gemini Judge недоступний. Використано Fallback Selector."
+
+COMPARE MODE
+При натисканні:
+Show All Responses
+відкривається велике модальне вікно поверх Chat Area.
+Всередині:
+3 вертикальні колонки.
+Кожна колонка:
+одна модель
+одна відповідь
+Угорі:
+назва провайдера
+назва моделі
+час генерації
+оцінка
+Унизу:
+кнопка вибору відповіді.
+
+VISUAL PHILOSOPHY
+Простота.
+Мінімалізм.
+Багато вільного простору.
+Ніяких перевантажених панелей.
+Основна увага:
+відповідь AI та порівняння моделей.
+
+ARCHITECTURE PHILOSOPHY
+Автор надає великий пріоритет:
+модульності
+перевикористанню компонентів
+локалізації
+темізації
+чистій структурі файлів
+Будь-яка нова функція повинна легко інтегруватися без переписування існуючих компонентів.
+

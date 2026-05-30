@@ -1,0 +1,65 @@
+/* frontend/theme/tokens.css
+ * Single source of truth for design tokens.
+ * Two layers: primitive palette → semantic roles. Components use ONLY semantic
+ * roles (mapped to Tailwind utilities in globals.css). Switch theme by changing
+ * `data-theme` on <html>; switch the whole look by editing values here.
+ * Dark palette mirrors design-reference/ai-gateway/NOTES.md.
+ */
+
+:root,
+[data-theme="dark"] {
+  /* primitive palette */
+  --violet-500: #8b5cf6;
+  --green-500: #2fd27a;
+  --red-400: #f87171;
+  --amber-500: #eab308;
+
+  /* semantic roles (dark) */
+  --bg: #07080d;
+  --panel: #0f111a;
+  --panel-2: #13151f;
+  --sidebar: #0b0d14;
+  --card: #11131d;
+
+  --border: rgba(148, 163, 184, 0.12);
+  --border-strong: rgba(148, 163, 184, 0.2);
+
+  --fg: #e8eaf2;
+  --muted: #9298ac;
+  --subtle: #686e83;
+
+  --accent: var(--violet-500);
+  --accent-rgb: 139, 92, 246;
+  --accent-contrast: #ffffff;
+  --success: var(--green-500);
+  --danger: var(--red-400);
+  --danger-surface: rgba(248, 113, 113, 0.12);
+  --warning: var(--amber-500);
+
+  /* sizing */
+  --radius: 14px;
+  --sidebar-width: 18rem;
+}
+
+[data-theme="light"] {
+  --bg: #f7f8fb;
+  --panel: #ffffff;
+  --panel-2: #eef1f6;
+  --sidebar: #ffffff;
+  --card: #ffffff;
+
+  --border: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(15, 23, 42, 0.18);
+
+  --fg: #0f172a;
+  --muted: #475569;
+  --subtle: #94a3b8;
+
+  --accent: #7c3aed;
+  --accent-rgb: 124, 58, 237;
+  --accent-contrast: #ffffff;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --danger-surface: rgba(220, 38, 38, 0.08);
+  --warning: #ca8a04;
+}

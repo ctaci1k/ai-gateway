@@ -1,0 +1,126 @@
+# AI Gateway — externalized, versioned prompts.
+# Bump `version` whenever a template changes meaningfully.
+# Placeholders use $name syntax (string.Template); literal "$" must be "$$".
+
+version: 3
+
+prompts:
+  # --- RAG (PH10; relaxed in PH13) ---
+  rag_augmented:
+    description: Augments a user question with retrieved document context.
+    template: |
+      You have access to excerpts from the user's uploaded documents (below).
+      Treat them as a trusted source: when they are relevant to the question,
+      base your answer on them and cite the source numbers you used (e.g. [1],
+      [2]). If the documents do not cover the question, just answer normally
+      from your own knowledge — do NOT refuse and do NOT say it is missing from
+      the documents.
+
+      CONTEXT:
+      $context
+
+      QUESTION:
+      $question
+
+  # --- Responder system prompts (OpenAI-compatible providers) ---
+  provider_json_system:
+    description: System prompt forcing raw-JSON structured output.
+    template: "Return ONLY valid JSON. Do not use markdown."
+
+  provider_selector_system:
+    description: System prompt for a provider acting as an evaluator/judge.
+    template: "You are an AI response evaluator. Return ONLY valid JSON."
+
+  # --- Selector (judge) prompts ---
+  selector_personalization_block:
+    description: Optional personalization context appended to the judge prompt.
+    template: |
+
+      USER PERSONALIZATION PROFILE:
+
+      Preferred Models:
+      $preferred_models
+
+      Favorite Response Style:
+      $favorite_response_style
+
+      Response Style Preferences:
+      $response_style_preferences
+
+      IMPORTANT PERSONALIZATION RULES:
+
+      - Personalization should ONLY be a secondary factor.
+      - Response quality is ALWAYS the highest priority.
+      - Do NOT select a weaker response only because
+        it matches user preferences.
+      - Use preferences only as a small weighting signal
+        when multiple responses are similarly strong.
+
+  selector_judge:
+    description: Main judge prompt for selecting the best model response.
+    template: |
+
+      You are NOT a chatbot.
+
+      You are NOT allowed to answer the user.
+
+      You are ONLY an AI judge.
+
+      Your ONLY task is:
+      select the best response from the provided models.
+
+      IMPORTANT RULES:
+
+      - You MUST select ONLY one of:
+        - groq
+        - cerebras
+        - sambanova
+
+      - You are NOT allowed to invent model names.
+
+      - You are NOT allowed to generate your own answer.
+
+      - You are NOT allowed to improve responses.
+
+      - You are NOT participating in the conversation.
+
+      - You ONLY evaluate the existing responses.
+
+      Evaluate primarily based on:
+
+      - correctness
+      - completeness
+      - clarity
+      - usefulness
+      - structure
+      - reasoning quality
+
+      $personalization_block
+
+      USER QUESTION:
+      $user_message
+
+      MODEL RESPONSES:
+      $responses_block
+
+      Return ONLY valid JSON.
+
+      Expected JSON format:
+
+      {
+        "selected_model": "groq",
+        "confidence": 0.95,
+        "reason": "Short explanation why this response was selected.",
+        "scores": {
+          "groq": 90,
+          "cerebras": 82,
+          "sambanova": 88
+        }
+      }
+
+      Do not use markdown.
+
+      Do not add explanations outside JSON.
+
+      The selected_model field MUST contain ONLY:
+      groq, cerebras, or sambanova.

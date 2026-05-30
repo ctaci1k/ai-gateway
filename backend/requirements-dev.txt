@@ -1,0 +1,16 @@
+# AI Gateway — backend development dependencies
+# Install on top of runtime deps:  pip install -r requirements.txt -r requirements-dev.txt
+
+-r requirements.txt
+
+# Formatting / linting
+ruff==0.9.6
+black==25.1.0
+
+# Tests
+pytest==8.3.4
+pytest-asyncio==0.25.3
+httpx==0.28.1   # FastAPI TestClient / async client for endpoint tests
+
+# Git hooks (format + lint on commit). See .pre-commit-config.yaml.
+pre-commit==4.1.0

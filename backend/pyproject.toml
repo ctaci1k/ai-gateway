@@ -1,0 +1,24 @@
+# AI Gateway — backend tooling configuration (Ruff, Black, pytest).
+# Runtime/dev dependencies are pinned in requirements.txt / requirements-dev.txt.
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+extend-exclude = "venv"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = ["venv"]
+
+[tool.ruff.lint]
+# E/F: pyflakes+pycodestyle, I: import sorting, UP: pyupgrade, B: bugbear
+select = ["E", "F", "I", "UP", "B"]
+# E501: line length handled by Black. B008: Depends() in defaults is the
+# idiomatic FastAPI dependency-injection pattern, not a bug.
+ignore = ["E501", "B008"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]

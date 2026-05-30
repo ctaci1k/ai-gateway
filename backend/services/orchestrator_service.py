@@ -1,12 +1,8 @@
 # backend/services/orchestrator_service.py
 
-from services.provider_service import (
-    ProviderService
-)
-
-from selector.response_selector import (
-    ResponseSelector
-)
+from core.prompts import render_prompt
+from selector.response_selector import ResponseSelector
+from services.provider_service import ProviderService
 
 
 class OrchestratorService:
@@ -17,35 +13,35 @@ class OrchestratorService:
         provider_names: list[str] | None = None,
         compare_mode: bool = False,
         selector_enabled: bool = False,
-        personalization_profile: dict | None = None
+        personalization_profile: dict | None = None,
+        rag_context: str | None = None,
     ):
 
         if personalization_profile is None:
 
             personalization_profile = {}
 
-        execution_result = (
-            await ProviderService.execute_many(
-                message=message,
-                provider_names=provider_names
+        # RAG (PH10): responders answer the question grounded in retrieved
+        # context; the judge still evaluates against the original question.
+        responder_message = message
+        if rag_context:
+            responder_message = render_prompt(
+                "rag_augmented", context=rag_context, question=message
             )
+
+        execution_result = await ProviderService.execute_many(
+            message=responder_message, provider_names=provider_names
         )
 
-        all_responses = (
-            execution_result["all_responses"]
-        )
+        all_responses = execution_result["all_responses"]
 
-        failed_providers = (
-            execution_result["failed_providers"]
-        )
+        failed_providers = execution_result["failed_providers"]
 
-        execution_metadata = (
-            execution_result["execution_metadata"]
-        )
+        execution_metadata = execution_result["execution_metadata"]
 
-        execution_summary = (
-            execution_result["execution_summary"]
-        )
+        execution_summary = execution_result["execution_summary"]
+
+        total_tokens = execution_result.get("total_tokens")
 
         best_response = ""
 
@@ -65,238 +61,102 @@ class OrchestratorService:
 
         selector_fallback_used = False
 
-        successful_providers = list(
-            all_responses.keys()
-        )
+        selector_fallback_reason = None
+
+        successful_providers = list(all_responses.keys())
 
         total_requested_models = (
-            len(provider_names)
-            if provider_names
-            else len(successful_providers)
+            len(provider_names) if provider_names else len(successful_providers)
         )
 
         if selector_enabled and all_responses:
 
             selector_input = {}
 
-            for provider_name, response_data in (
-                all_responses.items()
-            ):
+            for provider_name, response_data in all_responses.items():
 
-                selector_input[provider_name] = (
-                    response_data["response"]
-                )
+                selector_input[provider_name] = response_data["response"]
 
-            selector_result = (
-                await ResponseSelector.select_best_response(
-                    user_message=message,
-                    responses=selector_input,
-                    personalization_profile=(
-                        personalization_profile
-                    )
-                )
+            selector_result = await ResponseSelector.select_best_response(
+                user_message=message,
+                responses=selector_input,
+                personalization_profile=(personalization_profile),
             )
 
-            selected_model = (
-                selector_result.get(
-                    "selected_model"
-                )
-            )
+            selected_model = selector_result.get("selected_model")
 
-            best_response = (
-                selector_result.get(
-                    "best_response",
-                    ""
-                )
-            )
+            best_response = selector_result.get("best_response", "")
 
-            selector_scores = (
-                selector_result.get(
-                    "scores",
-                    {}
-                )
-            )
+            selector_scores = selector_result.get("scores", {})
 
-            selector_reason = (
-                selector_result.get(
-                    "reason"
-                )
-            )
+            selector_reason = selector_result.get("reason")
 
-            selector_confidence = (
-                selector_result.get(
-                    "confidence",
-                    0
-                )
-            )
+            selector_confidence = selector_result.get("confidence", 0)
 
-            selector_provider = (
-                selector_result.get(
-                    "selector_provider"
-                )
-            )
+            selector_provider = selector_result.get("selector_provider")
 
-            selector_model = (
-                selector_result.get(
-                    "selector_model"
-                )
-            )
+            selector_model = selector_result.get("selector_model")
 
-            selector_fallback_used = (
-                selector_result.get(
-                    "fallback_used",
-                    False
-                )
-            )
+            selector_fallback_used = selector_result.get("fallback_used", False)
 
-            if (
-                selected_model
-                and selected_model in all_responses
-            ):
+            selector_fallback_reason = selector_result.get("fallback_reason")
 
-                selected_model_data = (
-                    all_responses[selected_model]
-                )
+            if selected_model and selected_model in all_responses:
+
+                selected_model_data = all_responses[selected_model]
 
         else:
 
             if all_responses:
 
-                selected_model = next(
-                    iter(all_responses)
-                )
+                selected_model = next(iter(all_responses))
 
-                selected_model_data = (
-                    all_responses[selected_model]
-                )
+                selected_model_data = all_responses[selected_model]
 
-                best_response = (
-                    selected_model_data["response"]
-                )
+                best_response = selected_model_data["response"]
 
         compare_summary = {
-
-            "total_requested_models": (
-                total_requested_models
-            ),
-
-            "successful_models": len(
-                successful_providers
-            ),
-
-            "failed_models": len(
-                failed_providers
-            ),
-
-            "selected_model": (
-                selected_model
-            ),
-
-            "selector_enabled": (
-                selector_enabled
-            ),
-
-            "total_compared_responses": len(
-                all_responses
-            )
+            "total_requested_models": (total_requested_models),
+            "successful_models": len(successful_providers),
+            "failed_models": len(failed_providers),
+            "selected_model": (selected_model),
+            "selector_enabled": (selector_enabled),
+            "total_compared_responses": len(all_responses),
         }
 
         selector_metadata = {
-
-            "selector_provider": (
-                selector_provider
-            ),
-
-            "selector_model": (
-                selector_model
-            ),
-
-            "selector_confidence": (
-                selector_confidence
-            ),
-
-            "fallback_used": (
-                selector_fallback_used
-            ),
-
-            "selected_model": (
-                selected_model
-            ),
-
-            "selection_reason": (
-                selector_reason
-            ),
-
-            "scores": (
-                selector_scores
-            ),
-
-            "personalization_enabled": bool(
-                personalization_profile
-            )
+            "selector_provider": (selector_provider),
+            "selector_model": (selector_model),
+            "selector_confidence": (selector_confidence),
+            "fallback_used": (selector_fallback_used),
+            "fallback_reason": (selector_fallback_reason),
+            "selected_model": (selected_model),
+            "selection_reason": (selector_reason),
+            "scores": (selector_scores),
+            "personalization_enabled": bool(personalization_profile),
         }
 
         response_payload = {
-
             "best_response": best_response,
-
-            "selected_model": (
-                selected_model
-            ),
-
-            "selected_model_data": (
-                selected_model_data
-            ),
-
-            "all_responses": (
-                all_responses
-            ),
-
-            "failed_providers": (
-                failed_providers
-            ),
-
-            "execution_metadata": (
-                execution_metadata
-            ),
-
-            "execution_summary": (
-                execution_summary
-            ),
-
-            "compare_mode": (
-                compare_mode
-            ),
-
-            "selector_enabled": (
-                selector_enabled
-            ),
-
-            "selector_scores": (
-                selector_scores
-            ),
-
-            "selector_reason": (
-                selector_reason
-            ),
-
-            "selector_metadata": (
-                selector_metadata
-            ),
-
-            "compare_summary": (
-                compare_summary
-            ),
-
-            "personalization_profile": (
-                personalization_profile
-            )
+            "selected_model": (selected_model),
+            "selected_model_data": (selected_model_data),
+            "all_responses": (all_responses),
+            "failed_providers": (failed_providers),
+            "execution_metadata": (execution_metadata),
+            "execution_summary": (execution_summary),
+            "compare_mode": (compare_mode),
+            "selector_enabled": (selector_enabled),
+            "selector_scores": (selector_scores),
+            "selector_reason": (selector_reason),
+            "selector_metadata": (selector_metadata),
+            "compare_summary": (compare_summary),
+            "personalization_profile": (personalization_profile),
+            # Aggregate token usage for the turn (PH15); None when unknown.
+            "total_tokens": (total_tokens),
         }
 
         if compare_mode:
 
-            response_payload[
-                "comparison_count"
-            ] = len(all_responses)
+            response_payload["comparison_count"] = len(all_responses)
 
         return response_payload

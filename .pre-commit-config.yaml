@@ -1,0 +1,36 @@
+# Pre-commit hooks (PH11 / 005b): format + lint on staged files.
+# Local/system hooks reuse the tools already installed in the project
+# (backend/venv + frontend/node_modules) so versions match the gates and CI.
+#
+# Setup:  pip install -r backend/requirements-dev.txt && pre-commit install
+# Run all: pre-commit run --all-files
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (backend lint)
+        entry: backend/venv/bin/ruff check --force-exclude
+        language: system
+        types_or: [python]
+        files: ^backend/
+
+      - id: black
+        name: black (backend format)
+        entry: backend/venv/bin/black
+        language: system
+        types_or: [python]
+        files: ^backend/
+
+      - id: prettier
+        name: prettier (frontend format)
+        language: system
+        entry: bash -c 'cd frontend && npx prettier --check "${@#frontend/}"' --
+        files: ^frontend/.*\.(ts|tsx|js|jsx|css|json|md)$
+        exclude: ^frontend/design-reference/
+
+      - id: eslint
+        name: eslint (frontend lint)
+        language: system
+        entry: bash -c 'cd frontend && npx eslint "${@#frontend/}"' --
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        exclude: ^frontend/design-reference/

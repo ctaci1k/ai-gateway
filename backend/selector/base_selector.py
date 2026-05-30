@@ -19,32 +19,15 @@ class BaseSelector(ABC):
     def get_selector_metadata(cls):
 
         return {
-
-            "selector_name": (
-                cls.selector_name
-            ),
-
-            "selector_version": (
-                cls.selector_version
-            ),
-
-            "selector_type": (
-                cls.selector_type
-            ),
-
-            "supports_reasoning": (
-                cls.supports_reasoning
-            ),
-
-            "supports_detailed_scoring": (
-                cls.supports_detailed_scoring
-            )
+            "selector_name": (cls.selector_name),
+            "selector_version": (cls.selector_version),
+            "selector_type": (cls.selector_type),
+            "supports_reasoning": (cls.supports_reasoning),
+            "supports_detailed_scoring": (cls.supports_detailed_scoring),
         }
 
     @staticmethod
     @abstractmethod
-    def select_best_response(
-        responses: dict
-    ):
+    def select_best_response(responses: dict):
 
         pass

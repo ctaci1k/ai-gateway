@@ -1,27 +1,20 @@
 # backend/schemas/selector_schema.py
 
-from pydantic import BaseModel
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 
 class SelectorScoreSchema(BaseModel):
 
     provider: str
 
-    score: float = Field(
-        ge=0,
-        le=100
-    )
+    score: float = Field(ge=0, le=100)
 
 
 class SelectorResultSchema(BaseModel):
 
     selected_model: str
 
-    confidence: float = Field(
-        ge=0,
-        le=1
-    )
+    confidence: float = Field(ge=0, le=1)
 
     reason: str
 

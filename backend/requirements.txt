@@ -1,0 +1,34 @@
+# AI Gateway — backend runtime dependencies
+# Pinned to the versions currently installed in backend/venv (Python 3.12+).
+# Reproduce with:  python -m venv venv && pip install -r requirements.txt
+
+# Web framework / server
+fastapi==0.136.1
+uvicorn==0.47.0
+pydantic==2.13.4
+
+# Config / env
+python-dotenv==1.2.2
+pydantic-settings==2.7.1
+PyYAML==6.0.3
+python-multipart==0.0.29    # multipart/form-data (document upload, PH10)
+
+# Provider SDKs
+groq==1.2.0                 # Groq responder (llama-3.3-70b-versatile)
+openai==2.38.0              # OpenAI-compatible SDK for Cerebras + SambaNova
+google-generativeai==0.8.6  # Gemini judge (gemini-2.5-flash-lite)
+
+# Persistence (async ORM + migrations)
+SQLAlchemy[asyncio]==2.0.38
+alembic==1.14.1
+greenlet>=3.2.4             # required by SQLAlchemy async (cp314 wheels)
+aiosqlite==0.20.0           # dev driver (sqlite+aiosqlite)
+asyncpg==0.30.0             # prod async driver (postgresql+asyncpg)
+psycopg2-binary==2.9.10     # prod sync driver for Alembic migrations (psycopg2)
+
+# Auth
+argon2-cffi==23.1.0         # password hashing
+
+# RAG (PH10): document store + parsing. Embeddings reuse google-generativeai.
+chromadb==1.5.9             # persistent vector store
+pypdf==6.12.2               # PDF text extraction

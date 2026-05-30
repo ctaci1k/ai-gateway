@@ -1,0 +1,227 @@
+# 03 — Контракти API (бекенд)
+
+Базовий URL (dev): `http://127.0.0.1:8000` (фронтенд бере з `NEXT_PUBLIC_API_URL`).
+Усі ендпоінти — **реальні, з коду** (`routes/{chat,preferences,providers,memory}.py`, тонкі роутери). Кожен має `response_model` (`schemas/chat_response.py`, `schemas/common.py`) — відповіді типовані. Статуси узгоджені з [08-current-state.md](08-current-state.md).
+
+## Формат помилок (D-5, реалізовано в PH1)
+
+Усі помилки повертають **коректний HTTP-статус** і уніфіковане тіло:
+
+```jsonc
+{ "error": { "code": "string", "message": "string" } }
+```
+
+Коди/статуси (`core/errors.py`):
+
+| Статус | `code` | Коли |
+|--------|--------|------|
+| 400 | `validation_error` | бізнес-валідація (напр. відсутній `selected_model`) |
+| 422 | `validation_error` | помилка схеми запиту (Pydantic) |
+| 403 | `forbidden` | CSRF відсутній/невірний; доступ не-адміна до `/admin/*` |
+| 403 | `invalid_registration_code` | реєстрація без/із невірним кодом (PH15, D-10) |
+| 404 | `not_found` | невідомий шлях |
+| 429 | `rate_limited` | перевищено per-IP ліміт запитів (middleware, заголовок `Retry-After`) |
+| 429 | `quota_exceeded` | перевищено per-user квоту запитів (PH15, D-10) |
+| 502 | `provider_error` | збій апстрім-провайдера |
+| 504 | `upstream_timeout` | таймаут апстріму |
+| 500 | `internal_error` | неочікувана помилка |
+
+> Збої окремих провайдерів у `/chat` **не** є помилкою рівня запиту — вони ізолюються в `failed_providers` зі статусом 200 (часткова успішність). 500 повертається лише при неочікуваному збої оркестрації.
+
+Rate limiting: in-memory, **per-IP**, лише для мутуючих методів (POST/PUT/PATCH/DELETE). Налаштування — `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` (`.env`).
+
+## Автентифікація (PH8)
+
+Сесійна, через **httpOnly cookie** (`session`, SameSite=Lax, Secure у prod) + **server-side sessions** (таблиця `sessions`). Паролі — **argon2**. Захист **CSRF**: double-submit — на мутаціях обов'язковий заголовок `X-CSRF-Token`, що дорівнює cookie `csrf_token` (видається при login/register, читається фронтендом). Фронтенд шле всі запити з `credentials: "include"`.
+
+Ендпоінти:
+- `POST /auth/register` `{username (≥3), password (≥8), registration_code}` → `200 {user:{id,username}, csrf_token}` (+ cookies). `403 invalid_registration_code` без/із невірним кодом (PH15, D-10); `409 conflict` якщо зайнято; `400 validation_error` на коротких полях. Акаунт з `ADMIN_USERNAME` стає адміном (безліміт); інші — дефолтні ліміти.
+- `POST /auth/login` `{username, password}` → `200 {user, csrf_token}` (+ cookies). `401 unauthorized` на невірних даних.
+- `POST /auth/logout` (потрібні session+CSRF) → `200 {message}` (чистить cookies).
+- `GET /auth/me` (потрібна session) → `200 {id, username, is_admin, max_requests_per_minute, max_requests_per_day, used_this_minute, used_today, remaining_today}` або `401`. Ліміти `null` для безлімітних (адмін); `remaining_today` `null` коли безліміт (PH15, D-10).
+
+**Захищені (потрібні session; мутації — ще й CSRF):** `/chat`, `/chat/stream`, `/chat/structured`, `/chats` (CRUD), `/documents` (CRUD), `/preferences`, `/preferences/manual-selection`, `/memory` (GET/DELETE), `/memory/json`, `/admin/*` (ще й `is_admin`). Дані **ізольовані per-user**. Публічні: `/`, `/providers`, `/providers/info`.
+
+> Порядок гардів: спершу автентифікація (401), потім CSRF (403). Для `/chat` і `/chat/stream` додано гард квоти (`429 quota_exceeded`, PH15) — після auth/CSRF.
+
+---
+
+## POST `/chat` — Compare / Selector (головний)
+
+Один запит → кілька моделей → (опційно) суддя.
+
+**Request** (`schemas/chat_schema.py` → `ChatRequest`):
+
+```jsonc
+{
+  "message": "string (1..4000, обов'язково)",
+  "provider": "groq",                  // fallback, якщо providers порожній
+  "providers": ["groq", "cerebras", "sambanova"], // або null
+  "compare_mode": false,
+  "selector_enabled": false,
+  "include_execution_metadata": true,
+  "include_selector_analysis": true,
+  "include_all_responses": true,
+  "manual_override": false,
+  "manually_selected_model": null,
+  "chat_id": null,                     // PH9: коли задано (Compare) — хід персиститься у цей збережений чат
+  "rag_enabled": false                 // PH10: відповіді ґрунтуються на завантажених документах користувача
+}
+```
+
+**Response (200):**
+
+```jsonc
+{
+  "response": "best_response текст",
+  "selected_model": "groq",
+  "selected_model_data": { "response": "...", "model": "...", "execution_time": 1.2, "provider": "groq", "success": true },
+  "all_responses": {
+    "groq":      { "response": "...", "model": "llama-3.3-70b-versatile", "execution_time": 1.2, "provider": "groq", "success": true },
+    "cerebras":  { "...": "..." },
+    "sambanova": { "...": "..." }
+  },
+  "failed_providers": [ { "provider": "x", "error": "...", "reason": "rate_limited" } ],
+  "execution_metadata": [ { "provider": "groq", "success": true, "execution_time": 1.2, "model": "...", "error": null } ],
+  "execution_summary": { "total_models": 3, "successful_models": 3, "failed_models": 0, "average_execution_time": 1.1 },
+  "compare_mode": false,
+  "selector_enabled": false,
+  "selector_scores": { "groq": 85, "cerebras": 70 },
+  "selector_metadata": {
+    "selector_provider": "groq", "selector_model": "qwen/qwen3-32b",
+    "selector_confidence": 0.9, "fallback_used": false,
+    "fallback_reason": null,             // PH13: коли fallback_used=true — конкретна причина
+    "selected_model": "groq", "selection_reason": "...", "scores": {...},
+    "personalization_enabled": true
+  },
+  "selector_reason": "чому обрано цю відповідь",
+  "compare_summary": { "total_requested_models": 3, "successful_models": 3, "failed_models": 0, "selected_model": "groq", "selector_enabled": true, "total_compared_responses": 3 },
+  "comparison_count": 3,                 // присутнє лише коли compare_mode=true
+  "personalization_profile": { /* див. 04-data-models.md */ },
+  "personalization_enabled": true,
+  "manual_override": false,
+  "manually_selected_model": null,
+  "rag_enabled": false,                  // PH10
+  "rag_sources": [                       // PH10: витягнуті фрагменти (порожньо, якщо rag_enabled=false)
+    { "document_id": 1, "filename": "doc.pdf", "chunk_index": 0, "score": 0.82, "snippet": "..." }
+  ]
+}
+```
+
+**Поведінка:**
+- `providers` порожній → використовується `[provider]`.
+- `selector_enabled=false` → `best_response` = перша успішна відповідь (без суддівства).
+- `manual_override=true` + `manually_selected_model` → трекається сигнал персоналізації.
+- `chat_id` задано (PH9) → крім rolling-історії, хід **зберігається** у вказаний збережений чат. Чужий/невідомий `chat_id` → **404** `not_found`. Single (`/chat/stream`) пише лише в **rolling-історію**, не у збережені чати (уточнення D-3, PH13).
+- `rag_enabled=true` (PH10) → бекенд робить similarity-search по документах користувача, інʼєктує контекст у промпт відповідачів (суддя оцінює оригінальне питання), і повертає `rag_sources`. Якщо документів/збігів немає — відповідь без контексту, `rag_sources: []`.
+- `fallback_reason` (PH13) → коли `fallback_used=true`, містить причину, чому суддя не вирішив: `judge_unavailable` (таймаут/rate-limit/мережа), `invalid_response` (невалідна/неприйнятна відповідь судді) або `low_confidence` (впевненість нижче порога). Коли суддя вирішив — `null`.
+- **Квота (PH15, D-10):** перед обробкою рахуються запити користувача за rolling-вікна (остання хвилина / доба) з `usage_events`; перевищення `max_requests_per_minute`/`max_requests_per_day` → **429** `quota_exceeded`. Compare-запит рахується як **1**. Адмін і безлімітні (`null`) — без перевірки. Після ходу пишеться `usage_events` (mode, message, selected_model, total_tokens, success).
+
+---
+
+## POST `/chat/stream` — Single (стрімінг)
+
+**Request:** `{ "message": "...", "provider": "groq", "rag_enabled": false }`
+- `provider` — обрана модель Single (`groq` / `cerebras` / `sambanova`); UI має перемикач (PH13/B1).
+- `rag_enabled=true` (PH13/C3) → бекенд робить retrieve по документах користувача та інʼєктує контекст у промпт стріму; джерела повертаються **термінальною подією** `sources` (див. нижче). UI вмикає це **автоматично, коли в користувача є документи** (без ручного тумблера) — `rag_enabled = (документів > 0)`.
+
+**Response:** `StreamingResponse`, `media_type: application/x-ndjson`, **NDJSON** (один JSON на рядок):
+
+```
+{"type":"token","content":"Пр","provider":"groq","model":"llama-3.3-70b-versatile"}
+{"type":"token","content":"ивіт","provider":"groq","model":"..."}
+{"type":"sources","sources":[ { "document_id":1, "filename":"doc.pdf", "chunk_index":0, "score":0.82, "snippet":"..." } ]}  // лише коли rag_enabled=true (PH13)
+{"type":"error","content":"..."}   // у разі помилки (статус уже відправлено, тому помилка — термінальна подія потоку)
+```
+
+> **Single — візуально ефемерний, але пишеться в БД (PH13, уточнення D-3).** Після завершення стріму хід записується в **rolling-історію** (`interactions`, `compare_mode=false`, `selector_used=false`) для персоналізації. Це **не** створює збережений (Compare) чат. Порожній вивід (reasoning-модель без контенту) не пишеться. UI має кнопку «Очистити», що прибирає лише **візуальний** тред — дані в БД лишаються.
+
+---
+
+## POST `/chat/structured` — структурований вивід
+
+**Request:** `{ "message": "...", "provider": "groq" }`
+**Response:** `{ "structured_response": { ... } }` (модель повертає JSON).
+
+---
+
+## POST `/preferences/manual-selection` — сигнал персоналізації
+
+**Request:** `{ "selected_model": "cerebras", "selector_model": "groq" }`
+**Response:** `{ "success": true, "personalization_profile": { ... } }`
+Помилка валідації (відсутній `selected_model`): **400** `{ "error": { "code": "validation_error", "message": "selected_model required" } }`.
+
+---
+
+## GET `/providers`
+`{ "providers": ["groq", "cerebras", "sambanova"] }`
+
+## GET `/providers/info`
+`{ "providers": [ { "provider": "groq", "model": "...", "supports_streaming": true, "supports_structured_output": true, "supports_tool_calling": false, "supports_vision": false, "supports_selector_execution": true, "max_context_window": 128000 }, ... ] }`
+
+## GET `/memory`
+`{ "memory": [ /* список повідомлень ChatBuffer */ ] }`
+
+## GET `/preferences`
+`{ "preferences": { /* user_preferences */ }, "personalization_profile": { ... } }`
+
+## GET `/memory/json`
+Повертає серіалізований JSON буфера (`messages` + `user_preferences`).
+
+## DELETE `/memory`
+`{ "message": "Memory cleared" }`
+
+## GET `/`
+`{ "message": "AI Gateway Backend Running" }`
+
+---
+
+## Збережені чати (PH9) — `/chats` (CRUD)
+
+Збережені **Compare**-чати, ізольовані per-user; ліміт — **до 3** на користувача (`SAVED_CHATS_LIMIT`). Мутації потребують CSRF. Single сюди **не** пишеться (лише в rolling-історію — уточнення D-3, PH13). UI (PH13): клік по чату відкриває **тред усіх ходів**; сабміт у активному чаті додає хід і персиститься; поки активний чат порожній, створення нового блокується з повідомленням (A3); підписи — «Збереження чатів з порівнянням» / «Новий чат з порівнянням».
+
+Форми (`schemas/chats.py`):
+- `ChatSummary`: `{ id, title, created_at, updated_at, message_count }`
+- `ChatDetail`: `ChatSummary` + `messages: [{ id, created_at, payload }]` (payload = запис ходу, форма як `interactions.payload`, [04](04-data-models.md)).
+
+Ендпоінти:
+- `GET /chats` → `200 { "chats": [ChatSummary, ...] }` (сортування: за `updated_at` спадно).
+- `POST /chats` `{ "title"?: string }` → `200 ChatDetail` (новий чат, `messages: []`). Порожній/відсутній `title` → дефолтна назва. **409 conflict** якщо досягнуто ліміту (≤3).
+- `GET /chats/{id}` → `200 ChatDetail`. **404 not_found** якщо чужий/невідомий.
+- `PATCH /chats/{id}` `{ "title": string (1..255) }` → `200 ChatSummary`. **404** як вище; **422** на порожньому `title`.
+- `DELETE /chats/{id}` → `200 { "message": "Chat deleted" }` (каскадно видаляє повідомлення). **404** як вище.
+
+Наповнення чату — через `POST /chat` з `chat_id` (див. вище).
+
+---
+
+## RAG-документи (PH10) — `/documents`
+
+Завантажені документи (PDF/TXT/MD) для RAG, ізольовані per-user; ліміт `RAG_MAX_DOCUMENTS` (дефолт 10), розмір `RAG_MAX_FILE_BYTES` (дефолт 5 МБ). Chunks+embeddings — у ChromaDB (per-user). Мутації потребують CSRF.
+
+- `GET /documents` → `200 { "documents": [{ id, filename, content_type, chunk_count, created_at }] }`.
+- `POST /documents` (multipart/form-data, поле `file`) → `200 DocumentSummary`. **400** з конкретним `code` (PH13, для локалізованих повідомлень у UI): `empty_file`, `unsupported_type`, `unreadable_pdf`, `no_text`, `file_too_large`; **409 conflict** (ліміт документів). Підтримуються лише текстові: PDF/TXT/MD.
+- `DELETE /documents/{id}` → `200 { "message": "Document deleted" }` (видаляє рядок + вектори). **404 not_found** якщо чужий/невідомий.
+
+RAG більше не окремий режим/сторінка (PH13/C4): керування документами та тумблер RAG доступні з композера в Single і Compare. Питання до документів — через `POST /chat` (Compare) або `POST /chat/stream` (Single) з `rag_enabled: true` (див. вище).
+
+---
+
+## Адмінпанель + квоти (PH15) — `/admin/*` (D-10)
+
+Усі ендпоінти під гардом `is_admin` (не-адмін → **403** `forbidden`, неавтентифікований → **401**); мутації — ще й CSRF. Схеми — `schemas/admin.py`.
+
+`AdminUserSummary`: `{ id, username, is_admin, max_requests_per_minute|null, max_requests_per_day|null, used_this_minute, used_today, remaining_today|null, created_at }`.
+
+- `GET /admin/users` → `200 { "users": [AdminUserSummary, ...] }` (сортування за `id`; usage — rolling-вікна, як у `/auth/me`).
+- `GET /admin/users/{id}/usage` → `200 { user: AdminUserSummary, events: [{ id, created_at, mode, message, selected_model|null, total_tokens|null, success }], total_requests, total_tokens }` (останні ≤500 подій). **404** якщо невідомий.
+- `POST /admin/users` `{ username, password, is_admin?=false, max_requests_per_minute?=null, max_requests_per_day?=null }` → `200 AdminUserSummary`. Код реєстрації **не** потрібен (акаунт створює адмін). Для не-адміна незадані ліміти → дефолти конфіга; адмін → безліміт. `400` на коротких полях, `409 conflict` якщо username зайнято.
+- `PATCH /admin/users/{id}` `{ is_admin?, max_requests_per_minute?, max_requests_per_day? }` → `200 AdminUserSummary`. Семантика exclude_unset: лише надіслані поля застосовуються; надісланий `null` ліміт = безліміт. **404** якщо невідомий.
+
+Квота моделюється як **кількість запитів** (Compare = 1). Дефолти не-адміну — `DEFAULT_MAX_REQUESTS_PER_MINUTE`/`_PER_DAY` (5/30). Аудит — append-only `usage_events` (не обрізається, на відміну від rolling `interactions`).
+
+---
+
+## Заплановані ендпоінти (⛔ ще не існують)
+
+Згадані в первісному описі, але **в коді відсутні**: `/all-responses`. Збережені чати реалізовано як `/chats` (PH9), завантаження документів — як `/documents` (PH10), а не `/upload-document`.
