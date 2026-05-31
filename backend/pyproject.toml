@@ -22,3 +22,6 @@ ignore = ["E501", "B008"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+# Put the backend root on sys.path so tests/conftest.py can import the app
+# packages (core, services, …) when pytest runs from this directory in CI.
+pythonpath = ["."]
