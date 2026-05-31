@@ -126,7 +126,7 @@ updated: 2026-05-31
 - [x] **F1. Доки.** `docs/06-frontend-architecture.md` (адаптив, згортання, статус-
   система), `docs/08-current-state.md` (секція PH23), `docs/10-open-decisions.md` (D-16).
   `status: done`, усі `[x]`, «СТАН» актуальний.
-- [ ] **F2. Деплой.** Коміт + `git push origin main` (тригерить CI → Docker → деплой).
+- [x] **F2. Деплой.** Коміт + `git push origin main` (тригерить CI → Docker → деплой).
   Перевірити GitHub Actions (зелений CI + Deploy) і `curl -s -o /dev/null -w "%{http_code}"
   https://st.byn.sarl/` = 200. Бекенд НЕ змінюється — перезапуск не потрібен (але якщо
   щось бекендне додасться — `docker compose -f docker-compose.prod.yml --env-file
@@ -166,9 +166,10 @@ updated: 2026-05-31
   Compare 1 колонка (`.modal-grid`), `overflow-wrap:anywhere` для довгих BYOK-`model_id`,
   focus-visible-кільця. Блок F1: docs 06/08/10 оновлені, `status: done`. Усі гейти зелені (FE
   tsc/eslint/prettier/vitest 22/build), i18n паритет uk/pl/en.
-- Наступний крок: **F2** — коміт + `git push origin main` (CI→Docker→деплой), перевірити
-  Actions (CI+Deploy зелені) і сайт 200.
-- Заблоковано: **ні** — усі рішення ухвалені (блок «Ухвалені рішення»).
+  **F2 — задеплоєно:** коміт `2bb2447` на main; CI **success**, Deploy **success**;
+  сайт https://st.byn.sarl/ = **200** до/під час/після деплою. Бекенд не змінювався.
+- Наступний крок: **— план завершено (усі кроки [x], status: done, задеплоєно).**
+- Заблоковано: **ні**.
 - Змінені файли (накопич.): CompareColumn, TopbarModeContext, KeysContext(+test),
   store/SidebarContext, store/sidebarStatus, components/sidebar/{Sidebar,SidebarToggle,SidebarSquare,
   StatusSquares,LanguageSwitcher}, components/keys/KeysStatusBanner, components/account/LimitBanner,
