@@ -47,6 +47,14 @@ export const IconChevron = (p: IconProps) => (
   </Ico>
 );
 
+export const IconMenu = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M3 6h18" />
+    <path d="M3 12h18" />
+    <path d="M3 18h18" />
+  </Ico>
+);
+
 export const IconChat = (p: IconProps) => (
   <Ico {...p}>
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />

@@ -2,6 +2,7 @@
 
 "use client";
 
+import { useKeys } from "@/store/KeysContext";
 import { useI18n } from "@/store/LanguageContext";
 import { RESPONDER_LABELS } from "@/utils/models";
 
@@ -34,10 +35,13 @@ export default function CompareColumn({
   onSelect,
 }: CompareColumnProps) {
   const { t } = useI18n();
+  const { byokModelId } = useKeys();
 
-  // Built-in slots show their friendly registry label; a BYOK/custom slot has
-  // no registry entry, so its truthful name is the model_id that answered (NQ4).
-  const name = RESPONDER_LABELS[provider] ?? model ?? provider;
+  // Truthful name (PH23/A1): when this slot runs on the user's own key — including
+  // an *overridden* default slot (e.g. sambanova pointed at another provider) —
+  // show the entered model_id, mirroring CompareFailedCard. Otherwise a built-in
+  // slot shows its friendly registry label, falling back to model_id / provider.
+  const name = byokModelId(provider) ?? RESPONDER_LABELS[provider] ?? model ?? provider;
 
   return (
     <div className={winner ? "rcard rcard-win" : "rcard"}>

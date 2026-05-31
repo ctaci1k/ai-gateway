@@ -50,6 +50,14 @@ frontend/
 - `useCompare`: `POST /chat` з `providers:["groq","cerebras","sambanova"]`, `selectorEnabled:true`; розкладає `all_responses` у колонки з оцінками/часом.
 - API base URL **захардкоджено** у сервісах (`http://127.0.0.1:8000`).
 
+## Сайдбар: згортання + мобільна шухляда + статуси (PH23)
+
+- **`SidebarContext`** (`store/SidebarContext.tsx`): `collapsed` (desktop-рейл, персист `localStorage`, SSR-safe гідрація) + `mobileOpen` (ефемерна шухляда). Дії: `toggleCollapsed`/`openMobile`/`closeMobile`.
+- **Desktop-рейл — через CSS** (`@media(min-width:769px) .sidebar--collapsed`): ховає текст/банери, показує `.rail-only` квадратики; **немає дубльованого JSX** — той самий `Sidebar` рендериться в усіх трьох станах (full / rail / mobile drawer), станами керує CSS.
+- **Mobile-шухляда** (`@media(max-width:768px)`): бургер у `MainLayout` (`openMobile`), `.sidebar` як off-canvas + backdrop; a11y — focus-trap (лише видимі focusables), Esc, close-on-nav (зміна mode/chat/admin/keys).
+- **Єдине джерело статусів** — `store/sidebarStatus.ts::useSidebarStatus()` (`byok` ok/warn + `limited`); і повні банери (`KeysStatusBanner`/`LimitBanner`), і компактні квадратики (`StatusSquares`/`SidebarSquare`) читають **його** — без дублювання логіки. Кольори лише через токени (`--success`/`--danger`); кожен квадратик має tooltip + `aria-label`.
+- **Responsive:** Compare reflow у 1 колонку (`.modal-grid`), діалоги на всю ширину (bottom-sheet), таргети ≥44px, `overflow-wrap:anywhere` для довгих BYOK-`model_id`; явний `viewport` у `app/layout.tsx`.
+
 ## Golden Rules (обов'язкові)
 
 **Заборонено:** дублювати JSX, стилі, кольори, тексти; писати `fetch` у компонентах.

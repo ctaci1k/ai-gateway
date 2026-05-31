@@ -1,6 +1,6 @@
 // frontend/app/layout.tsx
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 
@@ -14,6 +14,7 @@ import { ComposerProvider } from "@/store/ComposerContext";
 import { KeysProvider } from "@/store/KeysContext";
 import { LanguageProvider } from "@/store/LanguageContext";
 import { RagProvider } from "@/store/RagContext";
+import { SidebarProvider } from "@/store/SidebarContext";
 import { ThemeProvider } from "@/store/ThemeContext";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -34,6 +35,12 @@ export const metadata: Metadata = {
     "One prompt, several AI models in parallel, an AI judge picks the best answer, personalized to you.",
 };
 
+// Explicit mobile viewport (PH23/E3): correct scaling on phones, zoom allowed.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
@@ -50,7 +57,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                   <ChatsProvider>
                     <RagProvider>
                       <ChatModeProvider>
-                        <ComposerProvider>{children}</ComposerProvider>
+                        <ComposerProvider>
+                          <SidebarProvider>{children}</SidebarProvider>
+                        </ComposerProvider>
                       </ChatModeProvider>
                     </RagProvider>
                   </ChatsProvider>

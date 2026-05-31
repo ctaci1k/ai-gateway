@@ -22,6 +22,98 @@
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
+  /* Smooth desktop collapse + mobile drawer slide (PH23/C2–C3). */
+  transition:
+    width 0.2s ease,
+    transform 0.25s ease;
+}
+
+/* Compact-rail primitives (PH23): rail-only elements are hidden by default and
+ * revealed only in the collapsed desktop rail (see the min-width block below). */
+.rail-only {
+  display: none;
+}
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 28px;
+}
+.sidebar-collapse-btn,
+.sidebar-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.sidebar-collapse-btn:hover,
+.sidebar-close-btn:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--fg);
+}
+.sidebar-collapse-btn:focus-visible,
+.sidebar-close-btn:focus-visible,
+.topbar-burger:focus-visible,
+.rail-sq:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sidebar-collapse-ic {
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+.sidebar--collapsed .sidebar-collapse-ic {
+  transform: rotate(-90deg);
+}
+/* The mobile close button only exists in the drawer (mobile media query). */
+.sidebar-close-btn {
+  display: none;
+}
+
+/* Rail squares — one shared primitive for status / author / BYOK (PH23/D2–D3). */
+.rail-squares {
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.rail-sq {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+  color: var(--muted);
+}
+button.rail-sq {
+  transition:
+    filter 0.15s,
+    background 0.15s;
+}
+button.rail-sq:hover {
+  filter: brightness(1.12);
+}
+.rail-sq--ok {
+  color: var(--success);
+  border-color: var(--success);
+  background: rgba(47, 210, 122, 0.12);
+}
+.rail-sq--danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-surface);
 }
 .acct {
   display: flex;
@@ -725,16 +817,23 @@
   justify-content: space-between;
   gap: 12px;
 }
+/* The name/model column must be allowed to shrink and wrap so a long BYOK
+ * model_id never forces the card wider than its (single-column) track (PH23/E2). */
+.rcard-head > div:first-child {
+  min-width: 0;
+}
 .rcard-name {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--fg);
+  overflow-wrap: anywhere;
 }
 .rcard-model {
   font-size: 11.5px;
   color: var(--subtle);
   margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 .stats {
   background: rgba(148, 163, 184, 0.06);
@@ -1307,7 +1406,11 @@
   color: var(--subtle);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  /* Wrap to the next line instead of forcing the row wider than the sidebar
+   * (PH23/D4): long reset copy (pl/uk "resets at 00:00…") flows downward. */
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .sidebar-admin {
   display: flex;
@@ -1808,4 +1911,184 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* ============ TOPBAR BURGER + MOBILE BACKDROP (PH23/C3) ============ */
+/* The burger lives in the topbar but only appears on phones (mobile media). */
+.topbar-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.topbar-burger:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(1px);
+}
+
+/* ============ DESKTOP COLLAPSED RAIL (PH23/C2, D2–D3) ============ */
+/* Rail behaviour is desktop-only; on phones the sidebar is always the full
+ * drawer (the mobile block below never collapses it). */
+@media (min-width: 769px) {
+  /* Mobile-only chrome never shows on desktop (guards a lingering open state
+   * after a resize from a narrow viewport). */
+  .sidebar-backdrop,
+  .topbar-burger {
+    display: none;
+  }
+  .sidebar--collapsed {
+    width: var(--sidebar-width-collapsed);
+    align-items: center;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .sidebar--collapsed .sidebar-head {
+    justify-content: center;
+  }
+  /* Everything textual collapses away, leaving icons / squares. */
+  .sidebar--collapsed .sb-cap,
+  .sidebar--collapsed .sb-label,
+  .sidebar--collapsed .acct-name,
+  .sidebar--collapsed .acct-logout,
+  .sidebar--collapsed .newchat span,
+  .sidebar--collapsed .newchat-notice,
+  .sidebar--collapsed .chat-row-title,
+  .sidebar--collapsed .chat-row-actions,
+  .sidebar--collapsed .chat-row-edit,
+  .sidebar--collapsed .syslog-row,
+  .sidebar--collapsed .sb-lang,
+  .sidebar--collapsed .byok-plashka,
+  .sidebar--collapsed .limit-banner,
+  .sidebar--collapsed .keys-trigger,
+  .sidebar--collapsed .author-card {
+    display: none;
+  }
+  .sidebar--collapsed .rail-only {
+    display: flex;
+  }
+  /* Center the icon-only controls in the rail. */
+  .sidebar--collapsed .acct,
+  .sidebar--collapsed .sb-item,
+  .sidebar--collapsed .newchat,
+  .sidebar--collapsed .sidebar-admin {
+    justify-content: center;
+    gap: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .sidebar--collapsed .sb-item {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  /* The active-mode accent bar would float oddly in the narrow rail. */
+  .sidebar--collapsed .sb-bar {
+    display: none;
+  }
+  .sidebar--collapsed .chat-row {
+    justify-content: center;
+  }
+}
+
+/* ============ MOBILE DRAWER + RESPONSIVE (PH23/C3, E1–E2) ============ */
+@media (max-width: 768px) {
+  .topbar-burger {
+    display: inline-flex;
+  }
+  /* Off-canvas drawer over the content; slides in on .sidebar--mobile-open. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(86vw, 20rem);
+    transform: translateX(-100%);
+    box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
+  }
+  .sidebar--mobile-open {
+    transform: translateX(0);
+  }
+  /* No desktop collapse on phones; the close button replaces it. */
+  .sidebar-collapse-btn {
+    display: none;
+  }
+  .sidebar-close-btn {
+    display: inline-flex;
+  }
+  .sidebar-head {
+    justify-content: flex-end;
+  }
+
+  .main {
+    padding: 12px 12px;
+    gap: 12px;
+  }
+  .topbar {
+    padding: 11px 13px;
+    gap: 9px;
+  }
+  .topbar-sub {
+    display: none;
+  }
+  .topbar-ctx {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .topbar-ctx-note {
+    max-width: 100%;
+  }
+
+  /* Compare collapses to a single column; cards take the full width. */
+  .modal-grid {
+    grid-template-columns: 1fr;
+  }
+  .composer {
+    max-width: 100%;
+  }
+
+  /* Dialogs span the viewport on phones (E1). */
+  .dialog-backdrop {
+    padding: 12px;
+    align-items: flex-end;
+  }
+  .dialog {
+    max-width: 100%;
+  }
+  .keys-dialog {
+    max-height: 92vh;
+  }
+  .admin {
+    padding: 14px 12px;
+  }
+
+  /* Comfortable tap targets ≥44px on touch screens (E3, a11y). */
+  .topbar-burger,
+  .sidebar-close-btn,
+  .composer-send,
+  .keys-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Very narrow phones (360–430px): tighten spacing, no horizontal overflow. */
+@media (max-width: 430px) {
+  .main {
+    padding: 10px 9px;
+  }
+  .chat {
+    padding: 14px 13px;
+  }
 }

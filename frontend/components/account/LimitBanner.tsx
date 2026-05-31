@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { IconInfo } from "@/components/icons/Icons";
 import { useAuth } from "@/store/AuthContext";
 import { useI18n } from "@/store/LanguageContext";
+import { useSidebarStatus } from "@/store/sidebarStatus";
 
 function formatCountdown(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
@@ -28,6 +29,9 @@ function formatCountdown(totalSeconds: number): string {
 export default function LimitBanner() {
   const { user, refresh } = useAuth();
   const { t } = useI18n();
+  // Visibility is governed by the single status source (PH23/D1) so this banner
+  // and the collapsed-rail "limited" square appear together.
+  const { limited } = useSidebarStatus();
 
   // Server-provided countdown anchor (null when the window has no requests yet
   // or the minute is unlimited). The local ticker decrements from it.
@@ -55,13 +59,12 @@ export default function LimitBanner() {
     return () => clearTimeout(id);
   }, [secondsLeft, refresh]);
 
-  if (!user || user.is_admin) return null;
+  if (!user || !limited) return null;
 
   const perMinute = user.max_requests_per_minute;
   const perDay = user.max_requests_per_day;
   const minuteLimited = perMinute != null;
   const dayLimited = perDay != null;
-  if (!minuteLimited && !dayLimited) return null;
 
   // Within each guarded row the matching limit is non-null (`?? 0` never fires).
   const remainingMinute = user.remaining_this_minute ?? perMinute ?? 0;

@@ -43,6 +43,7 @@
   /* sizing */
   --radius: 14px;
   --sidebar-width: 18rem;
+  --sidebar-width-collapsed: 4.25rem;
 }
 
 [data-theme="light"] {

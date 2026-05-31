@@ -10,6 +10,7 @@ import {
   JUDGE_SLOT,
   buildPersistedState,
   sanitizeLoadedState,
+  shouldClearKeysOnAuthChange,
   type KeysState,
 } from "@/store/KeysContext";
 
@@ -113,5 +114,31 @@ describe("sanitizeLoadedState", () => {
     const clean = sanitizeLoadedState(stored);
     expect(clean.responders.map((r) => r.slot)).toEqual(["groq", "custom-live"]);
     expect(clean.judge.active).toBe(true);
+  });
+});
+
+describe("shouldClearKeysOnAuthChange (PH23/B1 security)", () => {
+  it("keeps keys on a restored authenticated session (first resolution → user)", () => {
+    expect(shouldClearKeysOnAuthChange(undefined, 7)).toBe(false);
+  });
+
+  it("clears keys when the first resolution is anonymous (no owner)", () => {
+    expect(shouldClearKeysOnAuthChange(undefined, null)).toBe(true);
+  });
+
+  it("clears keys on logout (user → anonymous)", () => {
+    expect(shouldClearKeysOnAuthChange(7, null)).toBe(true);
+  });
+
+  it("clears keys when switching to a different account", () => {
+    expect(shouldClearKeysOnAuthChange(7, 9)).toBe(true);
+  });
+
+  it("keeps keys while the same user stays logged in", () => {
+    expect(shouldClearKeysOnAuthChange(7, 7)).toBe(false);
+  });
+
+  it("keeps state stable while staying anonymous", () => {
+    expect(shouldClearKeysOnAuthChange(null, null)).toBe(false);
   });
 });

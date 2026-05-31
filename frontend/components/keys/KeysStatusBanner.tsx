@@ -7,45 +7,31 @@
 //     (unlimited), red "available with limits" when some — but not all — are.
 // Nothing shows when the user has no active own keys (the limit banner covers
 // the default, app-key case).
+//
+// The state itself comes from the single source useSidebarStatus (PH23/D1) so
+// this full banner and the collapsed-rail squares never diverge.
 
 "use client";
 
 import { IconCheck, IconInfo } from "@/components/icons/Icons";
-import { useChatMode } from "@/store/ChatModeContext";
-import { useComposer } from "@/store/ComposerContext";
-import { DEFAULT_RESPONDER_SLOTS, JUDGE_SLOT, useKeys } from "@/store/KeysContext";
 import { useI18n } from "@/store/LanguageContext";
+import { useSidebarStatus } from "@/store/sidebarStatus";
 
 export default function KeysStatusBanner() {
-  const { mode } = useChatMode();
   const { t } = useI18n();
-  const { singleProvider } = useComposer();
-  const { isOwnKey, judgeActive, byokModelId, byokPayload, activeResponders, allParticipantsOwn } =
-    useKeys();
+  const { byok } = useSidebarStatus();
 
-  if (mode === "single") {
-    const onOwnKey = singleProvider === JUDGE_SLOT ? judgeActive : isOwnKey(singleProvider);
-    if (!onOwnKey) return null;
-    const model = byokModelId(singleProvider) ?? "";
+  if (!byok) return null;
+
+  if (byok.tone === "ok") {
+    const text =
+      byok.kind === "single"
+        ? t("keys.singleConnected", { model: byok.model })
+        : t("keys.compareUnlimited");
     return (
       <div className="byok-plashka byok-plashka--ok" role="status">
         <IconCheck size={15} />
-        <span>{t("keys.singleConnected", { model })}</span>
-      </div>
-    );
-  }
-
-  // Compare: only relevant once the user has at least one active own key.
-  if (byokPayload() === null) return null;
-
-  const customSlots = activeResponders.filter((r) => r.custom).map((r) => r.slot);
-  const slots = [...DEFAULT_RESPONDER_SLOTS, ...customSlots];
-
-  if (allParticipantsOwn(slots)) {
-    return (
-      <div className="byok-plashka byok-plashka--ok" role="status">
-        <IconCheck size={15} />
-        <span>{t("keys.compareUnlimited")}</span>
+        <span>{text}</span>
       </div>
     );
   }

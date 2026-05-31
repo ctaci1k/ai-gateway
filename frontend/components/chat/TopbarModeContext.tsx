@@ -9,12 +9,18 @@
 
 import ModelSwitcher from "@/components/chat/ModelSwitcher";
 import { useChatMode } from "@/store/ChatModeContext";
+import { JUDGE_SLOT, useKeys } from "@/store/KeysContext";
 import { useI18n } from "@/store/LanguageContext";
 import { JUDGE_MODEL, judgeModelName } from "@/utils/judge";
 
 export default function TopbarModeContext() {
   const { mode } = useChatMode();
   const { t } = useI18n();
+  const { byokModelId } = useKeys();
+
+  // Truthful judge name (PH23/A2): when a BYOK judge is active, the topbar shows
+  // the user's entered judge model_id; otherwise the built-in default (Qwen).
+  const judgeLabel = byokModelId(JUDGE_SLOT) ?? judgeModelName(JUDGE_MODEL) ?? "";
 
   if (mode === "single") {
     return (
@@ -29,9 +35,7 @@ export default function TopbarModeContext() {
 
   return (
     <div className="topbar-ctx">
-      <p className="topbar-ctx-note">
-        {t("topbar.compareInfo", { model: judgeModelName(JUDGE_MODEL) ?? "" })}
-      </p>
+      <p className="topbar-ctx-note">{t("topbar.compareInfo", { model: judgeLabel })}</p>
     </div>
   );
 }

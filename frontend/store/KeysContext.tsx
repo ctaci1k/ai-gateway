@@ -19,11 +19,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
 import { validateKeys, type ValidateEntry, type ValidateResult } from "@/services/keysApi";
+import { useAuth } from "@/store/AuthContext";
 
 // Built-in responder slots (mirror the backend roster / models_config.py).
 export const DEFAULT_RESPONDER_SLOTS = ["groq", "cerebras", "sambanova"] as const;
@@ -125,6 +127,19 @@ export function buildPersistedState(
   };
 }
 
+// Decide whether a logged-in-user change must wipe the BYOK keys (PH23/B1).
+// `prev === undefined` is the first auth resolution after mount: keep the keys
+// for a restored authenticated session (same owner, same tab), but clear when
+// landing anonymous (no owner). Afterwards, any id change — logout (→ null) or a
+// different account — clears. Pure for unit testing. Returns true ⇒ clear.
+export function shouldClearKeysOnAuthChange(
+  prev: number | null | undefined,
+  current: number | null,
+): boolean {
+  if (prev === undefined) return current === null;
+  return prev !== current;
+}
+
 interface KeysValue {
   state: KeysState;
   isOpen: boolean;
@@ -142,6 +157,9 @@ interface KeysValue {
   isOwnKey: (slot: string) => boolean;
   // The user's model_id for an active slot (judge slot supported), else null.
   byokModelId: (slot: string) => string | null;
+  // Wipe all keys from state and sessionStorage (security: called on logout /
+  // account change so the next account never inherits the previous one's keys).
+  clearKeys: () => void;
   // True when every Compare participant (the given responder slots + judge) is
   // on the user's own key → the turn is unlimited (NQ / Q7).
   allParticipantsOwn: (slots: string[]) => boolean;
@@ -152,6 +170,7 @@ const KeysContext = createContext<KeysValue | null>(null);
 export function KeysProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<KeysState>(defaultState);
   const [isOpen, setIsOpen] = useState(false);
+  const { user, status } = useAuth();
 
   // Hydrate from sessionStorage after mount. Deferred a microtask so the first
   // client render still matches the server (empty) — no hydration mismatch —
@@ -172,6 +191,29 @@ export function KeysProvider({ children }: { children: ReactNode }) {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     }
   }, []);
+
+  const clearKeys = useCallback(() => {
+    setState(defaultState());
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(STORAGE_KEY);
+    }
+  }, []);
+
+  // SECURITY (PH23/B1): keys are bound to the logged-in account. When the user
+  // changes within the same tab — logout (id → none) or a different account
+  // (id → other) — wipe the keys so the next account never inherits them.
+  // The very first resolution after mount is the session-restore case: an
+  // authenticated user keeps the keys already in sessionStorage (same owner,
+  // same tab), while landing anonymous clears them (no owner). A ref tracks the
+  // previous id so a change is detected without re-running on every render.
+  const prevUserIdRef = useRef<number | null | undefined>(undefined);
+  useEffect(() => {
+    if (status === "loading") return; // wait until auth is resolved
+    const currentId = user?.id ?? null;
+    const prev = prevUserIdRef.current;
+    prevUserIdRef.current = currentId;
+    if (shouldClearKeysOnAuthChange(prev, currentId)) clearKeys();
+  }, [user?.id, status, clearKeys]);
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
@@ -263,6 +305,7 @@ export function KeysProvider({ children }: { children: ReactNode }) {
       judgeActive: state.judge.active,
       isOwnKey,
       byokModelId,
+      clearKeys,
       allParticipantsOwn,
     }),
     [
@@ -275,6 +318,7 @@ export function KeysProvider({ children }: { children: ReactNode }) {
       activeResponders,
       isOwnKey,
       byokModelId,
+      clearKeys,
       allParticipantsOwn,
     ],
   );
