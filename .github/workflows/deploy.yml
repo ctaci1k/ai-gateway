@@ -96,6 +96,9 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           source: "docker-compose.prod.yml,deploy/nginx/nginx.conf"
           target: "/opt/ai-gateway"
+          # Overwrite existing files so re-deploys are idempotent — without this,
+          # tar refuses to unpack over an existing nginx.conf ("File exists").
+          overwrite: true
 
       - name: Pull & restart on VPS
         uses: appleboy/ssh-action@v1.2.0
