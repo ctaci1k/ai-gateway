@@ -11,8 +11,8 @@ updated: 2026-05-31
 > SSH-деплой на VPS → aaPanel термінує SSL. Без костилів, без технічного боргу.
 
 ## СТАН (читається першим — оновлюється після кожного кроку)
-- **Поточний крок:** `7.1` (end-to-end перевірка в браузері). **Фаза 6 завершена — сайт живий на https://st.byn.sarl.**
-- **Останній виконаний крок:** `6.x` ✅ aaPanel reverse proxy → 127.0.0.1:8080, Let's Encrypt SSL, Force HTTPS. https://st.byn.sarl/=200, /api/=200, http→301.
+- **Поточний крок:** `7.1` (end-to-end: реєстрація після фіксу datetime). Чекаємо CI(67c9aef)→Deploy.
+- **Останній виконаний крок:** `7.0` — знайдено+виправлено баг datetime: tz-aware vs naive на Postgres (реєстрація падала Internal error). Фікси: 0a6ed8a (naive UTC) + 67c9aef (session expiry compare).
 - **Заблоковано:** ні.
 - **Зібрані факти про середовище** (заповнюємо у Фазі 0):
   - OS / версія: `Ubuntu 26.04 LTS (kernel 7.0.0, x86_64)`
@@ -163,3 +163,4 @@ updated: 2026-05-31
 - 2026-05-31 — 3.3 ✅ GHCR login (deploy) + docker pull backend OK. 3.4 ✅ .env.production 12 змінних (chmod 600). **Фаза 3 done.** Далі: re-run Deploy (перший реальний деплой).
 - 2026-05-31 — Deploy фікси: copy nginx.conf (1649c69), overwrite:true (80a25d5). **Deploy ЗЕЛЕНИЙ** ✅. curl /=200, /api/=200; db/backend healthy. **Фази 4-5 done.** Далі Фаза 6 (домен+SSL через aaPanel). TODO: frontend healthcheck (wget) — косметика.
 - 2026-05-31 — Фаза 6 ✅: aaPanel сайт + reverse proxy →127.0.0.1:8080, Let's Encrypt SSL + Force HTTPS. **https://st.byn.sarl ЖИВИЙ** (=200, /api/=200, http→301, cert до 2026-08-29). Далі Фаза 7 (e2e в браузері).
+- 2026-05-31 — Фаза 7: реєстрація → Internal error. Корінь: datetime tz-aware vs колонки TIMESTAMP WITHOUT TZ (SQLite прощав, Postgres ні). Фікс naive UTC у моделях/auth/usage_repo (0a6ed8a) → зламав 35 тестів на auth_service:141 (порівняння aware vs naive) → фікс (67c9aef). NB: git add -A у 0a6ed8a захопив незакомічений WIP користувача — усе на GitHub, нічого не втрачено. Чекаємо CI→Deploy, потім повтор реєстрації.
