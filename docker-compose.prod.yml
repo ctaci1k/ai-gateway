@@ -1,0 +1,69 @@
+# AI Gateway — PRODUCTION stack (PH13: CI/CD via GHCR + aaPanel front).
+#
+# Архітектура:
+#   браузер → aaPanel-nginx :443 (SSL) → 127.0.0.1:8080 → цей nginx → frontend/backend
+#
+# Образи НЕ збираються тут — їх збирає GitHub Actions і пушить у GHCR.
+# На сервері лише:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production pull
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# ${IMAGE_TAG} підставляє CD (sha коміту); за замовчуванням latest для ручного запуску.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Жодних публічних портів — лише всередині docker-мережі.
+
+  backend:
+    image: ghcr.io/ctaci1k/ai-gateway-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      CHROMA_PATH: /app/chroma_data
+    volumes:
+      - chroma:/app/chroma_data
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  frontend:
+    image: ghcr.io/ctaci1k/ai-gateway-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    # Слухає ТІЛЬКИ на localhost — публічний фронт робить aaPanel-nginx (:443),
+    # який проксує сюди. Ззовні цей порт недоступний (не у ufw).
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  pgdata:
+  chroma:

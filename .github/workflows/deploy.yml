@@ -1,0 +1,111 @@
+name: Deploy
+
+# CD: збирає образи backend+frontend, пушить у GHCR, потім деплоїть на VPS
+# (SSH → docker compose pull && up -d). Запускається після пушу в main —
+# і лише якщо CI (.github/workflows/ci.yml) пройшов зелено для цього коміту.
+# Також доступний ручний запуск через вкладку Actions (workflow_dispatch).
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Не дозволяємо двом деплоям накладатись; новий скасовує попередній.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ghcr.io/ctaci1k/ai-gateway-backend
+  IMAGE_FRONTEND: ghcr.io/ctaci1k/ai-gateway-frontend
+
+jobs:
+  build-push:
+    name: Build & push images to GHCR
+    runs-on: ubuntu-latest
+    # На push-тригер деплоїмо тільки коли CI завершився успіхом.
+    # На ручний workflow_dispatch — завжди.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha: ${{ steps.vars.outputs.sha }}
+    steps:
+      - name: Resolve commit SHA
+        id: vars
+        run: echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_BACKEND }}:${{ steps.vars.outputs.sha }}
+            ${{ env.IMAGE_BACKEND }}:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=/api
+          tags: |
+            ${{ env.IMAGE_FRONTEND }}:${{ steps.vars.outputs.sha }}
+            ${{ env.IMAGE_FRONTEND }}:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Кладемо актуальний prod-compose на сервер (єдине джерело правди — git).
+      - name: Copy compose file to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          source: "docker-compose.prod.yml"
+          target: "/opt/ai-gateway"
+
+      - name: Pull & restart on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            cd /opt/ai-gateway
+            export IMAGE_TAG=${{ needs.build-push.outputs.sha }}
+            docker compose -f docker-compose.prod.yml --env-file .env.production pull
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
+            docker image prune -f
+            docker compose -f docker-compose.prod.yml ps
