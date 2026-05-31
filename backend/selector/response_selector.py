@@ -1,13 +1,13 @@
 # backend/selector/response_selector.py
 
 from config.selector_config import (
-    ALLOWED_MODELS,
     SELECTOR_MAX_RETRIES,
     SELECTOR_MIN_CONFIDENCE,
     SELECTOR_MODEL,
     SELECTOR_PROVIDER,
 )
 from core.logging import get_logger, log_event
+from selector.preference_weighting import apply_preference_weighting
 from selector.selector_fallback import SelectorFallback
 from selector.selector_parser import SelectorParser
 from selector.selector_prompt import SelectorPromptBuilder
@@ -50,10 +50,23 @@ class ResponseSelector:
         user_message: str,
         responses: dict,
         personalization_profile: dict | None = None,
+        judge_provider=None,
+        judge_label: dict | None = None,
     ):
         personalization_context = ResponseSelector.build_personalization_context(
             personalization_profile or {}
         )
+
+        # The judge identity reported to the UI: a BYOK judge reports its own
+        # model_id; otherwise the built-in judge (PH17). Validation is always
+        # against the actual presented responses (supports custom BYOK slots),
+        # which for the default roster equals ALLOWED_MODELS.
+        sel_provider = (judge_label or {}).get("provider") or SELECTOR_PROVIDER
+        sel_model = (judge_label or {}).get("model") or SELECTOR_MODEL
+        # Valid selections are exactly the responses shown to the judge — this
+        # covers custom BYOK slots and, for the default roster, equals
+        # ALLOWED_MODELS.
+        allowed = set(responses.keys())
 
         selector_prompt = SelectorPromptBuilder.build_selector_prompt(
             user_message=user_message,
@@ -70,7 +83,7 @@ class ResponseSelector:
             try:
                 selector_response = await ProviderService.execute_selector_ai(
                     message=selector_prompt,
-                    provider_name=SELECTOR_PROVIDER,
+                    judge_provider=judge_provider,
                 )
             except Exception as error:
                 fallback_reason = FALLBACK_JUDGE_UNAVAILABLE
@@ -91,14 +104,14 @@ class ResponseSelector:
                 )
                 continue
 
-            selector_response["selector_provider"] = SELECTOR_PROVIDER
-            selector_response["selector_model"] = SELECTOR_MODEL
+            selector_response["selector_provider"] = sel_provider
+            selector_response["selector_model"] = sel_model
 
             parsed_response = SelectorParser.parse_selector_response(selector_response)
             selected_model = parsed_response.selected_model
 
             # A model the judge named that we cannot honour is an invalid result.
-            if selected_model not in ALLOWED_MODELS or selected_model not in responses:
+            if selected_model not in allowed:
                 fallback_reason = FALLBACK_INVALID_RESPONSE
                 log_event(
                     logger,
@@ -120,18 +133,43 @@ class ResponseSelector:
                 )
                 break
 
+            # Bounded, deterministic nudge toward the user's manually-preferred
+            # model on comparable answers (PH16/E, D-11). Never overrides a
+            # clearly better answer; fully transparent via preference_weighting.
+            final_model, weighting = apply_preference_weighting(
+                selected_model=selected_model,
+                scores=parsed_response.scores,
+                responses=responses,
+                personalization_context=personalization_context,
+            )
+
+            reason = parsed_response.reason
+            if weighting.get("applied"):
+                note = (
+                    f"Adjusted toward your preferred model '{weighting['to']}' "
+                    f"over '{weighting['from']}' because the answers were of "
+                    f"comparable quality and you have chosen it more often."
+                )
+                reason = f"{reason} {note}".strip() if reason else note
+                log_event(
+                    logger,
+                    "selector_preference_weighting",
+                    **{k: v for k, v in weighting.items() if k != "applied"},
+                )
+
             return {
-                "selected_model": selected_model,
-                "best_response": responses[selected_model],
+                "selected_model": final_model,
+                "best_response": responses[final_model],
                 "confidence": parsed_response.confidence,
-                "reason": parsed_response.reason,
+                "reason": reason,
                 "scores": parsed_response.scores,
                 "fallback_used": False,
                 "fallback_reason": None,
-                "selector_provider": SELECTOR_PROVIDER,
-                "selector_model": SELECTOR_MODEL,
+                "selector_provider": sel_provider,
+                "selector_model": sel_model,
                 "personalization_used": bool(personalization_context),
                 "personalization_context": personalization_context,
+                "preference_weighting": weighting,
             }
 
         log_event(logger, "selector_fallback", reason=fallback_reason)

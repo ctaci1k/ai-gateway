@@ -22,7 +22,7 @@ class UsageRepository:
     async def count_since(self, since: datetime) -> int:
         """Number of usage events for this user with ``created_at >= since``.
 
-        Used for rolling-window quota enforcement (per-minute / per-day, D-10).
+        Used for window quota enforcement (per-minute / per-day, D-10/PH17).
         """
         async with session_scope() as session:
             count = await session.scalar(
@@ -32,6 +32,25 @@ class UsageRepository:
                 )
             )
             return count or 0
+
+    async def timestamps_since(self, since: datetime) -> list[datetime]:
+        """This user's event timestamps with ``created_at >= since``, ascending.
+
+        Feeds the fixed per-minute window reconstruction (PH18/6, D-13): the
+        window "opens" with the first request and resets *fully* at the 60s mark,
+        so the reset point and count are derived by replaying the raw timestamps
+        rather than a rolling trailing count.
+        """
+        async with session_scope() as session:
+            rows = await session.scalars(
+                select(UsageEvent.created_at)
+                .where(
+                    UsageEvent.user_id == self._user_id,
+                    UsageEvent.created_at >= since,
+                )
+                .order_by(UsageEvent.created_at.asc())
+            )
+            return list(rows)
 
     async def record(
         self,

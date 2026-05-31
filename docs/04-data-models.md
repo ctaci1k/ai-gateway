@@ -18,6 +18,28 @@
 | `include_all_responses` | bool | `true` | — |
 | `manual_override` | bool | `false` | — |
 | `manually_selected_model` | str \| None | `null` | — |
+| `chat_id` | int \| None | `null` | PH9: персист у збережений чат |
+| `rag_enabled` | bool | `false` | PH10 |
+| `byok` | ByokConfig \| None | `null` | PH17: транзитні ключі (нижче) |
+
+### ByokConfig (PH17, D-12) — транзитна модель ключів
+
+**Ніколи не персиститься** — ні в БД, ні в логах. Живе лише в `sessionStorage` браузера й передається в кожному запиті; бекенд будує провайдерів транзитно (in-memory на час запиту) і відкидає (NQ5).
+
+```jsonc
+{
+  "judge": { "api_key": "str", "model_id": "str", "base_url": "str|null" },   // null base_url → endpoint Groq
+  "responders": [
+    { "slot": "groq|cerebras|sambanova|custom-*", "api_key": "str", "model_id": "str", "base_url": "str|null" }
+  ]
+}
+```
+- Дефолтні слоти беруть фіксований endpoint провайдера (`base_url` опційний); кастомні (4–5-й) **потребують** `base_url` (OpenAI-сумісний).
+- FE-дзеркало — `store/KeysContext.tsx` (`ByokPayload`). Валідація — `POST /keys/validate` ([03](03-api-contracts.md)).
+
+### Семантика квотних вікон (PH17, D-12) — `services/quota_service.py`
+
+Без нових таблиць (рахуються з `usage_events`). **Хвилина:** ковзне 60-с вікно «від першого запиту»; `used = count(events за останні 60с)`, `remaining_this_minute = max(0, limit − used)`, `minute_resets_in_seconds = ceil(60 − (now − earliest_in_window))` (`null` поки запитів нема). **День:** календарний за `Europe/Warsaw` (DST-aware, `zoneinfo`), `day_start = 00:00 Warsaw → UTC`, скид `day_resets_at` = наступне 00:00 Warsaw. Enforcement використовує **ті самі** вікна, що й `/auth/me`.
 
 ---
 

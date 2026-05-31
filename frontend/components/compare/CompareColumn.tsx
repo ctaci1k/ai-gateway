@@ -3,6 +3,7 @@
 "use client";
 
 import { useI18n } from "@/store/LanguageContext";
+import { RESPONDER_LABELS } from "@/utils/models";
 
 import ManualSelectionButton from "./ManualSelectionButton";
 import ModelScoreCard from "./ModelScoreCard";
@@ -34,13 +35,17 @@ export default function CompareColumn({
 }: CompareColumnProps) {
   const { t } = useI18n();
 
+  // Built-in slots show their friendly registry label; a BYOK/custom slot has
+  // no registry entry, so its truthful name is the model_id that answered (NQ4).
+  const name = RESPONDER_LABELS[provider] ?? model ?? provider;
+
   return (
     <div className={winner ? "rcard rcard-win" : "rcard"}>
       {winner && <div className="rcard-flag">{t("compare.bestAnswer")}</div>}
 
       <div className="rcard-head">
         <div>
-          <div className="rcard-name">{provider.toUpperCase()}</div>
+          <div className="rcard-name">{name}</div>
           <div className="rcard-model mono">{model}</div>
         </div>
         <ModelScoreCard score={score} executionTime={executionTime} />

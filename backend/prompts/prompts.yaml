@@ -2,7 +2,7 @@
 # Bump `version` whenever a template changes meaningfully.
 # Placeholders use $name syntax (string.Template); literal "$" must be "$$".
 
-version: 3
+version: 4
 
 prompts:
   # --- RAG (PH10; relaxed in PH13) ---
@@ -38,8 +38,13 @@ prompts:
 
       USER PERSONALIZATION PROFILE:
 
-      Preferred Models:
+      Preferred Models (how often each model's answer ended up being the chosen
+      best answer):
       $preferred_models
+
+      Manually Selected Models (the user OVERRODE the judge and picked these
+      models themselves — this is the STRONGEST signal of what they prefer):
+      $manual_model_selections
 
       Favorite Response Style:
       $favorite_response_style
@@ -49,12 +54,15 @@ prompts:
 
       IMPORTANT PERSONALIZATION RULES:
 
-      - Personalization should ONLY be a secondary factor.
       - Response quality is ALWAYS the highest priority.
+      - Personalization is only a SECONDARY, tie-breaking factor.
       - Do NOT select a weaker response only because
         it matches user preferences.
-      - Use preferences only as a small weighting signal
-        when multiple responses are similarly strong.
+      - When two or more responses are of COMPARABLE quality, prefer the model
+        the user has manually selected more often (see "Manually Selected
+        Models" above).
+      - Judge ONLY by the content of each response. Do NOT let the ORDER in which
+        the responses are listed below influence your decision in any way.
 
   selector_judge:
     description: Main judge prompt for selecting the best model response.

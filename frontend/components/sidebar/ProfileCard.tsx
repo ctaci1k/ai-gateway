@@ -15,10 +15,7 @@ export default function ProfileCard() {
       <div className="acct-av">
         <IconUser size={17} />
       </div>
-      <div>
-        <div className="acct-name">{user?.username ?? t("profile.title")}</div>
-        <div className="acct-sub">{t("profile.subtitle")}</div>
-      </div>
+      <div className="acct-name">{user?.username ?? t("profile.title")}</div>
       <button
         className="acct-logout"
         type="button"

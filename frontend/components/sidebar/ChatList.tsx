@@ -75,7 +75,6 @@ function ChatRow({ chat }: { chat: ChatSummary }) {
       >
         <IconChat size={15} />
         <span className="chat-row-title">{chat.title}</span>
-        <span className="chat-row-count">{chat.message_count}</span>
       </button>
       <div className="chat-row-actions">
         <button

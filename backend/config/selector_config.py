@@ -12,9 +12,9 @@ ALLOWED_MODELS = [
 # the judge stays available. Gemini is still used for embeddings (separate, much
 # larger quota).
 #
-# The judge model is *neutral* — qwen3-32b is NOT one of the responders
-# (groq=llama-3.3-70b, cerebras=gpt-oss-120b, sambanova=its own), so there is no
-# self-bias toward any answer. It is served by Groq on the same key.
+# The judge model is *neutral* — qwen3-32b shares no family with any responder
+# in the registry (config/models_config.py: Llama / GLM / DeepSeek), so there is
+# no self-bias toward any answer. It is served by Groq on the same key.
 SELECTOR_PROVIDER = "groq"
 
 SELECTOR_MODEL = "qwen/qwen3-32b"

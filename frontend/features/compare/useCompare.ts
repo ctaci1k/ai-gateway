@@ -5,61 +5,31 @@
 import { useCallback, useState } from "react";
 
 import { compareChat } from "@/services/compareApi";
+import { DEFAULT_RESPONDER_SLOTS, useKeys } from "@/store/KeysContext";
 import { useRagDocuments } from "@/store/RagContext";
-import type { CompareRow, FailedProvider, SavedInteraction, SelectorMetadata } from "@/types/api";
-
-import { toCompareRows } from "./rows";
 
 export interface RunCompareOptions {
   chatId?: number | null;
 }
 
 export interface UseCompareResult {
-  responses: CompareRow[];
-  failedProviders: FailedProvider[];
   loading: boolean;
-  selectedModel: string | null;
-  setSelectedModel: (model: string | null) => void;
-  selectorMetadata: SelectorMetadata | null;
   error: string | null;
   runCompare: (message: string, options?: RunCompareOptions) => Promise<void>;
-  hydrate: (interaction: SavedInteraction | null) => void;
 }
 
-const COMPARE_PROVIDERS = ["groq", "cerebras", "sambanova"];
-
+// Runs one Compare turn. The result is persisted server-side against the chat
+// (chatId) and rendered from the reloaded thread (PH16/D1), so the hook only
+// owns the request lifecycle (loading / error) — it no longer stores responses.
 export function useCompare(): UseCompareResult {
   // RAG is applied automatically whenever the user has any documents.
   const { documents } = useRagDocuments();
   const ragEnabled = documents.length > 0;
-  const [responses, setResponses] = useState<CompareRow[]>([]);
-  const [failedProviders, setFailedProviders] = useState<FailedProvider[]>([]);
+  // BYOK: extra (custom) responders the user added expand the Compare roster to
+  // 4–5 columns; their keys ride along as transit overrides (PH17).
+  const { activeResponders, byokPayload } = useKeys();
   const [loading, setLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  const [selectorMetadata, setSelectorMetadata] = useState<SelectorMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Populate the view from a persisted turn (opening a saved chat), or clear it.
-  const hydrate = useCallback((interaction: SavedInteraction | null) => {
-    setError(null);
-    if (!interaction) {
-      setResponses([]);
-      setFailedProviders([]);
-      setSelectedModel(null);
-      setSelectorMetadata(null);
-      return;
-    }
-    setResponses(
-      toCompareRows(
-        interaction.all_responses,
-        interaction.selector_scores,
-        interaction.selector_metadata?.selector_confidence || 0,
-      ),
-    );
-    setFailedProviders(interaction.failed_providers || []);
-    setSelectedModel(interaction.manually_selected_model || interaction.selected_model || null);
-    setSelectorMetadata(interaction.selector_metadata || null);
-  }, []);
 
   const runCompare = useCallback(
     async (message: string, options: RunCompareOptions = {}) => {
@@ -70,43 +40,27 @@ export function useCompare(): UseCompareResult {
       setError(null);
       setLoading(true);
 
+      // The 3 built-in slots plus any active custom responder slots (deduped).
+      const customSlots = activeResponders.filter((r) => r.custom).map((r) => r.slot);
+      const providers = [...DEFAULT_RESPONDER_SLOTS, ...customSlots];
+
       try {
-        const data = await compareChat({
+        await compareChat({
           message,
-          providers: COMPARE_PROVIDERS,
+          providers,
           selectorEnabled: true,
           chatId: options.chatId ?? null,
           ragEnabled,
+          byok: byokPayload(),
         });
-
-        setResponses(
-          toCompareRows(
-            data.all_responses || {},
-            data.selector_scores,
-            data.selector_metadata?.selector_confidence || 0,
-          ),
-        );
-        setFailedProviders(data.failed_providers || []);
-        setSelectedModel(data.selected_model || null);
-        setSelectorMetadata(data.selector_metadata || null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
         setLoading(false);
       }
     },
-    [ragEnabled],
+    [ragEnabled, activeResponders, byokPayload],
   );
 
-  return {
-    responses,
-    failedProviders,
-    loading,
-    selectedModel,
-    setSelectedModel,
-    selectorMetadata,
-    error,
-    runCompare,
-    hydrate,
-  };
+  return { loading, error, runCompare };
 }

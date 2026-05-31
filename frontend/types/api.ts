@@ -156,6 +156,13 @@ export interface CurrentUser {
   used_this_minute: number;
   used_today: number;
   remaining_today: number | null;
+  // Live limit windows (PH17). Per-dimension fields are null when that
+  // dimension is unlimited (admin / null limit). The minute window opens with
+  // the first request; minute_resets_in_seconds counts down to its reset. The
+  // day resets at 00:00 Europe/Warsaw (day_resets_at, ISO-8601 UTC).
+  remaining_this_minute: number | null;
+  minute_resets_in_seconds: number | null;
+  day_resets_at: string | null;
 }
 
 // A user row in the admin table (identity + quotas + current usage).
@@ -214,6 +221,9 @@ export interface StreamTokenEvent {
 export interface StreamErrorEvent {
   type: "error";
   content: string;
+  // Classified failure reason (PH18/8, D-13) so the UI can tell a BYOK key's own
+  // provider rate-limit apart from our account quota. Absent on older payloads.
+  reason?: FailureReason | null;
 }
 
 // Terminal event carrying RAG grounding for a Single+RAG stream (PH13/C3).

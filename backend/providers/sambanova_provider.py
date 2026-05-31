@@ -2,6 +2,7 @@
 
 from openai import OpenAI
 
+from config.models_config import get_model_spec
 from core.config import get_settings
 from providers.openai_compatible import OpenAICompatibleProvider
 
@@ -9,7 +10,6 @@ from providers.openai_compatible import OpenAICompatibleProvider
 class SambaNovaProvider(OpenAICompatibleProvider):
 
     provider_name = "sambanova"
-    model_name = "Meta-Llama-3.3-70B-Instruct"
 
     supports_streaming = True
     supports_structured_output = True
@@ -23,4 +23,4 @@ class SambaNovaProvider(OpenAICompatibleProvider):
             api_key=get_settings().sambanova_api_key,
             base_url="https://api.sambanova.ai/v1",
         )
-        self.model = self.model_name
+        self.apply_model_spec(get_model_spec(self.provider_name))

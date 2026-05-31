@@ -8,7 +8,8 @@ RESPONSES = {"groq": "answer A", "cerebras": "answer B"}
 
 
 def _judge_returning(payload):
-    async def _fake(message, provider_name="gemini"):
+    # Accepts the judge-override kwarg (judge_provider) added for BYOK (PH17).
+    async def _fake(message, judge_provider=None):
         if isinstance(payload, Exception):
             raise payload
         return dict(payload)
@@ -144,10 +145,63 @@ async def test_judge_exception_falls_back(monkeypatch):
     assert result["fallback_used"] is True
 
 
+async def test_manual_preference_shifts_near_tie_selection(monkeypatch):
+    # Judge narrowly prefers groq; the user has manually chosen cerebras several
+    # times → the final pick shifts to cerebras (PH16/E, D-11).
+    monkeypatch.setattr(
+        ProviderService,
+        "execute_selector_ai",
+        staticmethod(
+            _judge_returning(
+                {
+                    "selected_model": "groq",
+                    "confidence": 0.9,
+                    "reason": "slightly better",
+                    "scores": {"groq": 80, "cerebras": 78},
+                }
+            )
+        ),
+    )
+    result = await ResponseSelector.select_best_response(
+        "q",
+        RESPONSES,
+        personalization_profile={"manual_model_selections": {"cerebras": 4}},
+    )
+    assert result["selected_model"] == "cerebras"
+    assert result["best_response"] == "answer B"
+    assert result["preference_weighting"]["applied"] is True
+    assert result["fallback_used"] is False
+
+
+async def test_manual_preference_does_not_override_clear_winner(monkeypatch):
+    # groq is clearly ahead → preference must not override it.
+    monkeypatch.setattr(
+        ProviderService,
+        "execute_selector_ai",
+        staticmethod(
+            _judge_returning(
+                {
+                    "selected_model": "groq",
+                    "confidence": 0.9,
+                    "reason": "much better",
+                    "scores": {"groq": 95, "cerebras": 78},
+                }
+            )
+        ),
+    )
+    result = await ResponseSelector.select_best_response(
+        "q",
+        RESPONSES,
+        personalization_profile={"manual_model_selections": {"cerebras": 10}},
+    )
+    assert result["selected_model"] == "groq"
+    assert result["preference_weighting"]["applied"] is False
+
+
 async def test_invalid_model_then_retry_success(monkeypatch):
     calls = {"n": 0}
 
-    async def _fake(message, provider_name="gemini"):
+    async def _fake(message, judge_provider=None):
         calls["n"] += 1
         if calls["n"] == 1:
             return {"selected_model": "not-a-model", "confidence": 0.9}

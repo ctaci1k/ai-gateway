@@ -6,6 +6,7 @@ import types
 
 import pytest
 
+from core.config import get_settings
 from core.errors import ProviderError
 from providers.openai_compatible import OpenAICompatibleProvider
 
@@ -42,7 +43,8 @@ async def test_generate_passes_explicit_max_tokens():
     provider = _FakeProvider(content="hello")
     result = await provider.generate("hi")
     assert result == "hello"
-    assert provider.last_kwargs["max_tokens"] == 1024
+    # No per-provider budget on the fake → the global RESPONDER_MAX_TOKENS.
+    assert provider.last_kwargs["max_tokens"] == get_settings().responder_max_tokens
 
 
 async def test_generate_empty_content_is_provider_failure():
@@ -67,10 +69,34 @@ async def test_stream_passes_max_tokens_and_yields():
     provider = _FakeProvider(stream_chunks=[_delta("foo"), _delta(None), _delta("bar")])
     chunks = [c async for c in provider.generate_stream("hi")]
     assert chunks == ["foo", "bar"]
-    assert provider.last_kwargs["max_tokens"] == 1024
+    assert provider.last_kwargs["max_tokens"] == get_settings().responder_max_tokens
 
 
 async def test_stream_empty_is_provider_failure():
     provider = _FakeProvider(stream_chunks=[_delta(None), _delta("")])
     with pytest.raises(ProviderError):
         [c async for c in provider.generate_stream("hi")]
+
+
+def test_registry_per_provider_budget_overrides_global():
+    """A ModelSpec budget (e.g. GLM-4.7 reasoning headroom) wins over the global
+    default; without a spec the provider falls back to RESPONDER_MAX_TOKENS."""
+    from config.models_config import ModelSpec
+
+    provider = _FakeProvider(content="x")
+    assert provider._max_tokens() == get_settings().responder_max_tokens
+
+    provider.apply_model_spec(
+        ModelSpec(provider="fake", api_model_id="m", display_name="M", max_tokens=4096)
+    )
+    assert provider._max_tokens() == 4096
+    assert provider.display_name == "M"
+
+
+def test_cerebras_registry_budget_matches_settings():
+    """The Cerebras spec uses the dedicated reasoning budget (OD-1)."""
+    from config.models_config import get_model_spec
+
+    spec = get_model_spec("cerebras")
+    assert spec.max_tokens == get_settings().cerebras_max_tokens
+    assert spec.api_model_id == get_settings().cerebras_model

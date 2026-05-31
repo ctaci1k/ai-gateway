@@ -82,6 +82,8 @@ class ProvidersResponse(BaseModel):
 class ProviderInfo(BaseModel):
     provider: str
     model: str
+    # Truthful human label for the model (PH16, D-11), e.g. "Llama 3.3 70B".
+    display_name: str
     supports_streaming: bool
     supports_structured_output: bool
     supports_tool_calling: bool

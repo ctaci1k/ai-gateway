@@ -12,11 +12,13 @@ from core.db import dispose_engine, init_models
 from core.errors import register_error_handlers
 from core.logging import configure_logging, get_logger
 from core.middleware import RateLimitMiddleware, RequestLoggingMiddleware
+from memory.chats_repository import purge_orphan_chat_messages
 from routes.admin import router as admin_router
 from routes.auth import router as auth_router
 from routes.chat import router as chat_router
 from routes.chats import router as chats_router
 from routes.documents import router as documents_router
+from routes.keys import router as keys_router
 from routes.memory import router as memory_router
 from routes.preferences import router as preferences_router
 from routes.providers import router as providers_router
@@ -32,7 +34,18 @@ def create_app() -> FastAPI:
         # Ensure schema exists (dev/runtime). Prod schema is owned by Alembic;
         # both derive from the same Base.metadata.
         await init_models()
-        logger.info("startup", extra={"extra_fields": {"event": "db_ready"}})
+        # One-time/defensive cleanup of chat_messages orphaned by the previous
+        # non-cascading delete (PH17/A). Idempotent.
+        removed = await purge_orphan_chat_messages()
+        logger.info(
+            "startup",
+            extra={
+                "extra_fields": {
+                    "event": "db_ready",
+                    "orphan_messages_removed": removed,
+                }
+            },
+        )
         yield
         await dispose_engine()
 
@@ -60,6 +73,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(chats_router)
     app.include_router(documents_router)
+    app.include_router(keys_router)
     app.include_router(preferences_router)
     app.include_router(providers_router)
     app.include_router(memory_router)

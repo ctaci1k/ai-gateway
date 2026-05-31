@@ -36,6 +36,22 @@ def _summary(chat: Chat, message_count: int) -> dict[str, Any]:
     }
 
 
+async def purge_orphan_chat_messages() -> int:
+    """Remove ``chat_messages`` whose parent ``Chat`` no longer exists (PH17/A).
+
+    Earlier ``delete_chat`` used a Core bulk-DELETE that skipped the ORM
+    ``delete-orphan`` cascade and, on SQLite (FK cascade off by default), left
+    orphaned messages behind; SQLite's chat-id reuse then mixed them into a new
+    chat. This one-time, idempotent cleanup runs at startup. Returns the number
+    of rows removed.
+    """
+    async with session_scope() as session:
+        result = await session.execute(
+            delete(ChatMessage).where(ChatMessage.chat_id.not_in(select(Chat.id)))
+        )
+        return result.rowcount or 0
+
+
 class SavedChatRepository:
     def __init__(self, user_id: int):
         self._user_id = user_id
@@ -127,6 +143,15 @@ class SavedChatRepository:
         async with session_scope() as session:
             # Confirm ownership first so foreign chats can't be deleted.
             await self._get_owned(session, chat_id)
+            # Delete the chat's messages explicitly before the chat itself.
+            # A Core bulk-DELETE on Chat does not trigger the ORM
+            # ``delete-orphan`` cascade, and SQLite has FK cascade disabled by
+            # default, so without this the messages were orphaned — and since
+            # SQLite reuses the freed chat id, a brand-new chat would "inherit"
+            # them. Deleting children first is robust regardless of cascade.
+            await session.execute(
+                delete(ChatMessage).where(ChatMessage.chat_id == chat_id)
+            )
             await session.execute(delete(Chat).where(Chat.id == chat_id))
 
     async def add_message(

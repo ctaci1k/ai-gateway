@@ -25,9 +25,10 @@ class OpenAICompatibleProvider(BaseProvider):
         return self.client.chat.completions.create(model=self.model, **kwargs)
 
     def _max_tokens(self) -> int:
-        # Explicit output budget so reasoning models (gpt-oss-120b) reliably
-        # emit visible content instead of spending it all on hidden reasoning.
-        return get_settings().responder_max_tokens
+        # Explicit output budget so reasoning models reliably emit visible
+        # content instead of spending it all on hidden reasoning. Per-provider
+        # budget from the registry (PH16); falls back to the global default.
+        return self.max_output_tokens or get_settings().responder_max_tokens
 
     async def generate_full(self, message: str) -> dict:
         response = await asyncio.to_thread(
@@ -53,6 +54,19 @@ class OpenAICompatibleProvider(BaseProvider):
 
     async def generate(self, message: str) -> str:
         return (await self.generate_full(message))["text"]
+
+    async def validate_credentials(self) -> None:
+        """Lightweight live check that the key/model/endpoint work (BYOK, PH17).
+
+        Sends a tiny completion; raises on any API error (bad key, unknown
+        model, unreachable endpoint). An empty completion still counts as
+        success — the point is that the call authenticates and the model exists.
+        Nothing is stored."""
+        await asyncio.to_thread(
+            self._create,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=16,
+        )
 
     async def generate_stream(self, message: str) -> AsyncGenerator[str, None]:
         def make_iter():

@@ -36,6 +36,10 @@
   --danger-surface: rgba(248, 113, 113, 0.12);
   --warning: var(--amber-500);
 
+  /* scrollbar (dark) — thin, themed thumb */
+  --scrollbar-thumb: rgba(148, 163, 184, 0.22);
+  --scrollbar-thumb-hover: rgba(148, 163, 184, 0.4);
+
   /* sizing */
   --radius: 14px;
   --sidebar-width: 18rem;
@@ -62,4 +66,8 @@
   --danger: #dc2626;
   --danger-surface: rgba(220, 38, 38, 0.08);
   --warning: #ca8a04;
+
+  /* scrollbar (light) */
+  --scrollbar-thumb: rgba(15, 23, 42, 0.18);
+  --scrollbar-thumb-hover: rgba(15, 23, 42, 0.32);
 }

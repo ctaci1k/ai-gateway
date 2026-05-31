@@ -44,13 +44,16 @@
   border: 1px solid var(--border);
 }
 .acct-name {
+  /* Sits next to the icon, vertically centered via .acct{align-items:center}
+   * (PH19/2). Truncates long usernames; "Log out" is pushed right by its own
+   * margin-left:auto. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
   font-size: 14px;
   color: var(--fg);
-}
-.acct-sub {
-  font-size: 12px;
-  color: var(--muted);
 }
 
 /* sidebar section caption */
@@ -186,13 +189,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.chat-row-count {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--subtle);
-  font-family: var(--font-mono), monospace;
 }
 .chat-row-actions {
   display: flex;
@@ -433,6 +429,15 @@
   background: rgba(var(--accent-rgb), 0.18);
 }
 
+/* Positioning context for the floating "scroll to bottom" button (PH18/5).
+ * Inherits the flex sizing .msgs used to get directly from .chat. */
+.msgs-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .msgs {
   flex: 1;
   min-height: 0;
@@ -446,6 +451,73 @@
   flex-direction: column;
   gap: 22px;
   padding: 8px 10px;
+}
+/* Centered above the composer; visible only when scrolled away from bottom. */
+.scroll-bottom {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
+}
+.scroll-bottom:hover {
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  transform: translateX(-50%) translateY(1px);
+}
+.scroll-bottom:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Thin, rounded, themed scrollbar (PH16/6) for the app's scroll containers —
+ * the chat/compare feed (.msgs is the single feed container) and the in-composer
+ * document popover. Tokens keep it consistent across dark/light. */
+.thin-scroll,
+.msgs,
+.composer-popover,
+.keys-dialog {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.thin-scroll::-webkit-scrollbar,
+.msgs::-webkit-scrollbar,
+.composer-popover::-webkit-scrollbar,
+.keys-dialog::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-track,
+.msgs::-webkit-scrollbar-track,
+.composer-popover::-webkit-scrollbar-track,
+.keys-dialog::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb,
+.msgs::-webkit-scrollbar-thumb,
+.composer-popover::-webkit-scrollbar-thumb,
+.keys-dialog::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover,
+.msgs::-webkit-scrollbar-thumb:hover,
+.composer-popover::-webkit-scrollbar-thumb:hover,
+.keys-dialog::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 .msgs-empty {
   flex: 1;
@@ -622,17 +694,25 @@
 .rcard-fail {
   border-style: dashed;
   border-color: var(--danger);
-  opacity: 0.85;
+  /* Fill the dashed card with a light danger tint (mirrors how the winning
+     card is tinted) so it reads as a real, intentional state rather than a
+     faded ghost — text stays fully legible (PH17/B). */
+  background: var(--danger-surface);
 }
 .rcard-flag--fail {
   color: var(--danger);
-  background: var(--danger-surface);
+  /* Opaque card backing (not the translucent danger surface) so the dashed
+     border doesn't show through and read as a "cut" badge (PH17/B). */
+  background: var(--card);
   border: 1px solid var(--danger);
+}
+.rcard-fail .rcard-name {
+  color: var(--danger);
 }
 .rcard-fail-reason {
   font-size: 13px;
   line-height: 1.5;
-  color: var(--danger);
+  color: var(--fg);
 }
 .rcard-head {
   display: flex;
@@ -1191,6 +1271,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
   font-size: 12px;
   line-height: 1.45;
   color: var(--muted);
@@ -1199,6 +1280,29 @@
   color: var(--danger);
   font-weight: 600;
   font-size: 12.5px;
+}
+.limit-intro {
+  color: var(--muted);
+}
+.limit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
+  min-width: 0;
+  color: var(--fg);
+  font-weight: 600;
+}
+.limit-row > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.limit-reset {
+  color: var(--subtle);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .sidebar-admin {
   display: flex;
@@ -1420,4 +1524,283 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Confirmation dialog (PH16/A1) — token-based, a11y modal. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(7, 8, 13, 0.6);
+  backdrop-filter: blur(2px);
+}
+.dialog {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: 0 24px 60px rgba(7, 8, 13, 0.45);
+}
+.dialog-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.dialog-message {
+  margin: 0 0 20px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.dialog-btn {
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--fg);
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.dialog-btn:hover {
+  background: var(--panel);
+}
+.dialog-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dialog-btn--danger {
+  background: var(--danger-surface);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.dialog-btn--danger:hover {
+  background: var(--danger);
+  color: var(--accent-contrast);
+}
+.dialog-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.dialog-btn--primary:hover {
+  filter: brightness(1.05);
+}
+.dialog-btn--primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── BYOK (bring-your-own-key) ─────────────────────────────────────────── */
+.keys-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  transition: background 0.15s;
+}
+.keys-trigger:hover {
+  background: rgba(var(--accent-rgb), 0.14);
+}
+.keys-dialog {
+  max-width: 560px;
+  max-height: 86vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.keys-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.keys-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.keys-close:hover {
+  color: var(--fg);
+}
+.keys-intro {
+  margin: 6px 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.keys-notes {
+  margin: 0 0 16px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--subtle);
+}
+.keys-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.keys-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.keys-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.keys-slot {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.keys-default {
+  font-size: 11.5px;
+  color: var(--subtle);
+}
+.keys-remove {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--danger);
+}
+.keys-remove:hover {
+  text-decoration: underline;
+}
+.keys-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.keys-input-wrap {
+  position: relative;
+  flex: 1 1 200px;
+  display: flex;
+}
+.keys-input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+}
+.keys-input-wrap .keys-input {
+  padding-right: 58px;
+}
+.keys-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.keys-input--invalid {
+  border-color: var(--danger);
+  background: var(--danger-surface);
+}
+.keys-input--model {
+  flex: 1 1 160px;
+}
+.keys-input--url {
+  flex: 1 1 100%;
+}
+.keys-eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  border-radius: 6px;
+}
+.keys-eye:hover {
+  background: rgba(var(--accent-rgb), 0.12);
+}
+.keys-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--danger);
+}
+.keys-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px dashed rgba(var(--accent-rgb), 0.4);
+  border-radius: 11px;
+}
+.keys-add:hover {
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.dialog .dialog-actions {
+  margin-top: 18px;
+}
+
+/* Green/red status plashkas for BYOK in Single / Compare (PH17, step 7). */
+.byok-plashka {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 11px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.byok-plashka--ok {
+  color: var(--success, #16a34a);
+  background: var(--success-surface, rgba(22, 163, 74, 0.1));
+  border: 1px solid var(--success, #16a34a);
+}
+.byok-plashka--warn {
+  color: var(--danger);
+  background: var(--danger-surface);
+  border: 1px solid var(--danger);
+}
+/* The "+" chip that opens BYOK settings from the Single model switcher. */
+.model-chip--add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }

@@ -75,7 +75,14 @@ class BaseProvider(ABC):
 
     provider_name = "base"
 
+    # Set from the model registry in __init__ (PH16). The class defaults are
+    # only placeholders for providers that have no registry entry.
     model_name = "unknown"
+
+    display_name = "unknown"
+
+    # Per-provider output budget (PH16); None falls back to RESPONDER_MAX_TOKENS.
+    max_output_tokens: int | None = None
 
     supports_streaming = True
 
@@ -114,11 +121,27 @@ class BaseProvider(ABC):
 
         return await self.generate_structured(message)
 
+    def apply_model_spec(self, spec) -> None:
+        """Bind this instance to its registry ``ModelSpec`` (PH16, D-11).
+
+        Sets the model id sent to the API, the truthful display name shown in
+        the UI / ``/providers/info``, and the per-provider output budget. The
+        spec is the single source of truth — providers no longer hardcode it.
+        """
+        if spec is None:
+            self.model = self.model_name
+            return
+        self.model = spec.api_model_id
+        self.model_name = spec.api_model_id
+        self.display_name = spec.display_name
+        self.max_output_tokens = spec.max_tokens
+
     def get_provider_info(self):
 
         return {
             "provider": self.provider_name,
             "model": self.model_name,
+            "display_name": self.display_name,
             "supports_streaming": (self.supports_streaming),
             "supports_structured_output": (self.supports_structured_output),
             "supports_tool_calling": (self.supports_tool_calling),

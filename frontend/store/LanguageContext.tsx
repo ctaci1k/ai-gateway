@@ -30,14 +30,12 @@ function detectInitialLocale(): LocaleCode {
     return DEFAULT_LOCALE;
   }
 
+  // New users always start in English (DEFAULT_LOCALE, PH19/4): the browser
+  // language is intentionally NOT auto-detected. Once a user picks a language it
+  // is persisted below and restored here on the next visit.
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored && isLocale(stored)) {
     return stored;
-  }
-
-  const browser = window.navigator.language?.slice(0, 2);
-  if (browser && isLocale(browser)) {
-    return browser;
   }
 
   return DEFAULT_LOCALE;

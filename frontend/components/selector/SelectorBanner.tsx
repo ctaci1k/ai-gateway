@@ -6,6 +6,7 @@ import { IconInfo } from "@/components/icons/Icons";
 import { useI18n } from "@/store/LanguageContext";
 import type { FallbackReason } from "@/types/api";
 import { judgeModelName } from "@/utils/judge";
+import { responderLabel } from "@/utils/models";
 
 interface SelectorBannerProps {
   selectedModel?: string | null;
@@ -52,7 +53,8 @@ export default function SelectorBanner({
               {t("selector.title")}
               {judgeName ? ` (${judgeName})` : ""}
             </b>{" "}
-            — {t("selector.selected")} {selectedModel || t("common.unknown")} ·{" "}
+            — {t("selector.selected")}{" "}
+            {selectedModel ? responderLabel(selectedModel) : t("common.unknown")} ·{" "}
             {t("selector.confidence")} {Number(confidence || 0).toFixed(2)}
           </>
         )}

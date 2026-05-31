@@ -224,6 +224,83 @@ def test_admin_is_not_quota_limited(client, monkeypatch):
     assert me["remaining_today"] is None
 
 
+# --- Live limit windows (PH17, C1) -----------------------------------------
+
+
+def test_me_exposes_minute_window_after_request(client, monkeypatch):
+    monkeypatch.setattr(
+        OrchestratorService, "process_chat", staticmethod(_fake_process_chat)
+    )
+    admin_csrf = _make_admin(client)
+    client.post(
+        "/admin/users",
+        json={
+            "username": "win",
+            "password": "password123",
+            "max_requests_per_minute": 5,
+            "max_requests_per_day": 50,
+        },
+        headers=admin_csrf,
+    )
+    emp_csrf = _csrf(_login(client, "win"))
+
+    # Before any request: full minute remaining, no countdown yet.
+    me = client.get("/auth/me").json()
+    assert me["remaining_this_minute"] == 5
+    assert me["minute_resets_in_seconds"] is None
+    assert me["day_resets_at"] is not None  # day is limited → reset timestamp set
+
+    assert _chat(client, emp_csrf).status_code == 200
+
+    # After the first request the minute window has opened and counts down.
+    me = client.get("/auth/me").json()
+    assert me["remaining_this_minute"] == 4
+    assert me["used_this_minute"] == 1
+    assert 0 < me["minute_resets_in_seconds"] <= 60
+
+
+def test_me_null_fields_for_unlimited_dimensions(client, monkeypatch):
+    monkeypatch.setattr(
+        OrchestratorService, "process_chat", staticmethod(_fake_process_chat)
+    )
+    admin_csrf = _make_admin(client)
+    # Per-minute unlimited (null), per-day limited. create_user treats an unset/
+    # null minute as "use default", so PATCH null explicitly to make it unlimited.
+    created = client.post(
+        "/admin/users",
+        json={
+            "username": "half",
+            "password": "password123",
+            "max_requests_per_minute": 5,
+            "max_requests_per_day": 9,
+        },
+        headers=admin_csrf,
+    )
+    client.patch(
+        f"/admin/users/{created.json()['id']}",
+        json={"max_requests_per_minute": None},
+        headers=admin_csrf,
+    )
+    emp_csrf = _csrf(_login(client, "half"))
+    assert _chat(client, emp_csrf).status_code == 200
+
+    me = client.get("/auth/me").json()
+    # Minute dimension unlimited → no remaining/countdown for it.
+    assert me["remaining_this_minute"] is None
+    assert me["minute_resets_in_seconds"] is None
+    # Day dimension limited → remaining + reset timestamp present.
+    assert me["remaining_today"] == 8
+    assert me["day_resets_at"] is not None
+
+    # Admin: every per-dimension field is null (fully unlimited).
+    client.post("/auth/login", json={"username": "admin", "password": "password123"})
+    admin_me = client.get("/auth/me").json()
+    assert admin_me["remaining_this_minute"] is None
+    assert admin_me["minute_resets_in_seconds"] is None
+    assert admin_me["remaining_today"] is None
+    assert admin_me["day_resets_at"] is None
+
+
 # --- Usage / token audit ----------------------------------------------------
 
 
@@ -251,3 +328,66 @@ def test_usage_events_record_tokens_for_admin_audit(client, monkeypatch):
     assert usage["total_tokens"] == 84  # 42 per request (mocked)
     assert {e["mode"] for e in usage["events"]} == {"single", "compare"}
     assert all(e["total_tokens"] == 42 for e in usage["events"])
+
+
+# --- Fixed per-minute window: full reset (PH18/6, D-13) ---------------------
+
+from datetime import UTC, datetime, timedelta  # noqa: E402
+
+from services.quota_service import (  # noqa: E402
+    MINUTE_WINDOW_SECONDS,
+    _minute_window,
+)
+
+
+class _FakeUsageRepo:
+    """Stand-in repo replaying a fixed list of event timestamps."""
+
+    def __init__(self, timestamps):
+        self._timestamps = sorted(timestamps)
+
+    async def timestamps_since(self, since):
+        return [ts for ts in self._timestamps if ts >= since]
+
+
+_ANCHOR = datetime(2026, 5, 31, 12, 0, 0, tzinfo=UTC)
+_WINDOW = timedelta(seconds=MINUTE_WINDOW_SECONDS)
+
+
+async def test_minute_window_counts_within_window():
+    # Two requests within the open window → used 2, resets at anchor + 60s.
+    repo = _FakeUsageRepo([_ANCHOR, _ANCHOR + timedelta(seconds=10)])
+    now = _ANCHOR + timedelta(seconds=30)
+    used, window_end = await _minute_window(repo, now)
+    assert used == 2
+    assert window_end == _ANCHOR + _WINDOW
+
+
+async def test_minute_window_full_reset_after_window():
+    # A window that filled up; once 60s pass the count resets fully to 0 at once
+    # (not slot-by-slot) and no window is open (D-13).
+    repo = _FakeUsageRepo(
+        [_ANCHOR, _ANCHOR + timedelta(seconds=5), _ANCHOR + timedelta(seconds=20)]
+    )
+    now = _ANCHOR + timedelta(seconds=61)
+    used, window_end = await _minute_window(repo, now)
+    assert used == 0
+    assert window_end is None
+
+
+async def test_minute_window_new_window_after_expiry():
+    # An expired window's events don't bleed into the fresh one: a request after
+    # the boundary opens a brand-new window counting from 1.
+    new_anchor = _ANCHOR + timedelta(seconds=70)
+    repo = _FakeUsageRepo([_ANCHOR, _ANCHOR + timedelta(seconds=5), new_anchor])
+    now = new_anchor + timedelta(seconds=10)
+    used, window_end = await _minute_window(repo, now)
+    assert used == 1
+    assert window_end == new_anchor + _WINDOW
+
+
+async def test_minute_window_empty_is_unopened():
+    repo = _FakeUsageRepo([])
+    used, window_end = await _minute_window(repo, _ANCHOR)
+    assert used == 0
+    assert window_end is None

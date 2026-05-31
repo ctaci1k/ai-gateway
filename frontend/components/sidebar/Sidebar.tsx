@@ -4,6 +4,9 @@
 
 import LimitBanner from "@/components/account/LimitBanner";
 import { IconGrid } from "@/components/icons/Icons";
+import KeysButton from "@/components/keys/KeysButton";
+import KeysModal from "@/components/keys/KeysModal";
+import KeysStatusBanner from "@/components/keys/KeysStatusBanner";
 import { useAdminView } from "@/store/AdminViewContext";
 import { useAuth } from "@/store/AuthContext";
 import { useChatMode } from "@/store/ChatModeContext";
@@ -41,8 +44,11 @@ export default function Sidebar() {
           {t("admin.nav")}
         </button>
       )}
+      <KeysStatusBanner />
       <LimitBanner />
+      <KeysButton />
       <AuthorCard />
+      <KeysModal />
     </aside>
   );
 }

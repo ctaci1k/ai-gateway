@@ -11,6 +11,7 @@ import { AuthProvider } from "@/store/AuthContext";
 import { ChatModeProvider } from "@/store/ChatModeContext";
 import { ChatsProvider } from "@/store/ChatsContext";
 import { ComposerProvider } from "@/store/ComposerContext";
+import { KeysProvider } from "@/store/KeysContext";
 import { LanguageProvider } from "@/store/LanguageContext";
 import { RagProvider } from "@/store/RagContext";
 import { ThemeProvider } from "@/store/ThemeContext";
@@ -44,15 +45,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ThemeProvider>
           <LanguageProvider>
             <AuthProvider>
-              <AdminViewProvider>
-                <ChatsProvider>
-                  <RagProvider>
-                    <ChatModeProvider>
-                      <ComposerProvider>{children}</ComposerProvider>
-                    </ChatModeProvider>
-                  </RagProvider>
-                </ChatsProvider>
-              </AdminViewProvider>
+              <KeysProvider>
+                <AdminViewProvider>
+                  <ChatsProvider>
+                    <RagProvider>
+                      <ChatModeProvider>
+                        <ComposerProvider>{children}</ComposerProvider>
+                      </ChatModeProvider>
+                    </RagProvider>
+                  </ChatsProvider>
+                </AdminViewProvider>
+              </KeysProvider>
             </AuthProvider>
           </LanguageProvider>
         </ThemeProvider>

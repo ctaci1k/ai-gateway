@@ -2,6 +2,7 @@
 
 from openai import OpenAI
 
+from config.models_config import get_model_spec
 from core.config import get_settings
 from providers.openai_compatible import OpenAICompatibleProvider
 
@@ -9,7 +10,6 @@ from providers.openai_compatible import OpenAICompatibleProvider
 class CerebrasProvider(OpenAICompatibleProvider):
 
     provider_name = "cerebras"
-    model_name = "gpt-oss-120b"
 
     supports_streaming = True
     supports_structured_output = True
@@ -23,4 +23,4 @@ class CerebrasProvider(OpenAICompatibleProvider):
             api_key=get_settings().cerebras_api_key,
             base_url="https://api.cerebras.ai/v1",
         )
-        self.model = self.model_name
+        self.apply_model_spec(get_model_spec(self.provider_name))

@@ -16,8 +16,13 @@ from memory.usage_repository import UsageRepository
 from schemas.chat_response import ChatResponse, RagSource, StructuredChatResponse
 from schemas.chat_schema import ChatRequest
 from services.orchestrator_service import OrchestratorService
-from services.provider_service import ProviderService
-from services.quota_service import enforce_quota
+from services.provider_service import (
+    JUDGE_BYOK_SLOT,
+    ProviderService,
+    TransientProvider,
+    classify_provider_failure,
+)
+from services.quota_service import QuotaService
 from services.rag_service import RagService
 
 router = APIRouter(tags=["chat"])
@@ -25,15 +30,47 @@ router = APIRouter(tags=["chat"])
 logger = get_logger("chat")
 
 
+def _build_byok_judge(request: ChatRequest):
+    """Build a transient judge provider + its UI label from the request's BYOK
+    config, or (None, None) when no judge key was supplied (PH17)."""
+    if request.byok and request.byok.judge:
+        judge = request.byok.judge
+        return (
+            ProviderService.build_transient_judge(judge.model_dump()),
+            {"provider": "byok", "model": judge.model_id},
+        )
+    return None, None
+
+
 @router.post(
     "/chat",
     response_model=ChatResponse,
-    dependencies=[Depends(current_user), Depends(require_csrf), Depends(enforce_quota)],
+    dependencies=[Depends(current_user), Depends(require_csrf)],
 )
 async def chat(request: ChatRequest, user: User = Depends(current_user)):
     repository = get_chat_repository(user.id)
 
     provider_names = request.providers or [request.provider]
+
+    # BYOK (PH17): resolve responders + judge on the user's transient keys.
+    # Built-in slots without a key fall back to the app's singletons.
+    byok_responders = (
+        [r.model_dump() for r in request.byok.responders] if request.byok else None
+    )
+    providers_map = ProviderService.resolve_responders(provider_names, byok_responders)
+    judge_provider, judge_label = _build_byok_judge(request)
+
+    # Quota (PH17): a Compare turn is free only when every participant — all
+    # responders and the judge — runs on the user's own key. Otherwise it counts
+    # as one request and is enforced + recorded against the account quota (D-10).
+    all_byok = (
+        bool(providers_map)
+        and all(isinstance(p, TransientProvider) for p in providers_map.values())
+        and judge_provider is not None
+    )
+    should_charge = not all_byok
+    if should_charge:
+        await QuotaService.check(user)
 
     # RAG (PH10): retrieve grounding context from the user's documents.
     rag_sources: list[dict] = []
@@ -49,6 +86,9 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
         selector_enabled=request.selector_enabled,
         personalization_profile=await repository.get_personalization_profile(),
         rag_context=rag_context,
+        providers_map=providers_map,
+        judge_provider=judge_provider,
+        judge_label=judge_label,
     )
 
     selector_metadata = result["selector_metadata"]
@@ -92,13 +132,16 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
 
     # Append-only usage audit + quota source of truth (PH15, D-10). A Compare
     # request is a single event; success means at least one provider answered.
-    await UsageRepository(user.id).record(
-        mode="compare" if result["compare_mode"] else "single",
-        message=request.message,
-        selected_model=result["selected_model"],
-        total_tokens=result.get("total_tokens"),
-        success=bool(result["all_responses"]),
-    )
+    # Skipped when the turn ran entirely on the user's own keys (PH17): it does
+    # not consume the account quota, so it is neither enforced nor recorded.
+    if should_charge:
+        await UsageRepository(user.id).record(
+            mode="compare" if result["compare_mode"] else "single",
+            message=request.message,
+            selected_model=result["selected_model"],
+            total_tokens=result.get("total_tokens"),
+            success=bool(result["all_responses"]),
+        )
 
     # Persist into a saved chat when one is active (PH9). Ownership is verified
     # by the repository (404 for a foreign/unknown chat).
@@ -139,12 +182,41 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
     )
 
 
+def _resolve_single_provider(request: ChatRequest):
+    """Resolve the Single-mode provider for the chosen slot (PH17).
+
+    Returns ``(provider_or_None, is_byok)``. The judge's model is selectable in
+    Single too (NQ6): a request for the judge slot builds the judge as a
+    responder. ``None`` means use the built-in singleton (charged); a transient
+    provider means the user's own key (free)."""
+    byok = request.byok
+    slot = request.provider
+    if byok:
+        if slot == JUDGE_BYOK_SLOT and byok.judge:
+            return ProviderService.build_transient_judge(byok.judge.model_dump()), True
+        for responder in byok.responders:
+            if responder.slot == slot:
+                return (
+                    ProviderService.build_transient_responder(responder.model_dump()),
+                    True,
+                )
+    return None, False
+
+
 @router.post(
     "/chat/stream",
-    dependencies=[Depends(current_user), Depends(require_csrf), Depends(enforce_quota)],
+    dependencies=[Depends(current_user), Depends(require_csrf)],
 )
 async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
     repository = get_chat_repository(user.id)
+
+    # BYOK (PH17): resolve the chosen model. Single is free only when it runs on
+    # the user's own key; otherwise it counts as one request (enforced now,
+    # recorded after the stream).
+    byok_provider, is_byok = _resolve_single_provider(request)
+    should_charge = not is_byok
+    if should_charge:
+        await QuotaService.check(user)
 
     # Single + RAG (PH13/C3): ground the chosen model in the user's documents.
     # The judge isn't involved in Single mode; we inject context straight into
@@ -168,6 +240,7 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
             async for event in ProviderService.generate_stream(
                 message=responder_message,
                 provider_name=request.provider,
+                provider=byok_provider,
             ):
                 if event.get("type") == "token":
                     parts.append(event.get("content") or "")
@@ -175,10 +248,21 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                 yield json.dumps(event) + "\n"
             completed = True
         except Exception as error:
+            # Classify the failure so the UI can tell a BYOK key's own provider
+            # rate-limit (the user must check their provider account) apart from
+            # our quota (PH18/8, D-13). Same reason codes as Compare.
+            reason = classify_provider_failure(str(error))
             log_event(
-                logger, "stream_error", provider=request.provider, error=str(error)
+                logger,
+                "stream_error",
+                provider=request.provider,
+                error=str(error),
+                reason=reason,
             )
-            yield json.dumps({"type": "error", "content": str(error)}) + "\n"
+            yield (
+                json.dumps({"type": "error", "content": str(error), "reason": reason})
+                + "\n"
+            )
 
         # Terminal sources event so the UI can show grounding for Single+RAG (C3).
         if request.rag_enabled:
@@ -224,13 +308,15 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
 
         # Append-only usage audit + quota source of truth (PH15, D-10). The
         # streaming SDK path doesn't report token usage, so total_tokens is None.
-        await UsageRepository(user.id).record(
-            mode="single",
-            message=request.message,
-            selected_model=model_name or request.provider,
-            total_tokens=None,
-            success=completed and bool(full_text),
-        )
+        # Skipped when the turn ran on the user's own key (PH17): not charged.
+        if should_charge:
+            await UsageRepository(user.id).record(
+                mode="single",
+                message=request.message,
+                selected_model=model_name or request.provider,
+                total_tokens=None,
+                success=completed and bool(full_text),
+            )
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
 

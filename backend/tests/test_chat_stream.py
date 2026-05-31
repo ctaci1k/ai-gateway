@@ -11,7 +11,7 @@ from tests.test_rag import FakeEmbeddingClient
 
 
 def _fake_stream_factory(chunks):
-    async def _fake_generate_stream(message, provider_name="groq"):
+    async def _fake_generate_stream(message, provider_name="groq", provider=None):
         for chunk in chunks:
             yield {
                 "type": "token",
@@ -72,12 +72,36 @@ def test_single_stream_empty_output_not_persisted(auth_client, monkeypatch):
     assert client.get("/memory").json()["memory"] == []
 
 
+def test_single_stream_error_carries_reason(auth_client, monkeypatch):
+    """A provider failure mid-stream is surfaced as a classified error event so
+    the UI can show a BYOK-specific message (PH18/8, D-13)."""
+    client, headers = auth_client
+
+    async def _failing_stream(message, provider_name="groq", provider=None):
+        raise RuntimeError("429 Too Many Requests: rate limit exceeded")
+        yield  # pragma: no cover  (makes this an async generator)
+
+    monkeypatch.setattr(
+        ProviderService, "generate_stream", staticmethod(_failing_stream)
+    )
+
+    resp = client.post(
+        "/chat/stream", json={"message": "hi", "provider": "groq"}, headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    errors = [e for e in _read_events(resp) if e["type"] == "error"]
+    assert len(errors) == 1
+    assert errors[0]["reason"] == "rate_limited"
+    # Nothing persisted on a failed turn.
+    assert client.get("/memory").json()["memory"] == []
+
+
 def test_single_stream_rag_emits_sources(auth_client, monkeypatch):
     client, headers = auth_client
     monkeypatch.setattr(rag_service, "embedding_client", lambda: FakeEmbeddingClient())
     captured = {}
 
-    async def _fake_generate_stream(message, provider_name="groq"):
+    async def _fake_generate_stream(message, provider_name="groq", provider=None):
         captured["message"] = message
         yield {
             "type": "token",

@@ -3,15 +3,15 @@
 "use client";
 
 import { IconPlus } from "@/components/icons/Icons";
-import { useChats } from "@/store/ChatsContext";
+import { SAVED_CHATS_LIMIT, useChats } from "@/store/ChatsContext";
 import { useI18n } from "@/store/LanguageContext";
 
 export default function NewChatButton() {
   const { t } = useI18n();
   const { newChat, notice } = useChats();
 
-  // A3: the button is always clickable; when blocked (current chat still empty,
-  // or limit reached) newChat() surfaces a notice instead of creating a chat.
+  // The button is always clickable; "+" opens an empty draft (F2). When the
+  // limit is reached, newChat() surfaces a notice instead of opening a draft.
   return (
     <>
       <button
@@ -25,7 +25,7 @@ export default function NewChatButton() {
       </button>
       {notice && (
         <div className="newchat-notice" role="status">
-          {t(notice)}
+          {t(notice, { limit: SAVED_CHATS_LIMIT })}
         </div>
       )}
     </>

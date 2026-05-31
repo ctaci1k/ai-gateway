@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 
+import LanguageToggle from "@/components/common/LanguageToggle";
 import { ApiError } from "@/services/apiClient";
 import { useAuth } from "@/store/AuthContext";
 import { useI18n } from "@/store/LanguageContext";
@@ -49,6 +50,8 @@ export default function AuthScreen() {
   return (
     <div className="auth-screen">
       <form className="auth-card" onSubmit={handleSubmit}>
+        <LanguageToggle />
+
         <div className="auth-title">{title}</div>
 
         {error && (

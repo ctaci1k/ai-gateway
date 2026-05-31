@@ -15,6 +15,9 @@ class OrchestratorService:
         selector_enabled: bool = False,
         personalization_profile: dict | None = None,
         rag_context: str | None = None,
+        providers_map: dict | None = None,
+        judge_provider=None,
+        judge_label: dict | None = None,
     ):
 
         if personalization_profile is None:
@@ -29,8 +32,12 @@ class OrchestratorService:
                 "rag_augmented", context=rag_context, question=message
             )
 
+        # BYOK (PH17): when a providers_map is supplied the responders run on the
+        # user's transient keys; otherwise the built-in singletons are used.
         execution_result = await ProviderService.execute_many(
-            message=responder_message, provider_names=provider_names
+            message=responder_message,
+            provider_names=provider_names,
+            providers_map=providers_map,
         )
 
         all_responses = execution_result["all_responses"]
@@ -63,6 +70,8 @@ class OrchestratorService:
 
         selector_fallback_reason = None
 
+        preference_weighting = None
+
         successful_providers = list(all_responses.keys())
 
         total_requested_models = (
@@ -81,6 +90,8 @@ class OrchestratorService:
                 user_message=message,
                 responses=selector_input,
                 personalization_profile=(personalization_profile),
+                judge_provider=judge_provider,
+                judge_label=judge_label,
             )
 
             selected_model = selector_result.get("selected_model")
@@ -100,6 +111,8 @@ class OrchestratorService:
             selector_fallback_used = selector_result.get("fallback_used", False)
 
             selector_fallback_reason = selector_result.get("fallback_reason")
+
+            preference_weighting = selector_result.get("preference_weighting")
 
             if selected_model and selected_model in all_responses:
 
@@ -134,6 +147,9 @@ class OrchestratorService:
             "selection_reason": (selector_reason),
             "scores": (selector_scores),
             "personalization_enabled": bool(personalization_profile),
+            # Transparent record of any manual-preference nudge (PH16/E, D-11);
+            # None when the judge was not used or no nudge applied.
+            "preference_weighting": (preference_weighting),
         }
 
         response_payload = {

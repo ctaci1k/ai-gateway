@@ -20,9 +20,9 @@ import { createChat, deleteChat, getChat, listChats, renameChat } from "@/servic
 import { useAuth } from "@/store/AuthContext";
 import type { ChatDetail, ChatSummary } from "@/types/api";
 
-// Mirrors the backend SAVED_CHATS_LIMIT default; creation is also guarded
+// Mirrors the backend SAVED_CHATS_LIMIT (OD-3: 25); creation is also guarded
 // server-side (409), which we surface as an error if the limits ever diverge.
-export const SAVED_CHATS_LIMIT = 3;
+export const SAVED_CHATS_LIMIT = 25;
 
 interface ChatsValue {
   chats: ChatSummary[];
@@ -31,18 +31,20 @@ interface ChatsValue {
   loading: boolean;
   error: string | null;
   limitReached: boolean;
-  // A3: a brand-new chat may only be created when the current active chat is
-  // not still empty (0 turns). false → newChat() is blocked and sets `notice`.
-  canCreate: boolean;
-  // Transient i18n key for a user-facing notice (e.g. blocked creation).
+  // Transient i18n key for a user-facing notice (e.g. the limit was reached).
   notice: string | null;
   clearNotice: () => void;
   refresh: () => Promise<void>;
   selectChat: (id: number | null) => Promise<void>;
+  // F2: enter an empty local draft (no server persist until the first message).
   newChat: () => Promise<void>;
+  // F1/F3: persist a chat titled after the first message; returns its id (or
+  // null when blocked by the limit / an error). Used by Compare on first send.
+  createActiveChat: (title: string) => Promise<number | null>;
   rename: (id: number, title: string) => Promise<void>;
   remove: (id: number) => Promise<void>;
-  reloadActive: () => Promise<void>;
+  // Re-fetch a chat (defaults to the active one) plus the list after a turn.
+  reloadActive: (id?: number) => Promise<void>;
 }
 
 const ChatsContext = createContext<ChatsValue | null>(null);
@@ -61,13 +63,6 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const clearNotice = useCallback(() => setNotice(null), []);
-
-  // The active chat is "empty" while it has no persisted turns yet. Creating a
-  // second empty chat is pointless, so it is blocked until the current one is
-  // used (A3). With no active chat, creation is allowed (subject to the limit).
-  const activeIsEmpty =
-    activeChat !== null && activeChat.id === activeChatId && activeChat.message_count === 0;
-  const canCreate = !activeIsEmpty;
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -124,27 +119,44 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // F2: "+" opens an empty local draft — nothing is persisted until the first
+  // message (createActiveChat). Repeated "+" on an empty draft is a no-op. When
+  // the limit is reached we surface the notice instead of starting a draft.
   const newChat = useCallback(async () => {
     setError(null);
     setNotice(null);
-    // A3: block creating a second empty chat on top of an empty active one.
-    if (activeChat && activeChat.id === activeChatId && activeChat.message_count === 0) {
-      setNotice("chatList.currentEmpty");
-      return;
-    }
     if (chats.length >= SAVED_CHATS_LIMIT) {
       setNotice("chatList.limitReached");
       return;
     }
-    try {
-      const chat = await createChat();
-      setChats((prev) => [chat, ...prev]);
-      setActiveChatId(chat.id);
-      setActiveChat(chat);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  }, [activeChat, activeChatId, chats]);
+    setActiveChatId(null);
+    setActiveChat(null);
+  }, [chats]);
+
+  // F1/F3: on the first Compare message, persist a chat titled after it. The id
+  // is returned so the caller can run the turn against it without waiting for
+  // the activeChatId state to propagate.
+  const createActiveChat = useCallback(
+    async (title: string): Promise<number | null> => {
+      setError(null);
+      setNotice(null);
+      if (chats.length >= SAVED_CHATS_LIMIT) {
+        setNotice("chatList.limitReached");
+        return null;
+      }
+      try {
+        const chat = await createChat(title);
+        setChats((prev) => [chat, ...prev]);
+        setActiveChatId(chat.id);
+        setActiveChat(chat);
+        return chat.id;
+      } catch (err) {
+        setError(errorMessage(err));
+        return null;
+      }
+    },
+    [chats],
+  );
 
   const rename = useCallback(async (id: number, title: string) => {
     setError(null);
@@ -169,17 +181,22 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Re-fetch the active chat (after a Compare turn is persisted) and refresh
-  // the list so message_count / ordering stay accurate.
-  const reloadActive = useCallback(async () => {
-    if (activeChatId === null) return;
-    try {
-      setActiveChat(await getChat(activeChatId));
-      setChats(await listChats());
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  }, [activeChatId]);
+  // Re-fetch a chat (after a Compare turn is persisted) and refresh the list so
+  // title / ordering stay accurate. Defaults to the active chat, but accepts an
+  // explicit id for a just-created chat whose state hasn't propagated yet (F1).
+  const reloadActive = useCallback(
+    async (id?: number) => {
+      const target = id ?? activeChatId;
+      if (target === null) return;
+      try {
+        setActiveChat(await getChat(target));
+        setChats(await listChats());
+      } catch (err) {
+        setError(errorMessage(err));
+      }
+    },
+    [activeChatId],
+  );
 
   const value = useMemo<ChatsValue>(
     () => ({
@@ -189,12 +206,12 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       limitReached: chats.length >= SAVED_CHATS_LIMIT,
-      canCreate,
       notice,
       clearNotice,
       refresh,
       selectChat,
       newChat,
+      createActiveChat,
       rename,
       remove,
       reloadActive,
@@ -205,12 +222,12 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       activeChat,
       loading,
       error,
-      canCreate,
       notice,
       clearNotice,
       refresh,
       selectChat,
       newChat,
+      createActiveChat,
       rename,
       remove,
       reloadActive,

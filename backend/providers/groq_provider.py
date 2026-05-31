@@ -2,6 +2,7 @@
 
 from groq import Groq
 
+from config.models_config import get_model_spec
 from core.config import get_settings
 from providers.openai_compatible import OpenAICompatibleProvider
 
@@ -9,7 +10,6 @@ from providers.openai_compatible import OpenAICompatibleProvider
 class GroqProvider(OpenAICompatibleProvider):
 
     provider_name = "groq"
-    model_name = "llama-3.3-70b-versatile"
 
     supports_streaming = True
     supports_structured_output = True
@@ -20,4 +20,4 @@ class GroqProvider(OpenAICompatibleProvider):
 
     def __init__(self):
         self.client = Groq(api_key=get_settings().groq_api_key)
-        self.model = self.model_name
+        self.apply_model_spec(get_model_spec(self.provider_name))

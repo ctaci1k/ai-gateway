@@ -195,6 +195,72 @@ def test_chat_with_unknown_chat_id_returns_404(auth_client, monkeypatch):
     assert resp.status_code == 404
 
 
+async def test_delete_chat_removes_messages_and_no_orphans(repo):
+    """PH17/A: deleting a chat removes its messages; a brand-new chat (which
+    reuses the freed id on SQLite) starts empty — no inherited messages."""
+    from sqlalchemy import func, select
+
+    from core.db import session_scope
+    from db.models import ChatMessage
+    from memory.chats_repository import SavedChatRepository
+
+    chats = SavedChatRepository(repo._user_id)
+    chat = await chats.create_chat("to delete")
+    await chats.add_message(chat["id"], {"user_message": "old", "best_response": "x"})
+
+    await chats.delete_chat(chat["id"])
+
+    async with session_scope() as session:
+        remaining = await session.scalar(select(func.count(ChatMessage.id)))
+    assert remaining == 0, "messages must be deleted with their chat"
+
+    # A new chat reuses the freed id on SQLite; it must not inherit messages.
+    fresh = await chats.create_chat("fresh")
+    detail = await chats.get_chat(fresh["id"])
+    assert detail["message_count"] == 0
+    assert detail["messages"] == []
+
+
+async def test_purge_orphan_chat_messages(repo):
+    """PH17/A: the startup cleanup removes messages whose parent chat is gone.
+
+    Fabricate a real orphan the way legacy data got one — delete the parent
+    chat row with FK enforcement off (AUTOCOMMIT, no active transaction) so the
+    DB-level cascade we now enable can't fire — then verify the purge clears it.
+    """
+    from sqlalchemy import func, select
+
+    from core.db import get_engine, session_scope
+    from db.models import ChatMessage
+    from memory.chats_repository import (
+        SavedChatRepository,
+        purge_orphan_chat_messages,
+    )
+
+    chats = SavedChatRepository(repo._user_id)
+    chat = await chats.create_chat("orphan source")
+    await chats.add_message(chat["id"], {"user_message": "hi", "best_response": "x"})
+
+    engine = get_engine()
+    async with engine.connect() as conn:
+        autocommit = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await autocommit.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        await autocommit.exec_driver_sql(
+            "DELETE FROM chats WHERE id = ?", (chat["id"],)
+        )
+
+    # The message is now orphaned (parent chat gone, no cascade).
+    async with session_scope() as session:
+        before = await session.scalar(select(func.count(ChatMessage.id)))
+    assert before == 1
+
+    removed = await purge_orphan_chat_messages()
+    assert removed == 1
+    async with session_scope() as session:
+        remaining = await session.scalar(select(func.count(ChatMessage.id)))
+    assert remaining == 0
+
+
 def test_single_stream_does_not_create_chats(auth_client):
     client, headers = auth_client
     client.post(

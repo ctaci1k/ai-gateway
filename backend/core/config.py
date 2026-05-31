@@ -41,12 +41,25 @@ class Settings(BaseSettings):
     # --- Logging ---
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
-    # --- Responders (PH13) ---
-    # Explicit output budget for responder models. Reasoning models (e.g.
-    # Cerebras gpt-oss-120b) spend tokens on hidden reasoning and may return an
-    # empty `content` if max_tokens is too small / unset; a sufficient default
-    # keeps Compare at a stable 3 answers. Tunable via RESPONDER_MAX_TOKENS.
-    responder_max_tokens: int = Field(default=1024, alias="RESPONDER_MAX_TOKENS")
+    # --- Responders (PH13/PH16) ---
+    # Global output budget for responder models. Reasoning models spend tokens
+    # on hidden reasoning and may return an empty `content` if max_tokens is too
+    # small / unset; a sufficient default keeps Compare at a stable 3 answers and
+    # full (non-truncated) replies. Per-provider overrides below.
+    responder_max_tokens: int = Field(default=2048, alias="RESPONDER_MAX_TOKENS")
+    # Cerebras runs GLM-4.7, a reasoning model: it needs extra headroom so the
+    # hidden reasoning never crowds out the visible answer (PH16, OD-1).
+    cerebras_max_tokens: int = Field(default=4096, alias="CEREBRAS_MAX_TOKENS")
+
+    # --- Responder model roster (PH16, D-11) ---
+    # Each responder runs a *distinct*, truthfully-named model so Compare shows
+    # three genuinely different answers (Llama / GLM / DeepSeek) and the judge
+    # (Qwen) shares no family with any of them. IDs are env-overridable (swap a
+    # model without code changes); defaults are the live-verified lineup.
+    # Display names live in config/models_config.py (the single registry).
+    groq_model: str = Field(default="llama-3.3-70b-versatile", alias="GROQ_MODEL")
+    cerebras_model: str = Field(default="zai-glm-4.7", alias="CEREBRAS_MODEL")
+    sambanova_model: str = Field(default="DeepSeek-V3.1", alias="SAMBANOVA_MODEL")
 
     # --- Database ---
     # Async SQLAlchemy URL. Dev default: SQLite. Prod: postgresql+asyncpg://...
@@ -58,8 +71,10 @@ class Settings(BaseSettings):
     # Max interactions kept per user in history (sliding window).
     history_limit: int = Field(default=10, alias="HISTORY_LIMIT")
 
-    # Max saved Compare chats per user (PH9, test version: a few).
-    saved_chats_limit: int = Field(default=3, alias="SAVED_CHATS_LIMIT")
+    # Max saved Compare chats per user (PH16/OD-3: 25). On reaching it the UI
+    # shows an explicit notice and the user deletes a chat manually — no
+    # auto-eviction. Keep in sync with the frontend SAVED_CHATS_LIMIT constant.
+    saved_chats_limit: int = Field(default=25, alias="SAVED_CHATS_LIMIT")
 
     # --- Auth / sessions ---
     # Mark session cookies Secure (HTTPS-only). Keep false for local http dev.

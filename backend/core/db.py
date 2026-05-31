@@ -8,6 +8,7 @@ tests can point at an isolated database before anything connects.
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -31,6 +32,17 @@ def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         _engine = create_async_engine(get_settings().database_url, future=True)
+        # Defense-in-depth: SQLite disables FK enforcement per connection by
+        # default, so ON DELETE CASCADE never fires. Turn it on for every new
+        # connection (no-op for Postgres, which we don't attach this to).
+        if _engine.dialect.name == "sqlite":
+
+            @event.listens_for(_engine.sync_engine, "connect")
+            def _enable_sqlite_fk(dbapi_connection, _record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
+
     return _engine
 
 
