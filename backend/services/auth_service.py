@@ -135,9 +135,12 @@ class AuthService:
             row = await session.get(Session, token)
             if row is None:
                 return None
+            # expires_at and _utcnow() are both naive UTC (TIMESTAMP WITHOUT
+            # TIME ZONE), so they compare directly. A legacy tz-aware row (from
+            # before the naive-UTC fix) is normalized to naive first.
             expires = row.expires_at
-            if expires.tzinfo is None:
-                expires = expires.replace(tzinfo=UTC)
+            if expires.tzinfo is not None:
+                expires = expires.replace(tzinfo=None)
             if expires < _utcnow():
                 await session.delete(row)
                 return None
