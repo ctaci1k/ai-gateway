@@ -33,7 +33,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 EXPOSE 3000
 
+# Use Node for the healthcheck: busybox wget (--spider) in alpine reports
+# non-zero on some valid Next.js responses, causing false "unhealthy". Node is
+# guaranteed present and treats any 2xx/3xx as healthy.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD wget -q --spider http://localhost:3000/ || exit 1
+    CMD node -e "require('http').get('http://127.0.0.1:3000/',r=>process.exit(r.statusCode<400?0:1)).on('error',()=>process.exit(1))"
 
 CMD ["node", "server.js"]

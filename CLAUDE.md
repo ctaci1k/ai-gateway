@@ -13,7 +13,7 @@
 
 ## Стек (реальний)
 
-- **Backend:** Python 3.12+, FastAPI, Pydantic, asyncio; прямі SDK провайдерів (`groq`, `google-generativeai`, Cerebras, SambaNova). **Стан — in-memory** (`ChatBuffer`, deque maxlen=10), без БД.
+- **Backend:** Python 3.12+, FastAPI, Pydantic, asyncio; прямі SDK провайдерів (`groq`, `google-generativeai`, Cerebras, SambaNova). **Стан — у PostgreSQL** (SQLAlchemy async + Alembic-міграції); RAG-вектори — у вбудованому ChromaDB (PersistentClient). Є accounts/auth, квоти, BYOK.
 - **Frontend:** Next.js (App Router) + React + Tailwind; design tokens, i18n (uk/pl/en); частково TypeScript.
 
 ## Структура
@@ -33,5 +33,5 @@
 ## Відоме (важливо)
 
 - Відповідачі — Groq/Cerebras/SambaNova; **Gemini — суддя**, не відповідач (на відміну від старого опису GPT/Claude/Gemini).
-- Немає: БД, мульти-юзера/auth, RAG, Docker/VPS, тестів. Це беклог, не наявні можливості.
-- Технічний борг (CORS `*`, помилки як 200, хардкод URL тощо) — у [docs/08-current-state.md](docs/08-current-state.md).
+- **Є** (реалізовано): PostgreSQL + accounts/auth, RAG (ChromaDB), квоти, BYOK, тести (pytest+vitest), **Docker + CI/CD** (GitHub Actions → GHCR → VPS), деплой на **https://st.byn.sarl** за aaPanel-проксі + Let's Encrypt. Деталі деплою — [docs/plans/013-cicd-deploy.md](docs/plans/013-cicd-deploy.md).
+- Технічний борг — у [docs/08-current-state.md](docs/08-current-state.md).

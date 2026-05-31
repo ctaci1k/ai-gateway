@@ -11,8 +11,8 @@ updated: 2026-05-31
 > SSH-деплой на VPS → aaPanel термінує SSL. Без костилів, без технічного боргу.
 
 ## СТАН (читається першим — оновлюється після кожного кроку)
-- **Поточний крок:** `7.1` (end-to-end: реєстрація після фіксу datetime). Чекаємо CI(67c9aef)→Deploy.
-- **Останній виконаний крок:** `7.0` — знайдено+виправлено баг datetime: tz-aware vs naive на Postgres (реєстрація падала Internal error). Фікси: 0a6ed8a (naive UTC) + 67c9aef (session expiry compare).
+- **Поточний крок:** `7.4` (тест надійності: рестарт сервера → персист) + Фаза 8 (косметика/доки).
+- **Останній виконаний крок:** `7.2` ✅ **COMPARE ПРАЦЮЄ НАЖИВО**: Llama+DeepSeek відповіли, Qwen-суддя обрав DeepSeek (0.92), GLM graceful fallback, квоти/i18n працюють.
 - **Заблоковано:** ні.
 - **Зібрані факти про середовище** (заповнюємо у Фазі 0):
   - OS / версія: `Ubuntu 26.04 LTS (kernel 7.0.0, x86_64)`
@@ -127,9 +127,9 @@ updated: 2026-05-31
 **DoD:** https://st.byn.sarl=200, /api/=200, http→301 редірект, сертифікат валідний (Let's Encrypt). ✅ **Фаза 6 done.**
 
 ## ФАЗА 7 — Перевірка end-to-end і надійність
-- [ ] **7.1** Реєстрація → логін; Single-чат зі стрімінгом (SSE не буферизується).
-- [ ] **7.2** Compare (groq+cerebras+sambanova → gemini-суддя); ручний перевибір моделі.
-- [ ] **7.3** RAG: завантаження документа в межах ліміту; великий файл → коректна помилка.
+- [x] **7.1** Реєстрація ✅ працює (datetime-баг виправлено). → логін; далі Single-чат зі стрімінгом.
+- [x] **7.2** Compare ✅ працює наживо: Llama 3.3 (78) + DeepSeek V3.1 (94, обрана) + GLM (fallback "недоступний"), суддя Qwen впевненість 0.92. Квоти + i18n (PL) ОК.
+- [ ] **7.3** RAG: завантаження документа в межах ліміту; великий файл → коректна помилка. (опційно)
 - [ ] **7.4** Перезавантаження сервера → стек піднявся сам (`restart: unless-stopped`); дані на місці.
 - [ ] **7.5** Тест відкату: задеплоїти попередній sha-тег і повернутися назад.
 
@@ -163,4 +163,6 @@ updated: 2026-05-31
 - 2026-05-31 — 3.3 ✅ GHCR login (deploy) + docker pull backend OK. 3.4 ✅ .env.production 12 змінних (chmod 600). **Фаза 3 done.** Далі: re-run Deploy (перший реальний деплой).
 - 2026-05-31 — Deploy фікси: copy nginx.conf (1649c69), overwrite:true (80a25d5). **Deploy ЗЕЛЕНИЙ** ✅. curl /=200, /api/=200; db/backend healthy. **Фази 4-5 done.** Далі Фаза 6 (домен+SSL через aaPanel). TODO: frontend healthcheck (wget) — косметика.
 - 2026-05-31 — Фаза 6 ✅: aaPanel сайт + reverse proxy →127.0.0.1:8080, Let's Encrypt SSL + Force HTTPS. **https://st.byn.sarl ЖИВИЙ** (=200, /api/=200, http→301, cert до 2026-08-29). Далі Фаза 7 (e2e в браузері).
-- 2026-05-31 — Фаза 7: реєстрація → Internal error. Корінь: datetime tz-aware vs колонки TIMESTAMP WITHOUT TZ (SQLite прощав, Postgres ні). Фікс naive UTC у моделях/auth/usage_repo (0a6ed8a) → зламав 35 тестів на auth_service:141 (порівняння aware vs naive) → фікс (67c9aef). NB: git add -A у 0a6ed8a захопив незакомічений WIP користувача — усе на GitHub, нічого не втрачено. Чекаємо CI→Deploy, потім повтор реєстрації.
+- 2026-05-31 — Фаза 7: реєстрація → Internal error. Корінь: datetime tz-aware vs колонки TIMESTAMP WITHOUT TZ (SQLite прощав, Postgres ні). Фікс naive UTC у моделях/auth/usage_repo (0a6ed8a) → зламав 35 тестів на auth_service:141 (порівняння aware vs naive) → фікс (5f46ede). NB: git add -A у 0a6ed8a захопив незакомічений WIP користувача — усе на GitHub, нічого не втрачено.
+- 2026-05-31 — CI #7/#8 ЗЕЛЕНІ, Deploy #6/#7 ЗЕЛЕНІ. Образ f765772 на сервері (backend healthy). **7.1 РЕЄСТРАЦІЯ ПРАЦЮЄ** ✅. Далі 7.2 (чат Single/Compare).
+- 2026-05-31 — **7.2 COMPARE ПРАЦЮЄ НАЖИВО** ✅✅ на https://st.byn.sarl: 3 моделі + AI-суддя Qwen (обрав DeepSeek V3.1, 0.92), graceful fallback для недоступного GLM, квоти+i18n OK. Суть продукту функціонує в проді. Лишилось: 7.4 рестарт-тест + Фаза 8 (frontend healthcheck, доки).
