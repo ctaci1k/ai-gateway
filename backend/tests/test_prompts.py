@@ -26,15 +26,19 @@ def test_render_substitutes_placeholders_and_preserves_json():
     rendered = render_prompt(
         "selector_judge",
         user_message="What is 2+2?",
-        responses_block="MODEL: groq",
+        responses_block="MODEL: AI 1",
         personalization_block="",
+        allowed_models_list="        - AI 1",
+        allowed_models_inline="AI 1",
+        scores_example='{"selected_model": "AI 1", "scores": {"AI 1": 90}}',
     )
     assert "What is 2+2?" in rendered
-    assert "MODEL: groq" in rendered
-    # Literal JSON example braces must survive templating.
-    assert '"selected_model": "groq"' in rendered
+    assert "MODEL: AI 1" in rendered
+    # Literal JSON braces in an injected value must survive templating.
+    assert '"selected_model": "AI 1"' in rendered
     # No unfilled placeholders remain.
     assert "$user_message" not in rendered
+    assert "$scores_example" not in rendered
 
 
 def test_provider_system_prompts():
@@ -43,17 +47,23 @@ def test_provider_system_prompts():
 
 
 def test_builder_without_personalization():
-    prompt = SelectorPromptBuilder.build_selector_prompt(
+    prompt, label_to_slot = SelectorPromptBuilder.build_selector_prompt(
         user_message="Hello?",
         responses={"groq": "Hi", "cerebras": "Hello there"},
     )
     assert "Hello?" in prompt
-    assert "groq" in prompt and "cerebras" in prompt
+    # Responses are shown under neutral, brand-free AI labels (PH22), mapped back
+    # to real slots by the caller.
+    assert "AI 1" in prompt and "AI 2" in prompt
+    assert "Hi" in prompt and "Hello there" in prompt
+    assert set(label_to_slot.values()) == {"groq", "cerebras"}
+    # Brand names are never leaked to the judge.
+    assert "groq" not in prompt and "cerebras" not in prompt
     assert "USER PERSONALIZATION PROFILE" not in prompt
 
 
 def test_builder_with_personalization():
-    prompt = SelectorPromptBuilder.build_selector_prompt(
+    prompt, label_to_slot = SelectorPromptBuilder.build_selector_prompt(
         user_message="Hello?",
         responses={"groq": "Hi"},
         personalization_context={
@@ -63,7 +73,27 @@ def test_builder_with_personalization():
     )
     assert "USER PERSONALIZATION PROFILE" in prompt
     assert "Manually Selected Models" in prompt
-    assert "groq" in prompt
+    assert label_to_slot == {"AI 1": "groq"}
+    # The in-comparison model appears by its neutral label, not its brand name.
+    assert '"AI 1": 3' in prompt
+    assert "groq" not in prompt
+
+
+def test_remap_verdict_to_slots_maps_labels():
+    label_to_slot = {"AI 1": "groq", "AI 2": "custom-abc"}
+    verdict = {"selected_model": "AI 2", "scores": {"AI 1": 70, "AI 2": 92}}
+    remapped = SelectorPromptBuilder.remap_verdict_to_slots(verdict, label_to_slot)
+    assert remapped["selected_model"] == "custom-abc"
+    assert remapped["scores"] == {"groq": 70, "custom-abc": 92}
+
+
+def test_remap_verdict_passes_through_unknown_keys():
+    # A judge that echoed real slot names instead of labels is left unchanged.
+    label_to_slot = {"AI 1": "groq"}
+    verdict = {"selected_model": "groq", "scores": {"groq": 88}}
+    remapped = SelectorPromptBuilder.remap_verdict_to_slots(verdict, label_to_slot)
+    assert remapped["selected_model"] == "groq"
+    assert remapped["scores"] == {"groq": 88}
 
 
 def test_response_ordering_is_deterministic_but_not_position_fixed():

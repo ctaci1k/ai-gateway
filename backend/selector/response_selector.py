@@ -68,7 +68,7 @@ class ResponseSelector:
         # ALLOWED_MODELS.
         allowed = set(responses.keys())
 
-        selector_prompt = SelectorPromptBuilder.build_selector_prompt(
+        selector_prompt, label_to_slot = SelectorPromptBuilder.build_selector_prompt(
             user_message=user_message,
             responses=responses,
             personalization_context=personalization_context,
@@ -103,6 +103,12 @@ class ResponseSelector:
                     attempt=attempt + 1,
                 )
                 continue
+
+            # Map the judge's neutral "AI N" labels back to real slots (PH22) so
+            # selection/scores are keyed by slot for validation and the UI.
+            selector_response = SelectorPromptBuilder.remap_verdict_to_slots(
+                selector_response, label_to_slot
+            )
 
             selector_response["selector_provider"] = sel_provider
             selector_response["selector_model"] = sel_model

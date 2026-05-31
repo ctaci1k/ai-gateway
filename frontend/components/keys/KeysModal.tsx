@@ -262,16 +262,17 @@ function KeysDialog({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
                 <div className="keys-fields">
-                  {r.custom && (
-                    <input
-                      className="keys-input keys-input--url"
-                      value={r.baseUrl}
-                      placeholder={t("keys.baseUrl")}
-                      autoComplete="off"
-                      spellCheck={false}
-                      onChange={(e) => updateResponder(index, "baseUrl", e.target.value)}
-                    />
-                  )}
+                  {/* Base URL is optional for the built-in slots (leave empty →
+                      provider's own endpoint) and required for custom ones, so a
+                      default slot can be pointed at another provider (PH22). */}
+                  <input
+                    className="keys-input keys-input--url"
+                    value={r.baseUrl}
+                    placeholder={r.custom ? t("keys.baseUrl") : t("keys.baseUrlOptional")}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(e) => updateResponder(index, "baseUrl", e.target.value)}
+                  />
                   <KeyInput
                     id={`keys-${r.slot}`}
                     value={r.apiKey}

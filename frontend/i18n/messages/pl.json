@@ -131,6 +131,7 @@
   "keys.apiKey": "Klucz API",
   "keys.modelId": "ID modelu",
   "keys.baseUrl": "Base URL (zgodny z OpenAI)",
+  "keys.baseUrlOptional": "Base URL — opcjonalnie (puste = wbudowany endpoint)",
   "keys.customResponder": "Dodany model",
   "keys.customResponderNumbered": "Dodany model — AI {n}",
   "keys.responderSlot": "AI {n}",

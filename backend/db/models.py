@@ -23,7 +23,11 @@ DEFAULT_USERNAME = "local"
 
 
 def _utcnow() -> datetime:
-    return datetime.now(UTC)
+    # Naive UTC: the timestamp columns are TIMESTAMP WITHOUT TIME ZONE, and
+    # asyncpg (Postgres) rejects tz-aware values for them ("can't subtract
+    # offset-naive and offset-aware datetimes"). SQLite (tests) tolerates aware
+    # values, which hid this; storing naive UTC is consistent on both backends.
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class User(Base):

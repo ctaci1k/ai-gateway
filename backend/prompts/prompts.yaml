@@ -79,10 +79,7 @@ prompts:
 
       IMPORTANT RULES:
 
-      - You MUST select ONLY one of:
-        - groq
-        - cerebras
-        - sambanova
+      - You MUST select ONLY one of these model names: $allowed_models_inline
 
       - You are NOT allowed to invent model names.
 
@@ -115,20 +112,12 @@ prompts:
 
       Expected JSON format:
 
-      {
-        "selected_model": "groq",
-        "confidence": 0.95,
-        "reason": "Short explanation why this response was selected.",
-        "scores": {
-          "groq": 90,
-          "cerebras": 82,
-          "sambanova": 88
-        }
-      }
+      $scores_example
 
       Do not use markdown.
 
       Do not add explanations outside JSON.
 
-      The selected_model field MUST contain ONLY:
-      groq, cerebras, or sambanova.
+      The "scores" object MUST contain a score (0-100) for EVERY model name
+      listed above, and "selected_model" MUST be EXACTLY one of:
+      $allowed_models_inline

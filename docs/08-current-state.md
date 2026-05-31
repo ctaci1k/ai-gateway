@@ -43,6 +43,19 @@
 - **Структуроване логування** (`core/logging.py`): запити, помилки провайдерів, рішення судді.
 - **Базові тести** (`backend/tests/`, pytest): ChatBuffer, rule-based selector, агрегація провайдерів, ретраї/мін-впевненість селектора, `extract_json`, API-кейси (помилки/rate-limit).
 
+## ✅ PH22 — суддя оцінює доданий AI · тонкий скрол сайдбара · base_url дефолтних слотів
+
+- **(1, корінь) Суддя тепер оцінює й може обрати доданий BYOK-AI.** Раніше промпт судді (`prompts.yaml`) хардкодив «select ONLY: groq/cerebras/sambanova» + приклад scores лише для них, а `selector_parser` відкидав не-дефолтний вибір (`ALLOWED_MODELS`) → доданий AI отримував 0/100 і не міг перемогти. Виправлено: судді відповіді подаються під **brand-нейтральними мітками «AI 1…AI N»** (`selector_prompt.py`), промпт — **динамічний** (список і приклад scores за фактичними учасниками); вердикт мапиться назад на слоти (`remap_verdict_to_slots`); валідація — за `responses.keys()` (парсер без `ALLOWED_MODELS`); персоналізаційний блок релейблиться. **Бонус:** нейтральні мітки прибирають бренд-байас судді. Тести: `test_response_selector.py` (вибір custom-слота) + `test_prompts.py` (remap, динамічні мітки).
+- **(2) Тонкий скрол сайдбара.** `.sidebar` додано до груп тематичного тонкого скролу (`theme/components.css`) — ліва колона більше не має дефолтного скролбара.
+- **(3) base_url для дефолтних слотів.** Бекенд уже підтримував (`_transient_base_url`); тепер `KeysModal` показує **опційне** поле Base URL і для дефолтних слотів (AI 1/2/3), а `KeysContext` (`saveAndValidate`/`byokPayload`) шле `base_url` для будь-якого слота → можна замінити дефолтний слот своїм ключем іншого провайдера. i18n `keys.baseUrlOptional` (uk/pl/en).
+- **Гейти:** BE **131 passed** + ruff/black; FE tsc/eslint/prettier/vitest(16)/build зелені. Live: промпт судді з custom-слотом дає мітки AI 1–N і не хардкодить ростер.
+
+## ✅ PH21 — BYOK: швидка валідація ключа (fix 500)
+
+- **Баг:** валідація свого ключа на повільному/rate-limited (429) ендпоінті (напр. OpenRouter free) «висіла» ~40с через дефолтні SDK-ретраї (backoff 10с+30с) → Next dev rewrite-проксі відвалювався по таймауту з **500**.
+- **Фікс:** `TransientProvider` будує OpenAI-клієнт із `max_retries=0` + `timeout=60с` (`BYOK_REQUEST_TIMEOUT_SECONDS`) — без backoff-ретраїв; `validate_credentials` робить ping через `with_options(timeout=12с)` (`VALIDATE_TIMEOUT_SECONDS`) → fail-fast; `/keys/validate` валідує записи конкурентно (`asyncio.gather`). Тепер `/keys/validate` повертає 200 з per-slot `ok`/`error` за секунди (live: невалідний ключ → `ok:false` за 0.54с). Ключ і далі не логується/не зберігається.
+- **Гейти:** BE 128 passed + ruff/black. Фронтенд не змінювався.
+
 ## ✅ PH20 — BYOK: життєвий цикл доданої моделі (D-15)
 
 - **Сховище тримає додану (custom) модель лише якщо вона валідна+робоча.** `KeysContext.buildPersistedState` (нова чиста функція) на «Зберегти» персистить дефолтні 3 слоти + суддю як раніше, але custom-рядки — **лише** з `active=true` (валідні); порожні й невалідні custom-рядки у `sessionStorage` **не** потрапляють. `sanitizeLoadedState` відкидає на гідрації будь-який неактивний custom-рядок (легасі-захист). Юніт-тести: `store/KeysContext.test.ts` (+4).

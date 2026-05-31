@@ -28,6 +28,12 @@ DEFAULT_BASE_URLS = {
 # The judge defaults to Groq's endpoint (the built-in judge runs Qwen on Groq).
 JUDGE_BYOK_SLOT = "byok-judge"
 
+# BYOK request budget (PH21). Disable the OpenAI SDK's automatic retries: on a
+# rate-limit (429) the default 2 retries back off ~10s then ~30s, which made key
+# validation hang ~40s and trip the dev proxy with a 500. A generous per-request
+# timeout still allows long real completions; validation uses a shorter cap.
+BYOK_REQUEST_TIMEOUT_SECONDS = 60
+
 
 class TransientProvider(OpenAICompatibleProvider):
     """An OpenAI-compatible provider built per-request from a user's BYOK key.
@@ -39,7 +45,14 @@ class TransientProvider(OpenAICompatibleProvider):
 
     def __init__(self, *, slot, base_url, api_key, model_id, max_tokens=None):
         self.provider_name = slot
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        # No SDK auto-retries (fail fast on 429/errors instead of ~40s backoff,
+        # PH21) + an explicit request timeout.
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            max_retries=0,
+            timeout=BYOK_REQUEST_TIMEOUT_SECONDS,
+        )
         self.model = model_id
         self.model_name = model_id
         self.display_name = model_id

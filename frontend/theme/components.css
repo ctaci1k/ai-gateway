@@ -489,34 +489,39 @@
 .thin-scroll,
 .msgs,
 .composer-popover,
-.keys-dialog {
+.keys-dialog,
+.sidebar {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .thin-scroll::-webkit-scrollbar,
 .msgs::-webkit-scrollbar,
 .composer-popover::-webkit-scrollbar,
-.keys-dialog::-webkit-scrollbar {
+.keys-dialog::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 .thin-scroll::-webkit-scrollbar-track,
 .msgs::-webkit-scrollbar-track,
 .composer-popover::-webkit-scrollbar-track,
-.keys-dialog::-webkit-scrollbar-track {
+.keys-dialog::-webkit-scrollbar-track,
+.sidebar::-webkit-scrollbar-track {
   background: transparent;
 }
 .thin-scroll::-webkit-scrollbar-thumb,
 .msgs::-webkit-scrollbar-thumb,
 .composer-popover::-webkit-scrollbar-thumb,
-.keys-dialog::-webkit-scrollbar-thumb {
+.keys-dialog::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: 999px;
 }
 .thin-scroll::-webkit-scrollbar-thumb:hover,
 .msgs::-webkit-scrollbar-thumb:hover,
 .composer-popover::-webkit-scrollbar-thumb:hover,
-.keys-dialog::-webkit-scrollbar-thumb:hover {
+.keys-dialog::-webkit-scrollbar-thumb:hover,
+.sidebar::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
 .msgs-empty {

@@ -15,6 +15,11 @@ from core.errors import ProviderError
 from core.prompts import get_prompt
 from providers.base_provider import BaseProvider, aiter_in_thread, extract_json
 
+# Fail-fast budget for a BYOK validation "ping" (PH21): short timeout so a slow
+# or rate-limited endpoint returns a clean per-key error in seconds. Retries are
+# already disabled on the transient client (max_retries=0).
+VALIDATE_TIMEOUT_SECONDS = 12
+
 
 class OpenAICompatibleProvider(BaseProvider):
 
@@ -61,11 +66,18 @@ class OpenAICompatibleProvider(BaseProvider):
         Sends a tiny completion; raises on any API error (bad key, unknown
         model, unreachable endpoint). An empty completion still counts as
         success — the point is that the call authenticates and the model exists.
-        Nothing is stored."""
+        Nothing is stored.
+
+        Uses a short, no-retry timeout (PH21) so a slow or rate-limited endpoint
+        fails fast with a clean per-key error instead of hanging (which tripped
+        the dev proxy with a 500)."""
+        client = self.client.with_options(timeout=VALIDATE_TIMEOUT_SECONDS)
         await asyncio.to_thread(
-            self._create,
-            messages=[{"role": "user", "content": "ping"}],
-            max_tokens=16,
+            lambda: client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=16,
+            )
         )
 
     async def generate_stream(self, message: str) -> AsyncGenerator[str, None]:

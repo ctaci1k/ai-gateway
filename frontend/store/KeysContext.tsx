@@ -191,7 +191,9 @@ export function KeysProvider({ children }: { children: ReactNode }) {
         if (!r.apiKey.trim() || !r.modelId.trim()) continue;
         entries.push({
           slot: r.slot,
-          base_url: r.custom ? r.baseUrl.trim() || undefined : undefined,
+          // Optional for default slots (PH22): empty → the built-in endpoint;
+          // set → override (e.g. point AI 3 at another provider).
+          base_url: r.baseUrl.trim() || undefined,
           api_key: r.apiKey.trim(),
           model_id: r.modelId.trim(),
         });
@@ -229,7 +231,8 @@ export function KeysProvider({ children }: { children: ReactNode }) {
       .filter((r) => r.active)
       .map((r) => ({
         slot: r.slot,
-        base_url: r.custom ? r.baseUrl || undefined : undefined,
+        // Send any base_url the user set, incl. an override on a default slot.
+        base_url: r.baseUrl || undefined,
         api_key: r.apiKey,
         model_id: r.modelId,
       }));

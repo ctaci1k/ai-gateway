@@ -198,6 +198,31 @@ async def test_manual_preference_does_not_override_clear_winner(monkeypatch):
     assert result["preference_weighting"]["applied"] is False
 
 
+async def test_custom_byok_slot_can_be_selected(monkeypatch):
+    # A custom BYOK responder (a non-default slot) must be selectable by the
+    # judge and scored, not zeroed by a hardcoded roster (PH22).
+    responses = {"groq": "answer A", "custom-abc": "answer B (custom)"}
+    monkeypatch.setattr(
+        ProviderService,
+        "execute_selector_ai",
+        staticmethod(
+            _judge_returning(
+                {
+                    "selected_model": "custom-abc",
+                    "confidence": 0.9,
+                    "reason": "best",
+                    "scores": {"groq": 70, "custom-abc": 92},
+                }
+            )
+        ),
+    )
+    result = await ResponseSelector.select_best_response("q", responses)
+    assert result["selected_model"] == "custom-abc"
+    assert result["best_response"] == "answer B (custom)"
+    assert result["fallback_used"] is False
+    assert result["scores"]["custom-abc"] == 92
+
+
 async def test_invalid_model_then_retry_success(monkeypatch):
     calls = {"n": 0}
 

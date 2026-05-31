@@ -16,7 +16,10 @@ MIN_PASSWORD_LEN = 8
 
 
 def _utcnow() -> datetime:
-    return datetime.now(UTC)
+    # Naive UTC to match the TIMESTAMP WITHOUT TIME ZONE columns (sessions.
+    # expires_at). asyncpg/Postgres rejects tz-aware values for them; SQLite
+    # tolerated it, which hid the mismatch in tests.
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class AuthService:

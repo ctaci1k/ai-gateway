@@ -131,6 +131,7 @@
   "keys.apiKey": "API key",
   "keys.modelId": "Model ID",
   "keys.baseUrl": "Base URL (OpenAI-compatible)",
+  "keys.baseUrlOptional": "Base URL — optional (leave empty for the built-in endpoint)",
   "keys.customResponder": "Added model",
   "keys.customResponderNumbered": "Added model — AI {n}",
   "keys.responderSlot": "AI {n}",

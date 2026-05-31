@@ -131,6 +131,7 @@
   "keys.apiKey": "API-ключ",
   "keys.modelId": "ID моделі",
   "keys.baseUrl": "Base URL (OpenAI-сумісний)",
+  "keys.baseUrlOptional": "Base URL — необов'язково (порожнє = вбудований ендпоінт)",
   "keys.customResponder": "Додана модель",
   "keys.customResponderNumbered": "Додана модель — AI {n}",
   "keys.responderSlot": "AI {n}",

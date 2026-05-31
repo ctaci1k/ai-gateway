@@ -6,6 +6,8 @@ live call and reports per-slot ``ok``/``error``. Transit-only: keys are never
 stored and never logged — only the slot and a sanitized error are recorded.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends
 
 from core.auth import current_user, require_csrf
@@ -61,5 +63,10 @@ async def _validate_entry(entry: KeyValidateEntry) -> KeyValidateResult:
     dependencies=[Depends(current_user), Depends(require_csrf)],
 )
 async def validate_keys(request: KeyValidateRequest) -> KeyValidateResponse:
-    results = [await _validate_entry(entry) for entry in request.entries]
-    return KeyValidateResponse(results=results)
+    # Validate concurrently so the total wait is the slowest single key (each is
+    # already bounded by a short no-retry timeout, PH21), not their sum. Each
+    # _validate_entry catches its own errors, so gather never raises.
+    results = await asyncio.gather(
+        *(_validate_entry(entry) for entry in request.entries)
+    )
+    return KeyValidateResponse(results=list(results))

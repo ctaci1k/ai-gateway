@@ -7,12 +7,24 @@ counts per minute/day) and the admin audit view, and records spent tokens per
 turn. Scoped to a single ``user_id`` (per-user isolation, PH8).
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 
 from core.db import session_scope
 from db.models import UsageEvent
+
+
+def _naive_utc(value: datetime) -> datetime:
+    """Normalize a query bound to naive UTC for the DB layer.
+
+    The ``created_at`` column is TIMESTAMP WITHOUT TIME ZONE. asyncpg (Postgres)
+    rejects a tz-aware bound compared against it ("can't subtract offset-naive
+    and offset-aware datetimes"); callers in quota_service build tz-aware UTC
+    instants (Warsaw day math needs tzinfo), so strip it at this boundary.
+    SQLite tolerated the aware value, which hid the mismatch in tests.
+    """
+    return value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
 
 
 class UsageRepository:
@@ -24,6 +36,7 @@ class UsageRepository:
 
         Used for window quota enforcement (per-minute / per-day, D-10/PH17).
         """
+        since = _naive_utc(since)
         async with session_scope() as session:
             count = await session.scalar(
                 select(func.count(UsageEvent.id)).where(
@@ -41,6 +54,7 @@ class UsageRepository:
         so the reset point and count are derived by replaying the raw timestamps
         rather than a rolling trailing count.
         """
+        since = _naive_utc(since)
         async with session_scope() as session:
             rows = await session.scalars(
                 select(UsageEvent.created_at)
