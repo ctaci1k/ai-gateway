@@ -95,6 +95,32 @@ describe("buildPersistedState", () => {
     expect(next.responders.map((r) => r.slot)).toEqual(["groq", "cerebras", "sambanova"]);
     expect(next.judge.active).toBe(false);
   });
+
+  it("blanks a half-filled built-in slot back to built-in (PH29.1)", () => {
+    const draft: KeysState = {
+      judge: { baseUrl: "", apiKey: "only-key", modelId: "", active: false },
+      responders: [
+        // key without model → incomplete → blanked
+        { slot: "groq", baseUrl: "", apiKey: "k", modelId: "", custom: false, active: false },
+        // model without key → incomplete → blanked
+        { slot: "cerebras", baseUrl: "", apiKey: "", modelId: "m", custom: false, active: false },
+      ],
+    };
+    const next = buildPersistedState(draft, {});
+    expect(next.judge).toEqual({ baseUrl: "", apiKey: "", modelId: "", active: false });
+    const groq = next.responders.find((r) => r.slot === "groq")!;
+    const cerebras = next.responders.find((r) => r.slot === "cerebras")!;
+    expect(groq).toEqual({
+      slot: "groq",
+      baseUrl: "",
+      apiKey: "",
+      modelId: "",
+      custom: false,
+      active: false,
+    });
+    expect(cerebras.apiKey).toBe("");
+    expect(cerebras.modelId).toBe("");
+  });
 });
 
 describe("sanitizeLoadedState", () => {

@@ -176,6 +176,8 @@
 - **Бекенд без змін** — уже приймав `base_url` будь-якого слота і судді (PH22; `KeyValidateEntry`+`is_judge`, `ByokJudge`, `build_transient_judge`).
 ↪ **Реалізовано (PH29, 2026-06-02):** код (`utils/byokEndpoints.ts`, `components/keys/BaseUrlSelect.tsx`, `components/common/InfoTip.tsx`, `KeysForm`, `KeysContext`, i18n, CSS) + оновлені тести `store/KeysContext.test.ts` (judge.baseUrl + legacy-нормалізація). Деталі — [08-current-state.md](08-current-state.md) (секція PH29); фронтенд — [06-frontend-architecture.md](06-frontend-architecture.md). Гейти: FE tsc/eslint/prettier/vitest(27)/build; бекенд не змінювався.
 
+↪ **Ревізія PH29.1 (фідбек власника, Design X):** власник: вбудовані endpoint'и не мають бути вибором — до них лише скидання. Тому **base URL прибрано з UI у судді й дефолтних AI 1/2/3** (endpoint фіксований; ключ+модель+**«Очистити»**, тепер і на AI 1/2/3); **base URL лишився лише в кастомних AI 4/5** — вибір **зі списку перевірених** (каталог = лише сумісні, **без built-in, без «Власний…»/вільного тексту**). **Неповний рядок не зберігається** (бланк/дроп + inline-підказка). **Свідомо прибрано** PH22-оверайд endpoint'у дефолтних слотів і base URL судді з UI (для чужого провайдера — AI 4/5; «суддя на своєму провайдері» — окремий майбутній план). Безпека D-12 збережена. Гейти: FE tsc/eslint/prettier/vitest(28)/build; бекенд без змін.
+
 ## Нові підтверджені вимоги (від власника, 2026-05-29)
 
 Окрім днів 10–14, додано до обсягу:

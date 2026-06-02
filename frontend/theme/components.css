@@ -1961,6 +1961,13 @@ button.rail-sq:hover {
   line-height: 1.4;
   color: var(--danger);
 }
+/* Non-error notice: a built-in/custom row is half-filled (PH29.1). */
+.keys-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--subtle);
+}
 .keys-add {
   display: flex;
   align-items: center;

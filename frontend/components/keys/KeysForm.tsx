@@ -1,17 +1,19 @@
 // frontend/components/keys/KeysForm.tsx
 //
 // BYOK key editor body (PH17 logic, relocated into Settings in PH24/E3; base-URL
-// UX reworked in PH29 / plan 027). Settings renders this; there is no separate
-// modal, so the logic is NOT duplicated.
+// UX reworked in PH29 and simplified in PH29.1 per owner feedback).
 //
-// Each row has three fields: a curated Base URL <select> (BaseUrlSelect), the
-// API key (masked) and the model ID, each with an ⓘ InfoTip. The judge gets a
-// base-URL select too (default = the built-in Groq endpoint) and a "Clear"
-// button that resets it to the built-in judge; custom AI 4/5 rows keep "Remove".
+// Built-in slots (the judge + default AI 1/2/3) have NO base-URL field: their
+// endpoint is fixed (built-in). They show API key + model ID + a "Clear" button
+// that resets the slot back to the built-in. Only custom AI 4/5 rows have a base
+// URL — a pick from the curated catalogue (BaseUrlSelect) — and a "Remove"
+// button. Every field has an ⓘ InfoTip (where to get it / what to enter /
+// pairing). A half-filled row (key without model, or vice versa) is flagged and
+// never persisted.
 //
-// On Save each filled (base_url + key + model) is validated by a live test call;
-// working keys activate, failing ones stay highlighted red with a per-key
-// message. Keys live only in sessionStorage (NQ5) — never persisted/logged.
+// On Save each filled (key + model [+ base_url for custom]) is validated by a
+// live test call; working keys activate, failing ones stay highlighted red.
+// Keys live only in sessionStorage (NQ5) — never persisted/logged.
 
 "use client";
 
@@ -31,6 +33,20 @@ function cloneState(state: KeysState): KeysState {
     judge: { ...state.judge },
     responders: state.responders.map((r) => ({ ...r })),
   };
+}
+
+// A built-in slot (judge / default) is half-filled: exactly one of key/model set.
+function builtinIncomplete(apiKey: string, modelId: string): boolean {
+  const k = apiKey.trim() !== "";
+  const m = modelId.trim() !== "";
+  return (k || m) && !(k && m);
+}
+
+// A custom slot is partially filled: something set, but not all of base+key+model.
+function customIncomplete(baseUrl: string, apiKey: string, modelId: string): boolean {
+  const filled = baseUrl.trim() !== "" || apiKey.trim() !== "" || modelId.trim() !== "";
+  const complete = baseUrl.trim() !== "" && apiKey.trim() !== "" && modelId.trim() !== "";
+  return filled && !complete;
 }
 
 interface KeyInputProps {
@@ -86,28 +102,26 @@ export default function KeysForm() {
   const [results, setResults] = useState<Record<string, ValidateResult>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  // Bumped on Clear to remount the judge BaseUrlSelect so its internal "custom
-  // mode" resets — the cleared judge shows the built-in endpoint, not "Custom…".
-  const [judgeNonce, setJudgeNonce] = useState(0);
 
-  const updateJudge = useCallback((field: "apiKey" | "modelId" | "baseUrl", value: string) => {
+  const dropResult = useCallback((slot: string) => {
+    setResults((prev) => {
+      if (!(slot in prev)) return prev;
+      const next = { ...prev };
+      delete next[slot];
+      return next;
+    });
+  }, []);
+
+  const updateJudge = useCallback((field: "apiKey" | "modelId", value: string) => {
     setSaved(false);
     setDraft((d) => ({ ...d, judge: { ...d.judge, [field]: value, active: false } }));
   }, []);
 
   const clearJudge = useCallback(() => {
     setSaved(false);
-    setJudgeNonce((n) => n + 1);
-    setResults((prev) => {
-      const next = { ...prev };
-      delete next[JUDGE_SLOT];
-      return next;
-    });
-    setDraft((d) => ({
-      ...d,
-      judge: { baseUrl: "", apiKey: "", modelId: "", active: false },
-    }));
-  }, []);
+    dropResult(JUDGE_SLOT);
+    setDraft((d) => ({ ...d, judge: { baseUrl: "", apiKey: "", modelId: "", active: false } }));
+  }, [dropResult]);
 
   const updateResponder = useCallback(
     (index: number, field: "apiKey" | "modelId" | "baseUrl", value: string) => {
@@ -120,6 +134,26 @@ export default function KeysForm() {
       }));
     },
     [],
+  );
+
+  // Built-in default slot: reset it back to the built-in (clear key/model).
+  const clearResponder = useCallback(
+    (index: number) => {
+      setSaved(false);
+      setDraft((d) => {
+        const target = d.responders[index];
+        if (target) dropResult(target.slot);
+        return {
+          ...d,
+          responders: d.responders.map((r, i) =>
+            i === index
+              ? { slot: r.slot, baseUrl: "", apiKey: "", modelId: "", custom: false, active: false }
+              : r,
+          ),
+        };
+      });
+    },
+    [dropResult],
   );
 
   const addResponder = useCallback(() => {
@@ -198,7 +232,7 @@ export default function KeysForm() {
       </ul>
 
       <div className="keys-rows">
-        {/* Judge row */}
+        {/* Judge row (built-in: no base URL, Clear resets to built-in) */}
         <div className="keys-row">
           <div className="keys-row-head">
             <span className="keys-slot">{t("keys.judge")}</span>
@@ -212,15 +246,6 @@ export default function KeysForm() {
             </div>
           </div>
           <div className="keys-fields">
-            <BaseUrlSelect
-              key={judgeNonce}
-              id="keys-judge-baseurl"
-              label={t("keys.baseUrlSelect")}
-              value={draft.judge.baseUrl}
-              defaultOptionLabel={t("keys.useDefaultEndpointJudge")}
-              info={baseUrlInfo}
-              onChange={(v) => updateJudge("baseUrl", v)}
-            />
             <div className="keys-field">
               <span className="keys-field-label">
                 <label htmlFor="keys-judge-key">{t("keys.apiKey")}</label>
@@ -252,6 +277,9 @@ export default function KeysForm() {
               />
             </div>
           </div>
+          {builtinIncomplete(draft.judge.apiKey, draft.judge.modelId) && (
+            <p className="keys-hint">{t("keys.incompleteBuiltin")}</p>
+          )}
           {judgeResult && !judgeResult.ok && <p className="keys-error">{t("keys.keyFailed")}</p>}
         </div>
 
@@ -263,6 +291,9 @@ export default function KeysForm() {
                 n: defaultSlots.length + customSlots.indexOf(r.slot) + 1,
               })
             : t("keys.responderSlot", { n: defaultSlots.indexOf(r.slot) + 1 });
+          const incomplete = r.custom
+            ? customIncomplete(r.baseUrl, r.apiKey, r.modelId)
+            : builtinIncomplete(r.apiKey, r.modelId);
           return (
             <div className="keys-row" key={r.slot}>
               <div className="keys-row-head">
@@ -276,22 +307,30 @@ export default function KeysForm() {
                     {t("keys.remove")}
                   </button>
                 ) : (
-                  <span className="keys-default">
-                    {t("keys.defaultName", { name: responderLabel(r.slot) })}
-                  </span>
+                  <div className="keys-head-right">
+                    <span className="keys-default">
+                      {t("keys.defaultName", { name: responderLabel(r.slot) })}
+                    </span>
+                    <button
+                      type="button"
+                      className="keys-clear"
+                      onClick={() => clearResponder(index)}
+                    >
+                      {t("keys.clear")}
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="keys-fields">
-                <BaseUrlSelect
-                  id={`keys-${r.slot}-baseurl`}
-                  label={t("keys.baseUrlSelect")}
-                  value={r.baseUrl}
-                  // Default slots may fall back to the provider's fixed endpoint;
-                  // custom (added) rows must point at a concrete endpoint.
-                  defaultOptionLabel={r.custom ? undefined : t("keys.useDefaultEndpoint")}
-                  info={baseUrlInfo}
-                  onChange={(v) => updateResponder(index, "baseUrl", v)}
-                />
+                {r.custom && (
+                  <BaseUrlSelect
+                    id={`keys-${r.slot}-baseurl`}
+                    label={t("keys.baseUrlSelect")}
+                    value={r.baseUrl}
+                    info={baseUrlInfo}
+                    onChange={(v) => updateResponder(index, "baseUrl", v)}
+                  />
+                )}
                 <div className="keys-field">
                   <span className="keys-field-label">
                     <label htmlFor={`keys-${r.slot}-key`}>{t("keys.apiKey")}</label>
@@ -323,6 +362,11 @@ export default function KeysForm() {
                   />
                 </div>
               </div>
+              {incomplete && (
+                <p className="keys-hint">
+                  {r.custom ? t("keys.incompleteCustom") : t("keys.incompleteBuiltin")}
+                </p>
+              )}
               {result && !result.ok && <p className="keys-error">{t("keys.keyFailed")}</p>}
             </div>
           );

@@ -111,22 +111,47 @@ export function buildPersistedState(
   draft: KeysState,
   bySlot: Record<string, ValidateResult>,
 ): KeysState {
+  // A built-in slot (judge / default AI 1/2/3) is only persisted when BOTH the
+  // key and the model are present (PH29.1): a half-filled row never sticks — it
+  // resets to the built-in (blank) so we never store partial nonsense. Custom
+  // rows are kept only when they validated as working (D-15), so a custom row
+  // missing a field never validates and is dropped below.
+  const judgeComplete = draft.judge.apiKey.trim() !== "" && draft.judge.modelId.trim() !== "";
   return {
-    judge: {
-      baseUrl: draft.judge.baseUrl.trim(),
-      apiKey: draft.judge.apiKey.trim(),
-      modelId: draft.judge.modelId.trim(),
-      active: bySlot[JUDGE_SLOT]?.ok ?? false,
-    },
+    judge: judgeComplete
+      ? {
+          baseUrl: draft.judge.baseUrl.trim(),
+          apiKey: draft.judge.apiKey.trim(),
+          modelId: draft.judge.modelId.trim(),
+          active: bySlot[JUDGE_SLOT]?.ok ?? false,
+        }
+      : { baseUrl: "", apiKey: "", modelId: "", active: false },
     responders: draft.responders
       .filter((r) => !r.custom || (bySlot[r.slot]?.ok ?? false))
-      .map((r) => ({
-        ...r,
-        apiKey: r.apiKey.trim(),
-        modelId: r.modelId.trim(),
-        baseUrl: r.baseUrl.trim(),
-        active: bySlot[r.slot]?.ok ?? false,
-      })),
+      .map((r) => {
+        if (r.custom) {
+          return {
+            ...r,
+            apiKey: r.apiKey.trim(),
+            modelId: r.modelId.trim(),
+            baseUrl: r.baseUrl.trim(),
+            active: bySlot[r.slot]?.ok ?? false,
+          };
+        }
+        // Built-in default slot: complete → keep (endpoint stays built-in, no
+        // override); incomplete → blank back to the built-in.
+        const complete = r.apiKey.trim() !== "" && r.modelId.trim() !== "";
+        return complete
+          ? {
+              slot: r.slot,
+              baseUrl: "",
+              apiKey: r.apiKey.trim(),
+              modelId: r.modelId.trim(),
+              custom: false,
+              active: bySlot[r.slot]?.ok ?? false,
+            }
+          : { slot: r.slot, baseUrl: "", apiKey: "", modelId: "", custom: false, active: false };
+      }),
   };
 }
 
