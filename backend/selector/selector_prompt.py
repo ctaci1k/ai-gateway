@@ -3,7 +3,7 @@
 import hashlib
 import json
 
-from core.prompts import render_prompt, render_template_string
+from core.prompts import get_prompt, render_prompt
 
 
 class SelectorPromptBuilder:
@@ -73,9 +73,12 @@ class SelectorPromptBuilder:
         participant, including custom BYOK slots (PH22). The caller maps the
         judge's verdict back to real slots via the returned map.
 
-        When ``judge_prompt_override`` is set (PH24, E2) it replaces the built-in
-        ``selector_judge`` template; the same ``$placeholders`` are substituted,
-        so an override that keeps them behaves identically structurally.
+        The mechanical scaffold (``selector_judge``) — role lock, selection rules
+        and the JSON/0-100 output contract — is always applied. Only the
+        **judging criteria** are user-editable: ``judge_prompt_override`` (when
+        set) replaces the built-in default criteria injected at
+        ``$judging_criteria``; it is inserted as a value (single substitution
+        pass), so a user can neither break the contract nor inject placeholders.
         """
 
         if personalization_context is None:
@@ -125,17 +128,21 @@ class SelectorPromptBuilder:
                 ),
             )
 
+        # Only the criteria are user-editable; everything else is the fixed
+        # scaffold. The override (if any) is injected as the criteria value.
+        judging_criteria = (judge_prompt_override or "").strip() or get_prompt(
+            "selector_judge_criteria"
+        )
+
         render_values = dict(
             user_message=user_message,
             responses_block=responses_block,
             personalization_block=personalization_block,
             allowed_models_inline=allowed_models_inline,
             scores_example=scores_example,
+            judging_criteria=judging_criteria,
         )
-        if judge_prompt_override:
-            prompt = render_template_string(judge_prompt_override, **render_values)
-        else:
-            prompt = render_prompt("selector_judge", **render_values)
+        prompt = render_prompt("selector_judge", **render_values)
         return prompt, label_to_slot
 
     @staticmethod

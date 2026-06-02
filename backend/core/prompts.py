@@ -76,14 +76,12 @@ def render_template_string(template: str, **values) -> str:
 
 # Placeholders a custom judge prompt MUST keep so the judge still sees the
 # question, the responses, and the allowed labels (PH24, E2). Validated on save.
-JUDGE_PROMPT_REQUIRED_PLACEHOLDERS = (
-    "$user_message",
-    "$responses_block",
-    "$allowed_models_inline",
-    "$scores_example",
-)
-
-
 def default_judge_prompt() -> str:
-    """The built-in judge prompt template shown as the editable default (E2)."""
-    return get_prompt("selector_judge")
+    """The built-in, user-editable **judging criteria** shown as the default.
+
+    Only the criteria are editable (the user's judging philosophy / what to weigh).
+    The mechanical scaffold — role lock, selection rules and the JSON/0-100 output
+    contract — lives in the fixed ``selector_judge`` template and is never exposed
+    or overridable, so a user can't break parsing or the scoring scale.
+    """
+    return get_prompt("selector_judge_criteria")

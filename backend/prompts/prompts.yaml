@@ -2,7 +2,7 @@
 # Bump `version` whenever a template changes meaningfully.
 # Placeholders use $name syntax (string.Template); literal "$" must be "$$".
 
-version: 4
+version: 5
 
 prompts:
   # --- RAG (PH10; relaxed in PH13) ---
@@ -91,14 +91,7 @@ prompts:
 
       - You ONLY evaluate the existing responses.
 
-      Evaluate primarily based on:
-
-      - correctness
-      - completeness
-      - clarity
-      - usefulness
-      - structure
-      - reasoning quality
+      $judging_criteria
 
       $personalization_block
 
@@ -121,3 +114,20 @@ prompts:
       The "scores" object MUST contain a score (0-100) for EVERY model name
       listed above, and "selected_model" MUST be EXACTLY one of:
       $allowed_models_inline
+
+  selector_judge_criteria:
+    description: >
+      Default editable judging criteria (PH24/E2, refined PH-criteria): the only
+      user-editable part of the judge prompt. Injected into the fixed
+      selector_judge scaffold at $judging_criteria. The mechanical scaffold (role
+      lock, selection rules, JSON/0-100 output contract, placeholders) is NOT
+      user-editable.
+    template: |
+      Evaluate primarily based on:
+
+      - correctness
+      - completeness
+      - clarity
+      - usefulness
+      - structure
+      - reasoning quality

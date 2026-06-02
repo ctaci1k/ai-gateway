@@ -1,13 +1,12 @@
 // frontend/components/settings/JudgePromptSection.tsx
 //
-// Settings → Judge prompt (PH24, E2). Lets the user edit the system prompt the
-// AI judge runs under (the one "under the hood"), reset it to the built-in
-// default, and view the default for reference. The override persists per-user
-// (backend Preference.data) and the backend applies it when judging Compare.
-//
-// The required $placeholders ($user_message, $responses_block,
-// $allowed_models_inline, $scores_example) must be kept — the backend rejects an
-// override that drops them, surfaced here as an inline error.
+// Settings → Judge criteria (PH24/E2, refined). Lets the user edit ONLY the
+// judging criteria (what the AI judge should weigh), reset to the built-in
+// default, and view the default for reference. The mechanical scaffold — role
+// lock, selection rules, the JSON/0-100 output contract — is fixed server-side
+// and never exposed, so the user can't break parsing or the scoring scale. The
+// criteria persist per-user (backend Preference.data) and are injected into the
+// fixed scaffold when judging Compare.
 
 "use client";
 
@@ -106,7 +105,7 @@ export default function JudgePromptSection() {
         }}
         rows={14}
       />
-      <p className="settings-hint">{t("settings.judge.placeholdersHint")}</p>
+      <p className="settings-hint">{t("settings.judge.fixedHint")}</p>
 
       {error && <p className="settings-error">{error}</p>}
 

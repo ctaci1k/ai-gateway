@@ -1,6 +1,8 @@
 # backend/tests/test_judge_prompt.py
-"""Per-user judge-prompt override (PH24, E2): persistence, the GET/PUT endpoint
-with placeholder validation, and that the override drives the built prompt."""
+"""Per-user judging criteria (PH24/E2, refined): only the criteria are editable;
+the mechanical scaffold (role, rules, JSON/0-100 contract) is fixed. Tests cover
+persistence, the GET/PUT endpoint, and that the criteria are injected into the
+always-applied scaffold."""
 
 from core.prompts import default_judge_prompt
 from selector.selector_prompt import SelectorPromptBuilder
@@ -8,31 +10,32 @@ from tests.conftest import TEST_REGISTRATION_CODE
 
 _RESPONSES = {"groq": "answer A", "cerebras": "answer B"}
 
-_VALID_OVERRIDE = (
-    "CUSTOM JUDGE. Pick from: $allowed_models_inline\n"
-    "$personalization_block\n"
-    "QUESTION: $user_message\n"
-    "RESPONSES: $responses_block\n"
-    "JSON: $scores_example"
-)
+# The override is now just judging criteria — free text, no placeholders.
+_VALID_OVERRIDE = "Prefer concise answers; reward concrete code examples."
 
 
-def test_build_uses_override_when_present():
+def test_override_criteria_injected_into_fixed_scaffold():
     prompt, _ = SelectorPromptBuilder.build_selector_prompt(
         user_message="hi", responses=_RESPONSES, judge_prompt_override=_VALID_OVERRIDE
     )
-    assert prompt.startswith("CUSTOM JUDGE.")
-    # Placeholders are substituted, not left literal.
-    assert "$user_message" not in prompt
+    # The user's criteria appear...
+    assert "reward concrete code examples" in prompt
+    # ...inside the fixed scaffold: role lock + 0-100 contract are always present,
+    # and the data placeholders are substituted (not left literal).
+    assert "AI judge" in prompt
+    assert "0-100" in prompt
+    assert "$user_message" not in prompt and "$judging_criteria" not in prompt
     assert "hi" in prompt
 
 
-def test_build_uses_default_when_no_override():
+def test_build_uses_default_criteria_when_no_override():
     prompt, _ = SelectorPromptBuilder.build_selector_prompt(
         user_message="hi", responses=_RESPONSES
     )
-    assert "CUSTOM JUDGE." not in prompt
-    assert "AI judge" in prompt or "AI judge" in prompt.lower()
+    assert "Prefer concise answers" not in prompt
+    # Default criteria + fixed scaffold.
+    assert "Evaluate primarily based on" in prompt
+    assert "AI judge" in prompt and "0-100" in prompt
 
 
 async def test_repository_set_get_clear(repo):
@@ -72,11 +75,23 @@ def test_put_judge_prompt_saves_and_resets(auth_client):
     assert reset.json()["override"] is None
 
 
-def test_put_judge_prompt_rejects_missing_placeholders(auth_client):
+def test_put_judge_prompt_accepts_free_text_criteria(auth_client):
+    # Plain criteria with no placeholders are now valid (the scaffold is fixed).
     client, headers = auth_client
     resp = client.put(
         "/preferences/judge-prompt",
-        json={"override": "just some text without placeholders"},
+        json={"override": "Favor short, well-structured answers."},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["override"] == "Favor short, well-structured answers."
+
+
+def test_put_judge_prompt_rejects_overlong_criteria(auth_client):
+    client, headers = auth_client
+    resp = client.put(
+        "/preferences/judge-prompt",
+        json={"override": "x" * 9000},
         headers=headers,
     )
     assert resp.status_code == 400

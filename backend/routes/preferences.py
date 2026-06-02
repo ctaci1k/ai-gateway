@@ -4,10 +4,7 @@ from fastapi import APIRouter, Depends
 
 from core.auth import current_user, require_csrf
 from core.errors import ValidationError
-from core.prompts import (
-    JUDGE_PROMPT_REQUIRED_PLACEHOLDERS,
-    default_judge_prompt,
-)
+from core.prompts import default_judge_prompt
 from db.models import User
 from memory.repository import get_chat_repository
 from schemas.chat_response import ManualSelectionResponse, PreferencesResponse
@@ -16,7 +13,10 @@ from schemas.preferences import JudgePromptResponse, JudgePromptUpdate
 router = APIRouter(tags=["preferences"])
 
 
-# A custom judge prompt is bounded so it can't be abused as unbounded storage.
+# Custom judging criteria are bounded so they can't be abused as unbounded
+# storage. Only the criteria are user-editable; the mechanical judge scaffold
+# (role, rules, JSON/0-100 contract) is fixed server-side, so there are no
+# required placeholders for the user to preserve.
 _JUDGE_PROMPT_MAX_LEN = 8000
 
 
@@ -72,22 +72,15 @@ async def get_judge_prompt(user: User = Depends(current_user)):
 async def set_judge_prompt(
     payload: JudgePromptUpdate, user: User = Depends(current_user)
 ):
-    """Save (or, when null/blank, reset to built-in) the judge-prompt override.
+    """Save (or, when null/blank, reset to default) the user's judging criteria.
 
-    A non-empty override must keep the required ``$placeholders`` so the judge
-    still receives the question, the responses and the allowed labels (E2)."""
+    Only the criteria are editable; they are injected into the fixed judge
+    scaffold server-side. Free text — the only constraint is a length bound."""
     repository = get_chat_repository(user.id)
     override = (payload.override or "").strip()
     if override:
         if len(override) > _JUDGE_PROMPT_MAX_LEN:
-            raise ValidationError("Judge prompt is too long")
-        missing = [
-            ph for ph in JUDGE_PROMPT_REQUIRED_PLACEHOLDERS if ph not in override
-        ]
-        if missing:
-            raise ValidationError(
-                "Judge prompt must keep the placeholders: " + ", ".join(missing)
-            )
+            raise ValidationError("Judging criteria are too long")
         await repository.set_judge_prompt_override(override)
     else:
         await repository.set_judge_prompt_override(None)
