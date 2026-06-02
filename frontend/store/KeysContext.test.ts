@@ -16,7 +16,12 @@ import {
 
 function baseDraft(): KeysState {
   return {
-    judge: { apiKey: " jk ", modelId: " jm ", active: false },
+    judge: {
+      baseUrl: " https://api.groq.com/openai/v1 ",
+      apiKey: " jk ",
+      modelId: " jm ",
+      active: false,
+    },
     responders: [
       { slot: "groq", baseUrl: "", apiKey: "gk", modelId: "gm", custom: false, active: false },
       { slot: "cerebras", baseUrl: "", apiKey: "", modelId: "", custom: false, active: false },
@@ -69,7 +74,12 @@ describe("buildPersistedState", () => {
 
   it("sets active flags from validation and trims fields", () => {
     const next = buildPersistedState(baseDraft(), okResults);
-    expect(next.judge).toEqual({ apiKey: "jk", modelId: "jm", active: true });
+    expect(next.judge).toEqual({
+      baseUrl: "https://api.groq.com/openai/v1",
+      apiKey: "jk",
+      modelId: "jm",
+      active: true,
+    });
 
     const groq = next.responders.find((r) => r.slot === "groq")!;
     expect(groq.active).toBe(true);
@@ -90,7 +100,7 @@ describe("buildPersistedState", () => {
 describe("sanitizeLoadedState", () => {
   it("drops legacy custom rows that aren't active, keeps defaults + active custom", () => {
     const stored: KeysState = {
-      judge: { apiKey: "jk", modelId: "jm", active: true },
+      judge: { baseUrl: "", apiKey: "jk", modelId: "jm", active: true },
       responders: [
         { slot: "groq", baseUrl: "", apiKey: "", modelId: "", custom: false, active: false },
         {
@@ -114,6 +124,14 @@ describe("sanitizeLoadedState", () => {
     const clean = sanitizeLoadedState(stored);
     expect(clean.responders.map((r) => r.slot)).toEqual(["groq", "custom-live"]);
     expect(clean.judge.active).toBe(true);
+  });
+
+  it("normalises a legacy judge with no baseUrl field to empty string (PH29)", () => {
+    const legacy = {
+      judge: { apiKey: "jk", modelId: "jm", active: true },
+      responders: [],
+    } as unknown as KeysState;
+    expect(sanitizeLoadedState(legacy).judge.baseUrl).toBe("");
   });
 });
 

@@ -166,6 +166,16 @@
 
 ↪ **UX-апгрейд (PH28, 2026-06-02, Варіант B):** власник: дашборд у модалці «дрібний/незручний». Архітектор виніс Звіти у **повноекранний розділ** (як Admin), додав вкладку **«Розкладка»** з акордеон-drill-down **ключ доступу → модель → чати** і **глобальний фільтр за ключем доступу** (`access=app|own` на всіх `/reports/*` + новий `GET /reports/breakdown`). «Ключ доступу» — фільтр/факт, не рівень-секція (його місце — сегмент тулбара і верхній рівень drill-down). План — [plans/026-reports-fullpage-breakdown.md](plans/026-reports-fullpage-breakdown.md); деталі — [08-current-state.md](08-current-state.md) (секція PH28). Гейти: BE 159 + ruff/black; FE tsc/eslint/prettier/vitest(26)/build.
 
+## D-19 ✅ BYOK «API-ключі»: курований Select base URL + суддя base URL/Clear + ⓘ-підказки (план 027)
+
+**Рішення (2026-06-02):** власник: «незрозуміло, звідки брати base URL — незручно». Архітектор переробив UX BYOK. **Уточнює D-12/D-15/D-16** (BYOK), нічого не скасовує; безпека D-12 збережена.
+
+- **Base URL = курований Select, не вільний рядок.** Список перевірених OpenAI-сумісних endpoint'ів (вбудовані Groq/Cerebras/SambaNova + сумісні OpenAI/OpenRouter/Together/Fireworks/DeepSeek/Mistral/xAI/Gemini-OpenAI/Perplexity/Ollama) + «Власний…» (текстове поле як fallback). Єдина FE-константа `utils/byokEndpoints.BYOK_BASE_URLS` (дзеркало бекендових дефолтів). **Anthropic НЕ додаємо** — його API не chat/completions-сумісне через цей механізм (потрібен окремий адаптер → окремий план).
+- **Дефолтні слоти + суддя** мають опцію «Типовий ендпоінт» (→ порожній `baseUrl`, бекенд бере фіксований). **Суддя отримав base URL** (`JudgeKey.baseUrl`; раніше поля не було) — дефолт «Вбудований суддя (Groq)»; кнопка **«Очистити»** скидає key/model/baseUrl → вбудований Qwen на Groq. Кастомні AI 4/5 — лишили **«Видалити»**.
+- **ⓘ-підказки** (спільний a11y `InfoTip`) на base URL / API-ключ / ID моделі: де взяти ключ, що таке ID моделі, парність із base URL. Тексти-нотатки переписані під реальні поля.
+- **Бекенд без змін** — уже приймав `base_url` будь-якого слота і судді (PH22; `KeyValidateEntry`+`is_judge`, `ByokJudge`, `build_transient_judge`).
+↪ **Реалізовано (PH29, 2026-06-02):** код (`utils/byokEndpoints.ts`, `components/keys/BaseUrlSelect.tsx`, `components/common/InfoTip.tsx`, `KeysForm`, `KeysContext`, i18n, CSS) + оновлені тести `store/KeysContext.test.ts` (judge.baseUrl + legacy-нормалізація). Деталі — [08-current-state.md](08-current-state.md) (секція PH29); фронтенд — [06-frontend-architecture.md](06-frontend-architecture.md). Гейти: FE tsc/eslint/prettier/vitest(27)/build; бекенд не змінювався.
+
 ## Нові підтверджені вимоги (від власника, 2026-05-29)
 
 Окрім днів 10–14, додано до обсягу:

@@ -1,8 +1,13 @@
 // frontend/components/keys/KeysForm.tsx
 //
-// BYOK key editor body (PH17 logic, relocated into Settings in PH24/E3). This is
-// the exact judge + responder form extracted from the old KeysModal so the
-// logic is NOT duplicated — Settings renders this; there is no separate modal.
+// BYOK key editor body (PH17 logic, relocated into Settings in PH24/E3; base-URL
+// UX reworked in PH29 / plan 027). Settings renders this; there is no separate
+// modal, so the logic is NOT duplicated.
+//
+// Each row has three fields: a curated Base URL <select> (BaseUrlSelect), the
+// API key (masked) and the model ID, each with an ⓘ InfoTip. The judge gets a
+// base-URL select too (default = the built-in Groq endpoint) and a "Clear"
+// button that resets it to the built-in judge; custom AI 4/5 rows keep "Remove".
 //
 // On Save each filled (base_url + key + model) is validated by a live test call;
 // working keys activate, failing ones stay highlighted red with a per-key
@@ -12,7 +17,9 @@
 
 import { useCallback, useState } from "react";
 
+import InfoTip from "@/components/common/InfoTip";
 import { IconCheck, IconPlus } from "@/components/icons/Icons";
+import BaseUrlSelect from "@/components/keys/BaseUrlSelect";
 import type { ValidateResult } from "@/services/keysApi";
 import { useI18n } from "@/store/LanguageContext";
 import { JUDGE_SLOT, MAX_RESPONDERS, useKeys, type KeysState } from "@/store/KeysContext";
@@ -79,10 +86,27 @@ export default function KeysForm() {
   const [results, setResults] = useState<Record<string, ValidateResult>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Bumped on Clear to remount the judge BaseUrlSelect so its internal "custom
+  // mode" resets — the cleared judge shows the built-in endpoint, not "Custom…".
+  const [judgeNonce, setJudgeNonce] = useState(0);
 
-  const updateJudge = useCallback((field: "apiKey" | "modelId", value: string) => {
+  const updateJudge = useCallback((field: "apiKey" | "modelId" | "baseUrl", value: string) => {
     setSaved(false);
     setDraft((d) => ({ ...d, judge: { ...d.judge, [field]: value, active: false } }));
+  }, []);
+
+  const clearJudge = useCallback(() => {
+    setSaved(false);
+    setJudgeNonce((n) => n + 1);
+    setResults((prev) => {
+      const next = { ...prev };
+      delete next[JUDGE_SLOT];
+      return next;
+    });
+    setDraft((d) => ({
+      ...d,
+      judge: { baseUrl: "", apiKey: "", modelId: "", active: false },
+    }));
   }, []);
 
   const updateResponder = useCallback(
@@ -143,6 +167,26 @@ export default function KeysForm() {
   const defaultSlots = draft.responders.filter((r) => !r.custom).map((r) => r.slot);
   const customSlots = draft.responders.filter((r) => r.custom).map((r) => r.slot);
 
+  // Shared ⓘ tip for each field type (where to get it / what to enter / pairing).
+  const apiKeyInfo = (
+    <InfoTip
+      label={t("keys.infoLabel", { field: t("keys.apiKey") })}
+      text={t("keys.info.apiKey")}
+    />
+  );
+  const modelIdInfo = (
+    <InfoTip
+      label={t("keys.infoLabel", { field: t("keys.modelId") })}
+      text={t("keys.info.modelId")}
+    />
+  );
+  const baseUrlInfo = (
+    <InfoTip
+      label={t("keys.infoLabel", { field: t("keys.baseUrlSelect") })}
+      text={t("keys.info.baseUrl")}
+    />
+  );
+
   return (
     <div className="keys-form">
       <p className="keys-intro">{t("keys.intro")}</p>
@@ -158,28 +202,55 @@ export default function KeysForm() {
         <div className="keys-row">
           <div className="keys-row-head">
             <span className="keys-slot">{t("keys.judge")}</span>
-            <span className="keys-default">
-              {t("keys.defaultName", { name: judgeModelName(JUDGE_MODEL) ?? "Qwen" })}
-            </span>
+            <div className="keys-head-right">
+              <span className="keys-default">
+                {t("keys.defaultName", { name: judgeModelName(JUDGE_MODEL) ?? "Qwen" })}
+              </span>
+              <button type="button" className="keys-clear" onClick={clearJudge}>
+                {t("keys.clear")}
+              </button>
+            </div>
           </div>
           <div className="keys-fields">
-            <KeyInput
-              id="keys-judge-key"
-              value={draft.judge.apiKey}
-              placeholder={t("keys.apiKey")}
-              invalid={judgeResult ? !judgeResult.ok : false}
-              showLabel={showLabel}
-              hideLabel={hideLabel}
-              onChange={(v) => updateJudge("apiKey", v)}
+            <BaseUrlSelect
+              key={judgeNonce}
+              id="keys-judge-baseurl"
+              label={t("keys.baseUrlSelect")}
+              value={draft.judge.baseUrl}
+              defaultOptionLabel={t("keys.useDefaultEndpointJudge")}
+              info={baseUrlInfo}
+              onChange={(v) => updateJudge("baseUrl", v)}
             />
-            <input
-              className="keys-input keys-input--model"
-              value={draft.judge.modelId}
-              placeholder={t("keys.modelId")}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => updateJudge("modelId", e.target.value)}
-            />
+            <div className="keys-field">
+              <span className="keys-field-label">
+                <label htmlFor="keys-judge-key">{t("keys.apiKey")}</label>
+                {apiKeyInfo}
+              </span>
+              <KeyInput
+                id="keys-judge-key"
+                value={draft.judge.apiKey}
+                placeholder={t("keys.apiKey")}
+                invalid={judgeResult ? !judgeResult.ok : false}
+                showLabel={showLabel}
+                hideLabel={hideLabel}
+                onChange={(v) => updateJudge("apiKey", v)}
+              />
+            </div>
+            <div className="keys-field">
+              <span className="keys-field-label">
+                <label htmlFor="keys-judge-model">{t("keys.modelId")}</label>
+                {modelIdInfo}
+              </span>
+              <input
+                id="keys-judge-model"
+                className="keys-input keys-input--model"
+                value={draft.judge.modelId}
+                placeholder={t("keys.modelId")}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => updateJudge("modelId", e.target.value)}
+              />
+            </div>
           </div>
           {judgeResult && !judgeResult.ok && <p className="keys-error">{t("keys.keyFailed")}</p>}
         </div>
@@ -211,31 +282,46 @@ export default function KeysForm() {
                 )}
               </div>
               <div className="keys-fields">
-                <input
-                  className="keys-input keys-input--url"
+                <BaseUrlSelect
+                  id={`keys-${r.slot}-baseurl`}
+                  label={t("keys.baseUrlSelect")}
                   value={r.baseUrl}
-                  placeholder={r.custom ? t("keys.baseUrl") : t("keys.baseUrlOptional")}
-                  autoComplete="off"
-                  spellCheck={false}
-                  onChange={(e) => updateResponder(index, "baseUrl", e.target.value)}
+                  // Default slots may fall back to the provider's fixed endpoint;
+                  // custom (added) rows must point at a concrete endpoint.
+                  defaultOptionLabel={r.custom ? undefined : t("keys.useDefaultEndpoint")}
+                  info={baseUrlInfo}
+                  onChange={(v) => updateResponder(index, "baseUrl", v)}
                 />
-                <KeyInput
-                  id={`keys-${r.slot}`}
-                  value={r.apiKey}
-                  placeholder={t("keys.apiKey")}
-                  invalid={result ? !result.ok : false}
-                  showLabel={showLabel}
-                  hideLabel={hideLabel}
-                  onChange={(v) => updateResponder(index, "apiKey", v)}
-                />
-                <input
-                  className="keys-input keys-input--model"
-                  value={r.modelId}
-                  placeholder={t("keys.modelId")}
-                  autoComplete="off"
-                  spellCheck={false}
-                  onChange={(e) => updateResponder(index, "modelId", e.target.value)}
-                />
+                <div className="keys-field">
+                  <span className="keys-field-label">
+                    <label htmlFor={`keys-${r.slot}-key`}>{t("keys.apiKey")}</label>
+                    {apiKeyInfo}
+                  </span>
+                  <KeyInput
+                    id={`keys-${r.slot}-key`}
+                    value={r.apiKey}
+                    placeholder={t("keys.apiKey")}
+                    invalid={result ? !result.ok : false}
+                    showLabel={showLabel}
+                    hideLabel={hideLabel}
+                    onChange={(v) => updateResponder(index, "apiKey", v)}
+                  />
+                </div>
+                <div className="keys-field">
+                  <span className="keys-field-label">
+                    <label htmlFor={`keys-${r.slot}-model`}>{t("keys.modelId")}</label>
+                    {modelIdInfo}
+                  </span>
+                  <input
+                    id={`keys-${r.slot}-model`}
+                    className="keys-input keys-input--model"
+                    value={r.modelId}
+                    placeholder={t("keys.modelId")}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(e) => updateResponder(index, "modelId", e.target.value)}
+                  />
+                </div>
               </div>
               {result && !result.ok && <p className="keys-error">{t("keys.keyFailed")}</p>}
             </div>

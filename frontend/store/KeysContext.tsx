@@ -46,6 +46,7 @@ export interface ResponderKey {
 }
 
 export interface JudgeKey {
+  baseUrl: string; // "" → the built-in judge endpoint (Groq); set → override (PH29)
   apiKey: string;
   modelId: string;
   active: boolean;
@@ -64,7 +65,7 @@ export interface ByokPayload {
 
 function defaultState(): KeysState {
   return {
-    judge: { apiKey: "", modelId: "", active: false },
+    judge: { baseUrl: "", apiKey: "", modelId: "", active: false },
     responders: DEFAULT_RESPONDER_SLOTS.map((slot) => ({
       slot,
       baseUrl: "",
@@ -82,7 +83,8 @@ function defaultState(): KeysState {
 // judge are always kept. Pure for unit testing.
 export function sanitizeLoadedState(state: KeysState): KeysState {
   return {
-    judge: state.judge,
+    // Normalise judge.baseUrl for legacy storage written before PH29 (no field).
+    judge: { ...state.judge, baseUrl: state.judge.baseUrl ?? "" },
     responders: state.responders.filter((r) => !r.custom || r.active),
   };
 }
@@ -111,6 +113,7 @@ export function buildPersistedState(
 ): KeysState {
   return {
     judge: {
+      baseUrl: draft.judge.baseUrl.trim(),
       apiKey: draft.judge.apiKey.trim(),
       modelId: draft.judge.modelId.trim(),
       active: bySlot[JUDGE_SLOT]?.ok ?? false,
@@ -224,6 +227,9 @@ export function KeysProvider({ children }: { children: ReactNode }) {
       if (draft.judge.apiKey.trim() && draft.judge.modelId.trim()) {
         entries.push({
           slot: JUDGE_SLOT,
+          // Optional (PH29): empty → the built-in judge endpoint (Groq);
+          // set → override (e.g. judge on another OpenAI-compatible provider).
+          base_url: draft.judge.baseUrl.trim() || undefined,
           api_key: draft.judge.apiKey.trim(),
           model_id: draft.judge.modelId.trim(),
           is_judge: true,
@@ -279,7 +285,13 @@ export function KeysProvider({ children }: { children: ReactNode }) {
         model_id: r.modelId,
       }));
     const judge = state.judge.active
-      ? { api_key: state.judge.apiKey, model_id: state.judge.modelId }
+      ? {
+          // Send the judge override base_url only when the user set one (PH29);
+          // empty → backend uses the built-in judge endpoint (Groq).
+          base_url: state.judge.baseUrl || undefined,
+          api_key: state.judge.apiKey,
+          model_id: state.judge.modelId,
+        }
       : undefined;
     if (!responders.length && !judge) return null;
     return { judge, responders };

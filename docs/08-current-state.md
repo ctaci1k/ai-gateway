@@ -43,6 +43,19 @@
 - **Структуроване логування** (`core/logging.py`): запити, помилки провайдерів, рішення судді.
 - **Базові тести** (`backend/tests/`, pytest): ChatBuffer, rule-based selector, агрегація провайдерів, ретраї/мін-впевненість селектора, `extract_json`, API-кейси (помилки/rate-limit).
 
+## ✅ PH29 — BYOK «API-ключі»: UX base URL (Select) + суддя base URL/Clear + ⓘ-підказки (D-19)
+
+> Власник: «незрозуміло, звідки брати base URL — незручно». Архітектор зробив base URL **курованим Select**, додав base URL і **«Очистити»** судді та інфо-підказки. План — [plans/027-byok-keys-ux.md](plans/027-byok-keys-ux.md). **Переважно фронтенд — бекенд без змін** (вже приймав `base_url` будь-якого слота і судді: `KeyValidateEntry`+`is_judge`, `ByokJudge`, `build_transient_judge`).
+
+- **`utils/byokEndpoints.ts`** — нова FE-константа `BYOK_BASE_URLS` (`{label,url,group:"builtin"|"compatible"}`): 3 вбудовані (Groq/Cerebras/SambaNova, дзеркало `provider_service.DEFAULT_BASE_URLS`) + 10 OpenAI-сумісних (OpenAI/OpenRouter/Together/Fireworks/DeepSeek/Mistral/xAI/Gemini-OpenAI/Perplexity/Ollama). **Anthropic свідомо НЕ додано** (несумісний формат). Хелпери `presetForUrl`/`isKnownUrl`. Дублювання URL — лише тут.
+- **`components/keys/BaseUrlSelect.tsx`** — нативний `<select>` з optgroup «Вбудовані»/«Сумісні» + опційний «Типовий ендпоінт» (дефолтні слоти/суддя → порожній `baseUrl`) + «Власний…» (показує текстове поле — поведінка-fallback). Sticky custom-mode; a11y через нативний select + видимий `<label>`.
+- **`components/common/InfoTip.tsx`** — переюзовна ⓘ-кнопка + popover (Esc/click-out/focus, `aria-describedby`/`role="note"`), на токенах.
+- **Суддя отримав base URL** (`KeysContext.JudgeKey.baseUrl`, дефолт `""`) — прокинуто у `saveAndValidate` (judge entry `base_url`), `byokPayload` (`judge.base_url` лише якщо непорожнє), `buildPersistedState`, `sanitizeLoadedState` (нормалізація legacy). Дефолт у формі — «Вбудований суддя (Groq)»; кнопка **«Очистити»** скидає key/model/baseUrl→вбудований Qwen.
+- **`KeysForm`** — кожен рядок: `BaseUrlSelect` + API-ключ (масковане `KeyInput`) + ID моделі, кожне з ⓘ-підказкою; кастомні AI 4/5 лишили «Видалити». Тексти переписані під 3 поля; прибрано мертвий `keys.baseUrlOptional`; нові i18n-ключі (паритет uk/pl/en).
+- **CSS** (`theme/components.css`): `.keys-fields` → вертикальна колонка; `.keys-select`/`.keys-field`/`.keys-field-label`/`.keys-head-right`/`.keys-clear`/`.keys-info`/`.keys-infotip`/`.keys-info-popover` на токенах; таргети ≥44px, focus-visible, адаптив 360/430 без горизонтального скролу.
+- **Безпека (D-12) збережена:** ключі лише в `sessionStorage` + транзит, не в БД/логах; очищення при logout (PH23) не зачеплено.
+- Гейти: FE tsc/eslint/prettier/**vitest(27)**/build зелені; i18n паритет uk/pl/en. Бекенд не змінювався.
+
 ## ✅ PH28 — Звіти: повноекранний розділ + drill-down «Розкладка» + фільтр за ключем доступу (Варіант B, D-18)
 
 > UX-апгрейд PH27 за рішенням власника («дашборд у модалці дрібний/незручний»). Архітектор обрав **Варіант B**: винести Звіти з модалки у повноекранний розділ, додати акордеон-drill-down і глобальний фільтр за ключем доступу. План — [plans/026-reports-fullpage-breakdown.md](plans/026-reports-fullpage-breakdown.md).
