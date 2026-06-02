@@ -78,6 +78,37 @@ async def test_stream_empty_is_provider_failure():
         [c async for c in provider.generate_stream("hi")]
 
 
+class _NoStreamOptsProvider(OpenAICompatibleProvider):
+    """A provider whose SDK rejects the ``stream_options`` kwarg (like the native
+    Groq/Cerebras/SambaNova SDKs)."""
+
+    provider_name = "fake"
+    model_name = "fake-model"
+
+    def __init__(self, stream_chunks):
+        self._stream_chunks = stream_chunks
+        self.used_stream_options = None
+
+    def _create(self, **kwargs):
+        if "stream_options" in kwargs:
+            self.used_stream_options = True
+            raise TypeError(
+                "Completions.create() got an unexpected keyword argument "
+                "'stream_options'"
+            )
+        self.used_stream_options = False
+        return iter(self._stream_chunks)
+
+
+async def test_stream_falls_back_when_stream_options_unsupported():
+    # Regression (PH27/B1): a TypeError on the unknown stream_options kwarg must
+    # not break streaming — it falls back to a plain stream (tokens estimated).
+    provider = _NoStreamOptsProvider([_delta("foo"), _delta("bar")])
+    chunks = [c async for c in provider.generate_stream("hi")]
+    assert chunks == ["foo", "bar"]
+    assert provider.used_stream_options is False
+
+
 def test_registry_per_provider_budget_overrides_global():
     """A ModelSpec budget (e.g. GLM-4.7 reasoning headroom) wins over the global
     default; without a spec the provider falls back to RESPONDER_MAX_TOKENS."""

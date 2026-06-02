@@ -89,15 +89,20 @@ class OpenAICompatibleProvider(BaseProvider):
         self, message: str
     ) -> AsyncGenerator[str | StreamUsage, None]:
         def make_iter():
-            return self._create(
+            base = dict(
                 messages=[{"role": "user", "content": message}],
                 stream=True,
                 max_tokens=self._max_tokens(),
-                # Ask the OpenAI-compatible server to emit a final usage chunk
-                # (empty choices + ``usage``) so Single streams record real
-                # token counts instead of an estimate (PH27/B1, D-18).
-                stream_options={"include_usage": True},
             )
+            # Ask the server to emit a final usage chunk (empty choices + ``usage``)
+            # so Single streams record real token counts (PH27/B1, D-18). Some
+            # native provider SDKs (Groq/Cerebras/SambaNova) reject the unknown
+            # ``stream_options`` kwarg with a TypeError; fall back to a plain
+            # stream — tokens then come from the estimate (B2).
+            try:
+                return self._create(**base, stream_options={"include_usage": True})
+            except TypeError:
+                return self._create(**base)
 
         produced = False
         usage_tokens: int | None = None
