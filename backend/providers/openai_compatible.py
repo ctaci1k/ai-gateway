@@ -13,7 +13,12 @@ from collections.abc import AsyncGenerator
 from core.config import get_settings
 from core.errors import ProviderError
 from core.prompts import get_prompt
-from providers.base_provider import BaseProvider, aiter_in_thread, extract_json
+from providers.base_provider import (
+    BaseProvider,
+    StreamUsage,
+    aiter_in_thread,
+    extract_json,
+)
 
 # Fail-fast budget for a BYOK validation "ping" (PH21): short timeout so a slow
 # or rate-limited endpoint returns a clean per-key error in seconds. Retries are
@@ -80,16 +85,27 @@ class OpenAICompatibleProvider(BaseProvider):
             )
         )
 
-    async def generate_stream(self, message: str) -> AsyncGenerator[str, None]:
+    async def generate_stream(
+        self, message: str
+    ) -> AsyncGenerator[str | StreamUsage, None]:
         def make_iter():
             return self._create(
                 messages=[{"role": "user", "content": message}],
                 stream=True,
                 max_tokens=self._max_tokens(),
+                # Ask the OpenAI-compatible server to emit a final usage chunk
+                # (empty choices + ``usage``) so Single streams record real
+                # token counts instead of an estimate (PH27/B1, D-18).
+                stream_options={"include_usage": True},
             )
 
         produced = False
+        usage_tokens: int | None = None
         async for chunk in aiter_in_thread(make_iter):
+            # The include_usage final chunk carries usage with empty choices.
+            usage = getattr(chunk, "usage", None)
+            if usage is not None:
+                usage_tokens = getattr(usage, "total_tokens", None)
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta.content
@@ -102,6 +118,11 @@ class OpenAICompatibleProvider(BaseProvider):
                 f"{self.provider_name} returned an empty response "
                 "(model produced no visible content)"
             )
+
+        # Terminal usage marker (PH27/B1): only when the server reported it, so
+        # text-only consumers (and providers without include_usage) are unaffected.
+        if usage_tokens is not None:
+            yield StreamUsage(total_tokens=usage_tokens)
 
     async def generate_structured(self, message: str):
         response = await asyncio.to_thread(

@@ -13,7 +13,16 @@ Scope:
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    false,
+    true,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db import Base
@@ -76,11 +85,17 @@ class User(Base):
 
 
 class UsageEvent(Base):
-    """Append-only audit of each chat request (PH15, D-10).
+    """Append-only per-turn ledger of each chat request (PH15, D-10; PH27, D-18).
 
     Unlike the rolling ``interactions`` history (trimmed per user), this table is
-    never trimmed: it is the source of truth for quota enforcement (counts per
-    minute / day) and the admin usage view, and records spent tokens.
+    never trimmed: it is the canonical source of truth for quota enforcement
+    (counts per minute / day), the admin usage view, and the per-user Usage
+    Reports (PH27). One row = one turn (a Compare turn is a single event).
+
+    PH27 (D-18) made it the canonical ledger for reports: ALL turns are recorded
+    (including BYOK), with ``billable`` marking whether the turn consumed the
+    account quota (``false`` = ran on the user's own key). Quota windows count
+    only ``billable`` rows, so recording BYOK turns does not change limits.
     """
 
     __tablename__ = "usage_events"
@@ -96,9 +111,30 @@ class UsageEvent(Base):
     message: Mapped[str] = mapped_column(String, default="")
     # The winning/answering model, when known (nullable — see User note above).
     selected_model: Mapped[str] = mapped_column(String(64), nullable=True)
-    # Total tokens spent on the turn; NULL when a provider didn't report usage.
+    # Total tokens spent on the turn; NULL when neither a provider nor the
+    # estimate could supply one (rare). Real usage when available, else an
+    # estimate flagged by ``token_estimated`` (PH27/B, D-18).
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
     success: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # PH27 (D-18): the saved chat this turn belongs to, when one was active.
+    # ondelete SET NULL keeps the audit row after a chat is deleted (the turn
+    # is then grouped as "deleted / ad-hoc" in reports). Nullable + indexed.
+    chat_id: Mapped[int] = mapped_column(
+        ForeignKey("chats.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # PH27 (D-18): whether the turn consumed the account quota. ``true`` = charged
+    # against app limits; ``false`` = ran entirely on the user's own BYOK key.
+    # Quota windows count only ``billable`` rows (A4), so the ledger stays
+    # complete without changing limit behavior.
+    billable: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    # PH27 (D-18): ``true`` when ``total_tokens`` is an estimate (no provider
+    # usage was reported), so the UI can mark it ("~", "estimate" badge).
+    token_estimated: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
 
     user: Mapped[User] = relationship(back_populates="usage_events")
 

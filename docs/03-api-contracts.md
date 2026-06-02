@@ -263,6 +263,23 @@ RAG більше не окремий режим/сторінка (PH13/C4): ке
 
 ---
 
+## Звіти про використання (PH27, D-18) — `/reports/*` (per-user)
+
+Self-service дашборд історії активності акаунта. Усі ендпоінти **під `current_user`** (неавтентифікований → **401**) і **суворо per-user** (`UsageReportRepository(user.id)` — користувач бачить лише свої події). **НЕ** admin-gated (Звіти — для всіх, D-17/п.6). Схеми — `schemas/reports.py`; агрегації — `memory/usage_report_repository.py` (read-only) над канонічним ledger `usage_events` (A1/D-18).
+
+**Спільні query-параметри вікна:** `from`/`to` — ISO-datetime (із суфіксом `Z` чи без; серіалізація — naive UTC). Якщо `from` не передано → дефолт **останні 30 днів**; для «усе» FE шле epoch-`from` (напр. `1970-01-01T00:00:00`). `to` за умовчанням = «зараз». Невалідний datetime → **422** (`validation_error`).
+
+- `GET /reports/summary` → `200 ReportSummary` `{ total_requests, total_tokens, tokens_estimated (bool — чи є серед порахованих оцінені токени), by_mode {single,compare}, billable_vs_own {billable,own_key}, distinct_chats, success_rate (0..1), first_event|null, last_event|null }`.
+- `GET /reports/by-model` → `200 { models: [{ model|null, requests, total_tokens, successful }] }` (за спаданням запитів).
+- `GET /reports/by-chat` → `200 { chats: [{ chat_id|null, title|null, mode|null, model|null, requests, total_tokens, last_event|null }] }`. `chat_id=null` — група «видалені/ad-hoc» (чат видалено → `chat_id` SET NULL, або хід без чату). LEFT JOIN `chats`.
+- `GET /reports/timeseries?bucket=day|hour` → `200 { bucket, points: [{ bucket (datetime), requests, tokens }] }`. Групування — у Python (портативно SQLite/Postgres), gap-filled, за зростанням; bucket у naive UTC (FE підписує локаллю).
+- `GET /reports/events?cursor=&limit=` → `200 { events: [{ id, created_at, mode, model|null, total_tokens|null, token_estimated, success, billable, message, chat_id|null, chat_title|null }], next_cursor|null }`. Keyset-пагінація за `(created_at,id)` спадно; `limit` 1..200 (дефолт 50); `cursor` = `"<iso>|<id>"`.
+- `GET /reports/events.csv` → `200 text/csv` (`Content-Disposition: attachment`), стрім рядками з того самого вікна; колонки: `created_at, mode, model, chat_title, billable, total_tokens, token_estimated, success, message`. CSV-екранування — стандартним `csv`-модулем; великі обсяги не тримаються в памʼяті (keyset-сторінки).
+
+**Бонус (G, опц.):** адмін-перегляд звітів іншого юзера — окремий admin-gated surface, не входить у мінімальний DoD.
+
+---
+
 ## Заплановані ендпоінти (⛔ ще не існують)
 
 Згадані в первісному описі, але **в коді відсутні**: `/all-responses`. Збережені чати реалізовано як `/chats` (PH9), завантаження документів — як `/documents` (PH10), а не `/upload-document`.

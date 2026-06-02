@@ -15,6 +15,7 @@ import { ComposerProvider } from "@/store/ComposerContext";
 import { KeysProvider } from "@/store/KeysContext";
 import { LanguageProvider } from "@/store/LanguageContext";
 import { RagProvider } from "@/store/RagContext";
+import { ReportsProvider } from "@/store/ReportsContext";
 import { SettingsProvider } from "@/store/SettingsContext";
 import { SidebarProvider } from "@/store/SidebarContext";
 import { ThemeProvider } from "@/store/ThemeContext";
@@ -57,17 +58,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <KeysProvider>
                 <AdminViewProvider>
                   <SettingsProvider>
-                    <ComingSoonProvider>
-                      <ChatsProvider>
-                        <RagProvider>
-                          <ChatModeProvider>
-                            <ComposerProvider>
-                              <SidebarProvider>{children}</SidebarProvider>
-                            </ComposerProvider>
-                          </ChatModeProvider>
-                        </RagProvider>
-                      </ChatsProvider>
-                    </ComingSoonProvider>
+                    <ReportsProvider>
+                      <ComingSoonProvider>
+                        <ChatsProvider>
+                          <RagProvider>
+                            <ChatModeProvider>
+                              <ComposerProvider>
+                                <SidebarProvider>{children}</SidebarProvider>
+                              </ComposerProvider>
+                            </ChatModeProvider>
+                          </RagProvider>
+                        </ChatsProvider>
+                      </ComingSoonProvider>
+                    </ReportsProvider>
                   </SettingsProvider>
                 </AdminViewProvider>
               </KeysProvider>

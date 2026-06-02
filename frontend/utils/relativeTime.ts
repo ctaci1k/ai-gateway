@@ -20,13 +20,24 @@ const MINUTE = 60;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+// The API serializes timestamps as naive UTC WITHOUT a timezone designator (the
+// backend stores naive UTC for Postgres compatibility, e.g. "2026-06-02T10:11:53").
+// JS `Date.parse` treats a date-time string with no offset as LOCAL time, which
+// skews relative times by the viewer's UTC offset (e.g. +2h → a fresh chat reads
+// "2h ago"). Normalize: if there's no trailing `Z` or ±HH:MM offset, it's UTC, so
+// append `Z` before parsing. Strings that already carry a timezone are untouched.
+function parseUtc(iso: string): number {
+  const hasTz = /([zZ]|[+-]\d\d:?\d\d)$/.test(iso.trim());
+  return Date.parse(hasTz ? iso : `${iso}Z`);
+}
+
 // Returns the i18n key + interpolation vars for the given timestamps. Kept pure
 // (caller passes `now`) so it is deterministic and unit-testable.
 export function relativeTimeParts(
   iso: string,
   nowMs: number,
 ): { key: keyof RelativeTimeLabels; n: number } {
-  const then = Date.parse(iso);
+  const then = parseUtc(iso);
   // Guard against future skew / unparseable input → treat as "just now".
   const seconds = Number.isNaN(then) ? 0 : Math.max(0, Math.floor((nowMs - then) / 1000));
 

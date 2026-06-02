@@ -22,6 +22,7 @@ from routes.keys import router as keys_router
 from routes.memory import router as memory_router
 from routes.preferences import router as preferences_router
 from routes.providers import router as providers_router
+from routes.reports import router as reports_router
 
 
 def create_app() -> FastAPI:
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(keys_router)
     app.include_router(preferences_router)
     app.include_router(providers_router)
+    app.include_router(reports_router)
     app.include_router(memory_router)
 
     @app.get("/")

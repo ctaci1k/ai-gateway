@@ -1,20 +1,21 @@
 // frontend/components/layout/Topbar.tsx
 //
-// Classic Console top bar (PH24, A2 + D). Full-width chrome above the body:
-//   brand · spacer · theme toggle · language menu · usage pill · | · reports ·
-//   settings · admin (admin only) · | · account menu.
+// Classic Console top bar (PH24, A2 + D; PH25). Full-width chrome above the body:
+//   brand · spacer · theme toggle · language menu · usage pill · | · settings ·
+//   admin (admin only) · | · account menu.
+// PH25: Reports moved into the account menu (off the topbar); the Admin button
+// uses a "users" icon (managing users), not the shield (which reads as security).
 // The mobile burger (left) opens the sidebar drawer (kept from PH23).
 
 "use client";
 
-import { IconGear, IconMenu, IconReport, IconShield, IconSparkle } from "@/components/icons/Icons";
+import { IconGear, IconMenu, IconSparkle, IconUsers } from "@/components/icons/Icons";
 import AccountMenu from "@/components/topbar/AccountMenu";
 import LangMenu from "@/components/topbar/LangMenu";
 import ThemeToggle from "@/components/topbar/ThemeToggle";
 import UsagePill from "@/components/topbar/UsagePill";
 import { useAdminView } from "@/store/AdminViewContext";
 import { useAuth } from "@/store/AuthContext";
-import { useComingSoon } from "@/store/ComingSoonContext";
 import { useI18n } from "@/store/LanguageContext";
 import { useSettings } from "@/store/SettingsContext";
 import { useSidebar } from "@/store/SidebarContext";
@@ -25,7 +26,6 @@ export default function Topbar() {
   const { mobileOpen, openMobile } = useSidebar();
   const { open: openAdmin } = useAdminView();
   const { open: openSettings } = useSettings();
-  const { open: openStub } = useComingSoon();
 
   return (
     <header className="cc-top">
@@ -59,15 +59,6 @@ export default function Topbar() {
       <button
         type="button"
         className="cc-iconbtn"
-        onClick={() => openStub("reports")}
-        aria-label={t("reports.title")}
-        title={t("reports.title")}
-      >
-        <IconReport size={18} />
-      </button>
-      <button
-        type="button"
-        className="cc-iconbtn"
         onClick={() => openSettings("judge")}
         aria-label={t("settings.title")}
         title={t("settings.title")}
@@ -82,7 +73,7 @@ export default function Topbar() {
           aria-label={t("admin.title")}
           title={t("admin.title")}
         >
-          <IconShield size={18} />
+          <IconUsers size={18} />
         </button>
       )}
 

@@ -216,6 +216,70 @@ export interface UpdateUserPayload {
   max_requests_per_day?: number | null;
 }
 
+// --- Usage Reports (PH27, D-18) — per-user /reports/* ----------------------
+
+export interface ReportSummary {
+  total_requests: number;
+  total_tokens: number;
+  // True when any counted token figure in the window is an estimate.
+  tokens_estimated: boolean;
+  by_mode: Record<string, number>; // { single, compare }
+  billable_vs_own: Record<string, number>; // { billable, own_key }
+  distinct_chats: number;
+  success_rate: number; // 0..1
+  first_event: string | null;
+  last_event: string | null;
+}
+
+export interface ModelUsage {
+  model: string | null;
+  requests: number;
+  total_tokens: number;
+  successful: number;
+}
+
+export interface ChatUsage {
+  // null = the deleted/ad-hoc bucket.
+  chat_id: number | null;
+  title: string | null;
+  mode: ChatMode | null;
+  model: string | null;
+  requests: number;
+  total_tokens: number;
+  last_event: string | null;
+}
+
+export interface TimeseriesPoint {
+  bucket: string; // naive-UTC ISO
+  requests: number;
+  tokens: number;
+}
+
+export interface TimeseriesResponse {
+  bucket: "day" | "hour";
+  points: TimeseriesPoint[];
+}
+
+// One row of the per-user activity log (richer than the admin UsageEventRecord).
+export interface ReportEvent {
+  id: number;
+  created_at: string;
+  mode: string;
+  model: string | null;
+  total_tokens: number | null;
+  token_estimated: boolean;
+  success: boolean;
+  billable: boolean;
+  message: string;
+  chat_id: number | null;
+  chat_title: string | null;
+}
+
+export interface ReportEventsPage {
+  events: ReportEvent[];
+  next_cursor: string | null;
+}
+
 // Stream events from POST /chat/stream (NDJSON).
 export interface StreamTokenEvent {
   type: "token";

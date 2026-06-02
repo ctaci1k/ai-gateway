@@ -1,14 +1,14 @@
 // frontend/store/ComingSoonContext.tsx
 //
-// Tiny shared state for the "in development" stub modal (PH24, F1). Several
-// triggers (Profile & Avatar, Security — in the account menu; Reports — for
-// every user) open the same modal with a different topic.
+// Tiny shared state for the "in development" stub modal (PH24, F1). Triggers
+// (Profile & Avatar, Security — in the account menu) open the same modal with a
+// different topic. (Reports graduated to a real dashboard in PH27 — D-18.)
 
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
-export type ComingSoonTopic = "profile" | "security" | "reports";
+export type ComingSoonTopic = "profile" | "security";
 
 interface ComingSoonValue {
   topic: ComingSoonTopic | null;

@@ -152,6 +152,17 @@
 - **(Увесь наявний функціонал лишився)** прикріплення файлів (RAG), ручний перевибір Compare, банер судді, картки провайдерів/невдач, правдиві назви BYOK (PH23/A), очищення ключів при logout (PH23/B).
 ↪ **Реалізовано (PH24, 2026-06-02):** код + тести (BE `test_chats.py` мода/модель/Single-persist, `test_judge_prompt.py`; FE `utils/relativeTime.test.ts`). Деталі — [08-current-state.md](08-current-state.md) (секція PH24); контракти — [03-api-contracts.md](03-api-contracts.md) (chats `mode`, `/chat/stream chat_id`, `/preferences/judge-prompt`); дані — [04-data-models.md](04-data-models.md) (`chats.mode/model`, `judge_prompt_override`); суддя — [05-providers-and-selector.md](05-providers-and-selector.md) (override промпта); фронтенд — [06-frontend-architecture.md](06-frontend-architecture.md) (Classic Console chrome, Settings, історія Single).
 
+## D-18 ✅ Звіти про використання + `usage_events` як канонічний per-turn ledger (план 025)
+
+**Рішення (2026-06-02):** власник делегував архітектору реалізувати розділ **«Звіти»** — повну self-service історію активності акаунта (запити, токени, моделі, чати, повідомлення) «як велика досвідчена корпорація». **Уточнює D-10** (квоти/`usage_events`) і **D-12/D-17** (BYOK/чати), нічого не скасовує.
+
+- **`usage_events` стає канонічним per-turn ledger.** Один рядок = один хід (Compare = 1 подія). Додано `chat_id` (FK→chats, **ondelete SET NULL** — аудит переживає видалення чату, відв'язуючись у групу «видалені/ad-hoc»), `billable` (списувалось із квоти застосунку), `token_estimated` (токени — оцінка). Alembic `0007`. **Не обрізається.**
+- **Пишемо ВСІ ходи, у т.ч. BYOK** (раніше BYOK не записувався → не було у звіті). **Квотні вікна рахують лише `billable=true`** — поведінка лімітів НЕ змінюється (BYOK і далі безкоштовний), але реєстр повний. Це **обов'язковий сумісний рефактор** (інакше запис BYOK почав би списувати квоту).
+- **Токени — чесно.** Пріоритет — реальні (provider `usage`): Compare вже мав; Single-стрім — `stream_options.include_usage` + читання фінального chunk. Фолбек — евристика `ceil(chars/4)` (`core/tokens.py`, без нової залежності) з прапором `token_estimated` (UI: «~» + бейдж «оцінка»). tiktoken — поза обсягом.
+- **Звіти — окремий per-user `/reports/*`** (auth, **НЕ** admin-gated — Звіти для всіх, D-17/п.6), агрегації read-only в `memory/usage_report_repository.py`; per-user ізоляція сувора. Дашборд із вкладками (Огляд/За моделями/За чатами/Журнал), фільтр періоду, легкі inline-SVG графіки (без важких залежностей), серверний CSV-стрім.
+- **Кнопка «Звіти» (для всіх) перестає бути заглушкою** (`ComingSoonModal("reports")` → реальний `ReportsModal`).
+↪ **Реалізовано (PH27, 2026-06-02):** код + тести (BE `test_reports.py` 12 кейсів + `test_tokens.py`; FE — vitest 26, i18n-паритет). Деталі — [08-current-state.md](08-current-state.md) (секція PH27); контракти — [03-api-contracts.md](03-api-contracts.md) (`/reports/*` + `events.csv`); дані — [04-data-models.md](04-data-models.md) (ledger-колонки); фронтенд — [06-frontend-architecture.md](06-frontend-architecture.md) (дашборд). Гейти: BE 157 + ruff/black; FE tsc/eslint/prettier/vitest(26)/build. **Опційно (не зроблено):** адмін-перегляд звітів іншого юзера (бонус G).
+
 ## Нові підтверджені вимоги (від власника, 2026-05-29)
 
 Окрім днів 10–14, додано до обсягу:

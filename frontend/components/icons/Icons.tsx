@@ -204,12 +204,29 @@ export const IconCode = (p: IconProps) => (
   </Ico>
 );
 
+export const IconUsers = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </Ico>
+);
+
 export const IconReport = (p: IconProps) => (
   <Ico {...p}>
     <path d="M3 3v18h18" />
     <rect x="7" y="11" width="3" height="6" rx="0.5" />
     <rect x="12" y="7" width="3" height="10" rx="0.5" />
     <rect x="17" y="13" width="3" height="4" rx="0.5" />
+  </Ico>
+);
+
+export const IconDownload = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M12 3v12" />
+    <path d="M7 10l5 5 5-5" />
+    <path d="M5 21h14" />
   </Ico>
 );
 

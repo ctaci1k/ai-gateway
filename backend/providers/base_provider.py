@@ -5,10 +5,23 @@ import json
 import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Callable, Iterable
+from dataclasses import dataclass
 from typing import Any
 
 # Matches a ```json ... ``` or ``` ... ``` fenced block, capturing the inner body.
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
+
+
+@dataclass
+class StreamUsage:
+    """Terminal usage marker emitted by ``generate_stream`` (PH27/B1, D-18).
+
+    Streaming yields plain ``str`` token deltas; when the provider reports usage
+    on the final ``include_usage`` chunk, it yields one of these at the end so
+    the caller can record real token counts. Consumers that only want text
+    ignore it (``isinstance`` check)."""
+
+    total_tokens: int | None
 
 
 def extract_json(content: str) -> Any:

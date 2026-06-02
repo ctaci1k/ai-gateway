@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from core.auth import current_user, require_csrf
 from core.logging import get_logger, log_event
 from core.prompts import render_prompt
+from core.tokens import estimate_tokens
 from db.models import User
 from memory import preferences_logic
 from memory.chats_repository import SavedChatRepository
@@ -139,24 +140,37 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
     # Rolling personalization history (always).
     await repository.add_message(**interaction)
 
-    # Append-only usage audit + quota source of truth (PH15, D-10). A Compare
-    # request is a single event; success means at least one provider answered.
-    # Skipped when the turn ran entirely on the user's own keys (PH17): it does
-    # not consume the account quota, so it is neither enforced nor recorded.
-    if should_charge:
-        await UsageRepository(user.id).record(
-            mode="compare" if result["compare_mode"] else "single",
-            message=request.message,
-            selected_model=result["selected_model"],
-            total_tokens=result.get("total_tokens"),
-            success=bool(result["all_responses"]),
-        )
-
     # Persist into a saved chat when one is active (PH9). Ownership is verified
-    # by the repository (404 for a foreign/unknown chat).
+    # by the repository (404 for a foreign/unknown chat). Done BEFORE the ledger
+    # write so a bad chat_id 404s instead of tripping the usage_events FK (D-18).
     if request.chat_id is not None:
         record = preferences_logic.build_interaction_record(**interaction)
         await SavedChatRepository(user.id).add_message(request.chat_id, record)
+
+    # Append-only per-turn ledger (PH15, D-10; PH27, D-18). A Compare request is
+    # a single event; success means at least one provider answered. PH27: ALL
+    # turns are recorded, including BYOK — ``billable`` marks whether the turn
+    # consumed the account quota (False = own keys). Quota windows count only
+    # billable rows (A4), so recording BYOK turns does not change limits. Tokens
+    # are real when a responder reported usage, else an estimate (B2).
+    real_tokens = result.get("total_tokens")
+    if real_tokens is not None:
+        total_tokens, token_estimated = real_tokens, False
+    else:
+        total_tokens = estimate_tokens(
+            request.message, result.get("best_response") or ""
+        )
+        token_estimated = True
+    await UsageRepository(user.id).record(
+        mode="compare" if result["compare_mode"] else "single",
+        message=request.message,
+        selected_model=result["selected_model"],
+        success=bool(result["all_responses"]),
+        total_tokens=total_tokens,
+        token_estimated=token_estimated,
+        chat_id=request.chat_id,
+        billable=should_charge,
+    )
 
     return ChatResponse(
         response=result["best_response"],
@@ -244,6 +258,7 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
     async def generate():
         parts: list[str] = []
         model_name: str | None = None
+        stream_tokens: int | None = None
         completed = False
         try:
             async for event in ProviderService.generate_stream(
@@ -251,9 +266,15 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                 provider_name=request.provider,
                 provider=byok_provider,
             ):
-                if event.get("type") == "token":
+                event_type = event.get("type")
+                if event_type == "token":
                     parts.append(event.get("content") or "")
                     model_name = event.get("model") or model_name
+                elif event_type == "usage":
+                    # Real provider usage (PH27/B1): captured for the ledger,
+                    # not forwarded to the client.
+                    stream_tokens = event.get("total_tokens")
+                    continue
                 yield json.dumps(event) + "\n"
             completed = True
         except Exception as error:
@@ -299,6 +320,10 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
         # active (chat_id set), the turn is ALSO appended to that named chat —
         # Single chats are now first-class saved chats, mirroring Compare.
         full_text = "".join(parts).strip()
+        # The chat the ledger row links to: stays None unless the turn was
+        # actually appended to an owned chat, so a foreign/stale chat_id never
+        # trips the usage_events FK (D-18).
+        chat_link: int | None = None
         if completed and full_text:
             single_response = {
                 "response": full_text,
@@ -325,6 +350,7 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                     await SavedChatRepository(user.id).add_message(
                         request.chat_id, record
                     )
+                    chat_link = request.chat_id
                 except Exception as error:  # noqa: BLE001
                     log_event(
                         logger,
@@ -333,17 +359,26 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                         error=str(error),
                     )
 
-        # Append-only usage audit + quota source of truth (PH15, D-10). The
-        # streaming SDK path doesn't report token usage, so total_tokens is None.
-        # Skipped when the turn ran on the user's own key (PH17): not charged.
-        if should_charge:
-            await UsageRepository(user.id).record(
-                mode="single",
-                message=request.message,
-                selected_model=model_name or request.provider,
-                total_tokens=None,
-                success=completed and bool(full_text),
-            )
+        # Append-only per-turn ledger (PH15, D-10; PH27, D-18). PH27: every
+        # Single turn is recorded, including BYOK — ``billable`` marks whether it
+        # consumed the account quota (False = own key; quota windows count only
+        # billable rows, A4). Tokens are real when the stream reported usage
+        # (include_usage, B1), else an estimate over prompt + answer (B2).
+        if stream_tokens is not None:
+            total_tokens, token_estimated = stream_tokens, False
+        else:
+            total_tokens = estimate_tokens(request.message, full_text)
+            token_estimated = True
+        await UsageRepository(user.id).record(
+            mode="single",
+            message=request.message,
+            selected_model=model_name or request.provider,
+            success=completed and bool(full_text),
+            total_tokens=total_tokens,
+            token_estimated=token_estimated,
+            chat_id=chat_link,
+            billable=should_charge,
+        )
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
 

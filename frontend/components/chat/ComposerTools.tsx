@@ -41,8 +41,7 @@ export default function ComposerTools() {
         title={active ? t("composer.docsActive") : t("composer.docs")}
         aria-label={active ? t("composer.docsActive") : t("composer.docs")}
       >
-        <IconDoc size={17} />
-        <span className="composer-tool-label">{t("composer.docs")}</span>
+        <IconDoc size={18} />
         {active && <span className="composer-tool-badge">{count}</span>}
       </button>
     </div>

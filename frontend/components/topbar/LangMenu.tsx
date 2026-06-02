@@ -35,10 +35,11 @@ export default function LangMenu() {
           aria-expanded={open}
           aria-label={t("sidebar.language")}
         >
+          {/* Flag only — the locale name lives in the dropdown list, not on the
+              pill (PH26: no duplicated EN/PL/UA label on the top bar). */}
           <span className="cc-flag" aria-hidden="true">
             {FLAGS[lang]}
           </span>
-          <b>{lang.toUpperCase()}</b>
           <IconChevron size={13} style={{ opacity: 0.6 }} />
         </button>
       )}

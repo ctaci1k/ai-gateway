@@ -8,7 +8,7 @@ from openai import OpenAI
 from config.models_config import get_model_spec
 from config.selector_config import SELECTOR_MODEL, SELECTOR_PROVIDER, SELECTOR_TIMEOUT
 from core.logging import get_logger, log_event
-from providers.base_provider import BaseProvider
+from providers.base_provider import BaseProvider, StreamUsage
 from providers.cerebras_provider import CerebrasProvider
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
@@ -363,6 +363,12 @@ class ProviderService:
             provider = ProviderService.get_default_provider()
 
         async for chunk in provider.generate_stream(message):
+
+            # A terminal usage marker (PH27/B1) carries real token counts; map it
+            # to a usage event the route records (not forwarded to the client).
+            if isinstance(chunk, StreamUsage):
+                yield {"type": "usage", "total_tokens": chunk.total_tokens}
+                continue
 
             yield {
                 "type": "token",

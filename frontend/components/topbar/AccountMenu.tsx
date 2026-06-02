@@ -1,24 +1,32 @@
 // frontend/components/topbar/AccountMenu.tsx
 //
-// Topbar account dropdown (PH24, D2): avatar + name + role trigger; menu with
-// Profile & Avatar (stub), Account settings (→ Settings), Security (stub) and a
-// real Sign out. Built on the shared a11y Dropdown.
+// Topbar account dropdown (PH24, D2; PH25): avatar + name + role trigger; menu
+// with Profile & Avatar (stub), Reports (stub — for everyone), Security (stub)
+// and a real Sign out. Built on the shared a11y Dropdown.
+// PH25: Account settings is NOT duplicated here — Settings stays as the separate
+// gear button in the topbar; Reports lives only here (removed from the topbar).
 
 "use client";
 
 import Dropdown from "@/components/common/Dropdown";
-import { IconChevron, IconGear, IconLogout, IconShield, IconUser } from "@/components/icons/Icons";
+import {
+  IconChevron,
+  IconLogout,
+  IconReport,
+  IconShield,
+  IconUser,
+} from "@/components/icons/Icons";
 import Avatar from "@/components/topbar/Avatar";
 import { useAuth } from "@/store/AuthContext";
 import { useComingSoon } from "@/store/ComingSoonContext";
 import { useI18n } from "@/store/LanguageContext";
-import { useSettings } from "@/store/SettingsContext";
+import { useReports } from "@/store/ReportsContext";
 
 export default function AccountMenu() {
   const { t } = useI18n();
   const { user, logout } = useAuth();
-  const { open: openSettings } = useSettings();
   const { open: openStub } = useComingSoon();
+  const { open: openReports } = useReports();
 
   const name = user?.username ?? t("profile.title");
   const role = user?.is_admin ? t("admin.roleAdmin") : t("admin.roleUser");
@@ -72,12 +80,12 @@ export default function AccountMenu() {
             role="menuitem"
             className="cc-menu-item"
             onClick={() => {
-              openSettings("judge");
+              openReports();
               close();
             }}
           >
-            <IconGear size={16} />
-            <span className="lab">{t("account.settings")}</span>
+            <IconReport size={16} />
+            <span className="lab">{t("reports.title")}</span>
           </button>
           <button
             type="button"

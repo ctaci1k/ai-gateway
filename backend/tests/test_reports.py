@@ -1,0 +1,343 @@
+# backend/tests/test_reports.py
+"""Usage Reports aggregations + API (PH27, D-18).
+
+Repository-level tests drive the DB directly in the test's event loop (like the
+``repo`` fixture) for full control over timestamps/models/billable/chat_id. HTTP
+tests use the ``client`` fixture for auth isolation + CSV.
+"""
+
+from datetime import datetime, timedelta
+from types import SimpleNamespace
+
+import pytest
+
+from core.db import dispose_engine, session_scope
+from db.models import UsageEvent
+from memory.chats_repository import SavedChatRepository
+from memory.usage_report_repository import UsageReportRepository
+from memory.usage_repository import UsageRepository
+from services.orchestrator_service import OrchestratorService
+from tests.conftest import TEST_REGISTRATION_CODE, _fresh_schema
+
+_BASE = datetime(2026, 6, 1, 12, 0, 0)  # naive UTC anchor
+
+
+@pytest.fixture
+async def env():
+    from services.auth_service import AuthService
+
+    await _fresh_schema()
+    alice = await AuthService.register("alice", "password123")
+    bob = await AuthService.register("bob", "password123")
+    yield SimpleNamespace(alice=alice.id, bob=bob.id)
+    await dispose_engine()
+
+
+async def _add(
+    user_id,
+    *,
+    created_at,
+    mode="single",
+    model="groq",
+    tokens=10,
+    success=True,
+    billable=True,
+    estimated=False,
+    chat_id=None,
+    message="hi",
+):
+    async with session_scope() as session:
+        session.add(
+            UsageEvent(
+                user_id=user_id,
+                created_at=created_at,
+                mode=mode,
+                message=message,
+                selected_model=model,
+                total_tokens=tokens,
+                success=success,
+                billable=billable,
+                token_estimated=estimated,
+                chat_id=chat_id,
+            )
+        )
+
+
+# --- Per-user isolation -----------------------------------------------------
+
+
+async def test_per_user_isolation(env):
+    for i in range(3):
+        await _add(env.alice, created_at=_BASE + timedelta(minutes=i))
+    for i in range(2):
+        await _add(env.bob, created_at=_BASE + timedelta(minutes=i))
+
+    alice_summary = await UsageReportRepository(env.alice).summary(None, None)
+    bob_summary = await UsageReportRepository(env.bob).summary(None, None)
+    assert alice_summary["total_requests"] == 3
+    assert bob_summary["total_requests"] == 2
+
+
+# --- Summary ----------------------------------------------------------------
+
+
+async def test_summary_aggregates(env):
+    await _add(env.alice, created_at=_BASE, mode="single", model="groq", tokens=10)
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(hours=1),
+        mode="compare",
+        model="cerebras",
+        tokens=20,
+        estimated=True,
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(hours=2),
+        mode="single",
+        model="groq",
+        tokens=5,
+        success=False,
+        billable=False,
+    )
+
+    s = await UsageReportRepository(env.alice).summary(None, None)
+    assert s["total_requests"] == 3
+    assert s["total_tokens"] == 35
+    assert s["tokens_estimated"] is True
+    assert s["by_mode"] == {"single": 2, "compare": 1}
+    assert s["billable_vs_own"] == {"billable": 2, "own_key": 1}
+    assert s["success_rate"] == round(2 / 3, 4)
+    assert s["first_event"] == _BASE
+    assert s["last_event"] == _BASE + timedelta(hours=2)
+
+
+# --- By model ---------------------------------------------------------------
+
+
+async def test_by_model(env):
+    await _add(env.alice, created_at=_BASE, model="groq", tokens=10)
+    await _add(
+        env.alice, created_at=_BASE + timedelta(minutes=1), model="groq", tokens=5
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=2),
+        model="cerebras",
+        tokens=7,
+        success=False,
+    )
+
+    models = await UsageReportRepository(env.alice).by_model(None, None)
+    by = {m["model"]: m for m in models}
+    assert by["groq"]["requests"] == 2
+    assert by["groq"]["total_tokens"] == 15
+    assert by["groq"]["successful"] == 2
+    assert by["cerebras"]["requests"] == 1
+    assert by["cerebras"]["successful"] == 0
+    # Busiest first.
+    assert models[0]["model"] == "groq"
+
+
+# --- By chat (incl. deleted/ad-hoc bucket) ----------------------------------
+
+
+async def test_by_chat_groups_and_null_bucket(env):
+    chat = await SavedChatRepository(env.alice).create_chat(
+        title="My chat", mode="single", model="groq"
+    )
+    cid = chat["id"]
+    await _add(env.alice, created_at=_BASE, chat_id=cid, tokens=10)
+    await _add(
+        env.alice, created_at=_BASE + timedelta(minutes=1), chat_id=cid, tokens=20
+    )
+    await _add(
+        env.alice, created_at=_BASE + timedelta(minutes=2), chat_id=None, tokens=3
+    )
+
+    chats = await UsageReportRepository(env.alice).by_chat(None, None)
+    by_id = {c["chat_id"]: c for c in chats}
+    assert by_id[cid]["title"] == "My chat"
+    assert by_id[cid]["requests"] == 2
+    assert by_id[cid]["total_tokens"] == 30
+    # Ad-hoc (no chat) collapses into the None bucket.
+    assert by_id[None]["title"] is None
+    assert by_id[None]["requests"] == 1
+
+
+async def test_chat_delete_sets_event_chat_id_null(env):
+    chat = await SavedChatRepository(env.alice).create_chat(
+        title="Temp", mode="single", model="groq"
+    )
+    cid = chat["id"]
+    await _add(env.alice, created_at=_BASE, chat_id=cid)
+
+    await SavedChatRepository(env.alice).delete_chat(cid)
+
+    # FK ondelete SET NULL: the audit row survives, detached from the chat.
+    async with session_scope() as session:
+        from sqlalchemy import select
+
+        rows = (await session.execute(select(UsageEvent.chat_id))).scalars().all()
+    assert rows == [None]
+    chats = await UsageReportRepository(env.alice).by_chat(None, None)
+    assert chats[0]["chat_id"] is None
+
+
+# --- Timeseries -------------------------------------------------------------
+
+
+async def test_timeseries_day_gap_filled(env):
+    day0 = datetime(2026, 6, 1, 8, 0, 0)
+    day2 = datetime(2026, 6, 3, 9, 0, 0)  # skip day1 → gap
+    await _add(env.alice, created_at=day0, tokens=10)
+    await _add(env.alice, created_at=day0 + timedelta(hours=2), tokens=5)
+    await _add(env.alice, created_at=day2, tokens=8)
+
+    points = await UsageReportRepository(env.alice).timeseries(None, None, "day")
+    # Three consecutive day buckets (gap day filled with zeros).
+    assert len(points) == 3
+    assert points[0]["requests"] == 2 and points[0]["tokens"] == 15
+    assert points[1]["requests"] == 0 and points[1]["tokens"] == 0
+    assert points[2]["requests"] == 1 and points[2]["tokens"] == 8
+
+
+async def test_timeseries_empty(env):
+    points = await UsageReportRepository(env.alice).timeseries(None, None, "day")
+    assert points == []
+
+
+# --- Events pagination ------------------------------------------------------
+
+
+async def test_events_keyset_pagination(env):
+    for i in range(5):
+        await _add(env.alice, created_at=_BASE + timedelta(minutes=i), message=f"m{i}")
+
+    repo = UsageReportRepository(env.alice)
+    page1 = await repo.events(None, None, limit=2)
+    assert len(page1["events"]) == 2
+    assert page1["next_cursor"] is not None
+    # Newest first.
+    assert page1["events"][0]["message"] == "m4"
+
+    from memory.usage_report_repository import UsageReportRepository as _R  # noqa
+
+    cur = page1["next_cursor"]
+    # Decode like the route does.
+    ts_str, id_str = cur.rsplit("|", 1)
+    cursor = (datetime.fromisoformat(ts_str), int(id_str))
+    page2 = await repo.events(None, None, cursor=cursor, limit=2)
+    assert [e["message"] for e in page2["events"]] == ["m2", "m1"]
+    assert page2["next_cursor"] is not None
+
+    ts_str, id_str = page2["next_cursor"].rsplit("|", 1)
+    page3 = await repo.events(
+        None, None, cursor=(datetime.fromisoformat(ts_str), int(id_str)), limit=2
+    )
+    assert [e["message"] for e in page3["events"]] == ["m0"]
+    assert page3["next_cursor"] is None
+
+
+# --- Billable quota filter (A4) ---------------------------------------------
+
+
+async def test_quota_counts_only_billable(env):
+    now = datetime(2026, 6, 1, 12, 0, 0)
+    await _add(env.alice, created_at=now, billable=True)
+    await _add(env.alice, created_at=now + timedelta(seconds=1), billable=False)
+    await _add(env.alice, created_at=now + timedelta(seconds=2), billable=True)
+
+    # count_since must ignore the BYOK (non-billable) event.
+    count = await UsageRepository(env.alice).count_since(now - timedelta(seconds=10))
+    assert count == 2
+    stamps = await UsageRepository(env.alice).timestamps_since(
+        now - timedelta(seconds=10)
+    )
+    assert len(stamps) == 2
+
+
+# --- CSV export iterator ----------------------------------------------------
+
+
+async def test_iter_events_for_csv_yields_all(env):
+    for i in range(3):
+        await _add(env.alice, created_at=_BASE + timedelta(minutes=i), message=f"m{i}")
+
+    rows = [
+        r
+        async for r in UsageReportRepository(env.alice).iter_events_for_csv(None, None)
+    ]
+    assert [r.message for r in rows] == ["m0", "m1", "m2"]  # oldest first
+
+
+# --- HTTP: auth isolation + CSV ---------------------------------------------
+
+
+def test_reports_require_auth(client):
+    assert client.get("/reports/summary").status_code == 401
+    assert client.get("/reports/by-model").status_code == 401
+    assert client.get("/reports/events.csv").status_code == 401
+
+
+_PROVIDER_RESPONSE = {
+    "response": "hello",
+    "model": "m",
+    "execution_time": 1.0,
+    "provider": "groq",
+    "success": True,
+}
+
+
+async def _fake_process_chat(**kwargs):
+    return {
+        "best_response": "hello",
+        "selected_model": "groq",
+        "selected_model_data": _PROVIDER_RESPONSE,
+        "all_responses": {"groq": _PROVIDER_RESPONSE},
+        "failed_providers": [],
+        "execution_metadata": [],
+        "execution_summary": {},
+        "compare_mode": kwargs.get("compare_mode", False),
+        "selector_enabled": kwargs.get("selector_enabled", False),
+        "selector_scores": {},
+        "selector_metadata": {},
+        "selector_reason": None,
+        "compare_summary": {},
+        "total_tokens": 42,
+    }
+
+
+def test_reports_summary_and_csv_http(client, monkeypatch):
+    monkeypatch.setattr(
+        OrchestratorService, "process_chat", staticmethod(_fake_process_chat)
+    )
+    resp = client.post(
+        "/auth/register",
+        json={
+            "username": "carol",
+            "password": "password123",
+            "registration_code": TEST_REGISTRATION_CODE,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    csrf = {"X-CSRF-Token": resp.json()["csrf_token"]}
+
+    chat = client.post(
+        "/chat",
+        json={"message": "hello world", "provider": "groq"},
+        headers=csrf,
+    )
+    assert chat.status_code == 200, chat.text
+
+    summary = client.get("/reports/summary").json()
+    assert summary["total_requests"] == 1
+    assert summary["total_tokens"] == 42
+    assert summary["tokens_estimated"] is False
+
+    csv_resp = client.get("/reports/events.csv")
+    assert csv_resp.status_code == 200
+    assert csv_resp.headers["content-type"].startswith("text/csv")
+    body = csv_resp.text
+    assert "created_at,mode,model" in body
+    assert "hello world" in body

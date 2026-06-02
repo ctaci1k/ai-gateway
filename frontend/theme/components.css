@@ -1194,15 +1194,15 @@ button.rail-sq:hover {
   align-items: center;
   gap: 8px;
 }
+/* Icon-only square, matched to the send button (PH26): no text label, badge
+ * sits in the corner. Same footprint as .composer-send for a tidy composer. */
 .composer-tool {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
   height: 100%;
-  padding: 0 13px;
   border-radius: 13px;
-  font-size: 13px;
-  font-weight: 600;
   color: var(--muted);
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -1242,13 +1242,20 @@ button.rail-sq:hover {
   box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.6);
 }
 .composer-tool-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
   font-size: 9.5px;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 1px 5px;
-  border-radius: 6px;
+  padding: 0 4px;
+  border-radius: 9px;
   color: var(--accent-contrast);
   background: var(--accent);
+  border: 2px solid var(--panel-2);
 }
 .composer-rag-note {
   font-size: 11.5px;
@@ -2206,11 +2213,15 @@ button.rail-sq:hover {
   box-shadow: 0 4px 12px -3px rgba(var(--accent-rgb), 0.7);
   transition: left 0.28s cubic-bezier(0.4, 1.3, 0.5, 1);
 }
+/* Anchor the knob to an edge (not a fixed left offset) so it can never overflow
+ * a narrow pill onto the next control on mobile (PH26). */
 [data-theme="dark"] .cc-theme-knob {
   left: 3px;
+  right: auto;
 }
 [data-theme="light"] .cc-theme-knob {
-  left: 29px;
+  left: auto;
+  right: 3px;
 }
 .cc-theme-ic {
   flex: 1;
@@ -2240,7 +2251,12 @@ button.rail-sq:hover {
   background: var(--softer);
 }
 .cc-langpill .cc-flag {
-  font-size: 15px;
+  font-size: 16px;
+  /* line-height:1 + flex centering so the flag glyph (or its "UA"/"EN" letter
+   * fallback on systems without flag emoji) sits centered, not low (PH26). */
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
 .cc-langpill b {
   color: var(--fg);
@@ -3225,8 +3241,29 @@ button.rail-sq:hover {
   .cc-userbtn-tx {
     display: none;
   }
+  /* On phones the left↔right slider reads as clutter — collapse it into a
+     single round moon/sun button (PH26): hide the track icons, let the knob
+     fill the circle. */
   .cc-theme {
-    width: 56px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
+  .cc-theme:hover {
+    background: transparent;
+  }
+  .cc-theme-ic {
+    display: none;
+  }
+  .cc-theme-knob {
+    position: static;
+    width: 40px;
+    height: 40px;
+    left: auto;
+    right: auto;
   }
   .cc-stage {
     padding: 10px;
@@ -3258,6 +3295,19 @@ button.rail-sq:hover {
   }
 }
 
+/* Phones / large phones: drop the brand mark + dividers so the utility cluster
+ * (theme · language · settings · admin · account) fits in one row without
+ * crowding or overflowing onto each other (PH26). */
+@media (max-width: 560px) {
+  .cc-top {
+    gap: 7px;
+  }
+  .cc-brand,
+  .cc-divider {
+    display: none;
+  }
+}
+
 @media (max-width: 430px) {
   .cc-top {
     gap: 6px;
@@ -3267,9 +3317,416 @@ button.rail-sq:hover {
     display: none;
   }
   .cc-iconbtn,
-  .cc-burger,
-  .cc-theme {
+  .cc-burger {
     width: 40px;
     height: 40px;
+  }
+  /* .cc-theme is already a 40px round button below 768px (see above). */
+  .cc-langpill {
+    padding: 0 9px;
+  }
+}
+
+/* ===========================================================================
+ * USAGE REPORTS (PH27, D-18) — per-user dashboard. Reuses the settings-dialog
+ * frame; everything below is on design tokens (no hardcoded colors).
+ * ======================================================================== */
+.rep-dialog {
+  max-width: 940px;
+}
+.rep-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.rep-title-sub {
+  color: var(--subtle);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Period filter bar */
+.rep-rangebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.rep-range-presets {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--soft);
+  border-radius: 10px;
+  padding: 3px;
+}
+.rep-range-btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: 0.12s;
+}
+.rep-range-btn:hover {
+  color: var(--fg);
+}
+.rep-range-btn.is-active {
+  background: var(--card);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.rep-range-custom {
+  display: inline-flex;
+  gap: 10px;
+}
+.rep-range-field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--subtle);
+}
+.rep-range-field input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  color: var(--fg);
+  color-scheme: dark light;
+}
+
+.rep-grid {
+  min-height: 0;
+}
+.rep-nav .settings-nav-item {
+  justify-content: flex-start;
+}
+.rep-content {
+  min-height: 320px;
+}
+
+/* KPI cards */
+.rep-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+.rep-kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.rep-kpi-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--subtle);
+}
+.rep-kpi-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--fg);
+}
+.rep-badge {
+  display: inline-block;
+  width: fit-content;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.rep-badge--est {
+  background: rgba(var(--accent-rgb), 0.14);
+  color: var(--accent);
+}
+.rep-badge--ok {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success);
+}
+.rep-badge--fail {
+  background: var(--danger-surface);
+  color: var(--danger);
+}
+.rep-badge--own {
+  background: var(--soft);
+  color: var(--muted);
+}
+
+/* Cards (chart + splits) */
+.rep-card {
+  margin-top: 14px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.rep-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.rep-card-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.rep-muted {
+  color: var(--subtle);
+  font-size: 13px;
+}
+.rep-legend,
+.rep-split-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.rep-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.rep-dot--bar,
+.rep-dot--a {
+  background: var(--accent);
+}
+.rep-dot--line,
+.rep-dot--b {
+  background: var(--success);
+}
+
+/* Chart */
+.rep-chart {
+  margin: 0;
+}
+.rep-chart-svg {
+  width: 100%;
+  height: 150px;
+  display: block;
+}
+.rep-chart-axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.rep-chart-bar {
+  fill: rgba(var(--accent-rgb), 0.55);
+}
+.rep-chart-line {
+  stroke: var(--success);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.rep-chart-dot {
+  fill: var(--success);
+}
+.rep-chart-axislabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--subtle);
+  margin-top: 4px;
+}
+
+/* Split bars */
+.rep-splits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.rep-split-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--soft);
+  margin-bottom: 8px;
+}
+.rep-split-seg--a {
+  background: var(--accent);
+}
+.rep-split-seg--b {
+  background: var(--success);
+}
+
+/* Tables */
+.rep-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.rep-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.rep-table th,
+.rep-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  white-space: nowrap;
+}
+.rep-table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--subtle);
+  background: var(--soft);
+  position: sticky;
+  top: 0;
+}
+.rep-table tbody tr:last-child th,
+.rep-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.rep-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rep-cell-strong {
+  font-weight: 700;
+}
+.rep-cell-msg {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.rep-cell-clip {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rep-nowrap {
+  white-space: nowrap;
+}
+.rep-row--click {
+  cursor: pointer;
+}
+.rep-row--click:hover {
+  background: var(--soft);
+}
+.rep-row--click:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.rep-share-col {
+  width: 140px;
+}
+.rep-sharebar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--soft);
+  overflow: hidden;
+}
+.rep-sharebar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.rep-tags {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Activity log toolbar + load more */
+.rep-log-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+.rep-csv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.rep-csv-btn:hover {
+  opacity: 0.92;
+}
+.rep-log-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+.rep-more-btn {
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.rep-more-btn:hover {
+  background: var(--soft);
+}
+.rep-more-btn:disabled {
+  opacity: 0.6;
+}
+
+/* States */
+.rep-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+  color: var(--subtle);
+  font-size: 13px;
+}
+.rep-state--error {
+  color: var(--danger);
+}
+.rep-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: rep-spin 0.7s linear infinite;
+}
+@keyframes rep-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .rep-splits {
+    grid-template-columns: 1fr;
+  }
+  .rep-rangebar {
+    padding: 10px 14px;
+  }
+  .rep-cell-msg {
+    max-width: 160px;
   }
 }

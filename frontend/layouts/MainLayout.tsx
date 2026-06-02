@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 
 import ComingSoonModal from "@/components/common/ComingSoonModal";
 import Topbar from "@/components/layout/Topbar";
+import ReportsModal from "@/components/reports/ReportsModal";
 import SettingsModal from "@/components/settings/SettingsModal";
 import Sidebar from "@/components/sidebar/Sidebar";
 import { useSidebar } from "@/store/SidebarContext";
@@ -28,6 +29,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
       </div>
 
       <SettingsModal />
+      <ReportsModal />
       <ComingSoonModal />
     </div>
   );
