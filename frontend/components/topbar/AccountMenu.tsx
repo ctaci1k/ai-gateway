@@ -17,6 +17,7 @@ import {
   IconUser,
 } from "@/components/icons/Icons";
 import Avatar from "@/components/topbar/Avatar";
+import { useAdminView } from "@/store/AdminViewContext";
 import { useAuth } from "@/store/AuthContext";
 import { useComingSoon } from "@/store/ComingSoonContext";
 import { useI18n } from "@/store/LanguageContext";
@@ -27,6 +28,7 @@ export default function AccountMenu() {
   const { user, logout } = useAuth();
   const { open: openStub } = useComingSoon();
   const { open: openReports } = useReports();
+  const { close: closeAdmin } = useAdminView();
 
   const name = user?.username ?? t("profile.title");
   const role = user?.is_admin ? t("admin.roleAdmin") : t("admin.roleUser");
@@ -80,6 +82,7 @@ export default function AccountMenu() {
             role="menuitem"
             className="cc-menu-item"
             onClick={() => {
+              closeAdmin();
               openReports();
               close();
             }}

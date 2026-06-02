@@ -300,5 +300,12 @@
   "reports.loadMore": "Load more",
   "reports.state.loading": "Loading…",
   "reports.state.empty": "No activity in this period.",
-  "reports.state.error": "Couldn't load the report. Try again."
+  "reports.state.error": "Couldn't load the report. Try again.",
+  "reports.tab.breakdown": "Breakdown",
+  "reports.access.label": "Access key",
+  "reports.access.all": "All",
+  "reports.access.app": "App keys",
+  "reports.access.own": "Own keys",
+  "reports.breakdown.legend": "Each row shows requests · tokens. Expand to drill down: access key → model → chats.",
+  "reports.back": "Back"
 }

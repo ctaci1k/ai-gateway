@@ -43,6 +43,15 @@
 - **Структуроване логування** (`core/logging.py`): запити, помилки провайдерів, рішення судді.
 - **Базові тести** (`backend/tests/`, pytest): ChatBuffer, rule-based selector, агрегація провайдерів, ретраї/мін-впевненість селектора, `extract_json`, API-кейси (помилки/rate-limit).
 
+## ✅ PH28 — Звіти: повноекранний розділ + drill-down «Розкладка» + фільтр за ключем доступу (Варіант B, D-18)
+
+> UX-апгрейд PH27 за рішенням власника («дашборд у модалці дрібний/незручний»). Архітектор обрав **Варіант B**: винести Звіти з модалки у повноекранний розділ, додати акордеон-drill-down і глобальний фільтр за ключем доступу. План — [plans/026-reports-fullpage-breakdown.md](plans/026-reports-fullpage-breakdown.md).
+
+- **(A) Бекенд — фільтр + breakdown.** `UsageReportRepository._scope(start,end,billable)` + усі методи приймають `billable: bool|None` (app-key/own-key/усе). Новий `breakdown(start,end,billable)` → вкладене дерево **access_key(app|own) → model → chats** з requests/total_tokens на кожному рівні (зібране в Python з однієї пласкої вибірки, LEFT JOIN chats; chat_id NULL → ad-hoc). Спільний query-параметр **`access`** (`app|own`) на **усіх** `/reports/*` (incl. `events.csv`) + новий `GET /reports/breakdown`. Схеми `Breakdown{Chat,Model,Group,Response}`. Тести: `test_access_filter_summary_and_events`, `test_breakdown_tree_shape`.
+- **(B) Фронтенд — повний екран.** Звіти більше **не модалка**: `app/page.tsx` рендерить `<ReportsPage/>` у головній області (як `AdminPanel`), коли `ReportsContext.isOpen`. Повноекранні розділи **взаємовиключні** (відкриття Звітів закриває Admin і навпаки — на call-sites `AccountMenu`/`Topbar`; пріоритет reports > admin > chat). `ReportsModal` видалено. `ReportsPage` — шапка (тайтл + «Назад») + тулбар (період + сегмент ключа доступу) + вкладки **Огляд / Розкладка / За моделями / За чатами / Журнал**; remount активної вкладки по `key=${rangeKey}|${access}`.
+- **(C) Розкладка + фільтр ключа.** `BreakdownTab` — акордеон `ключ → модель → чати` (a11y: `aria-expanded`/`aria-controls`/Enter/Space/focus-visible; шеврон обертається; листок-чат відкриває чат). Сегмент «усе/наш/свій» тече у `ReportRange.access` → всі виклики `reportsApi` + CSV. `getBreakdown` + типи `Breakdown*`.
+- **(D) i18n/CSS/гейти.** Нові ключі `reports.{tab.breakdown,access.*,breakdown.legend,back}` (паритет uk/pl/en). CSS-секція «USAGE REPORTS» переписана під повний екран (`.rep-page`/тулбар/вкладки/акордеон на токенах; responsive 768/430). Гейти: BE **159 passed** + ruff/black; FE tsc/eslint/prettier/vitest(**26**)/build зелені.
+
 ## ✅ PH27 — Звіти про використання (Usage Reports) · `usage_events` як канонічний per-turn ledger (D-18)
 
 > Реальний self-service розділ **«Звіти»** для КОЖНОГО акаунта (замінює заглушку `ComingSoonModal("reports")`): повна історія активності — запити, токени, моделі, чати, повідомлення — з агрегаціями, графіками, фільтром періоду та CSV-експортом. Рішення — [10-open-decisions.md](10-open-decisions.md) (D-18).

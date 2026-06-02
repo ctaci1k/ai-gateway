@@ -30,6 +30,7 @@ from memory.usage_report_repository import (
     UsageReportRepository,
 )
 from schemas.reports import (
+    BreakdownResponse,
     ByChatResponse,
     ByModelResponse,
     EventsResponse,
@@ -71,6 +72,17 @@ def _window(from_: str | None, to: str | None) -> tuple[datetime | None, datetim
     return start, end
 
 
+def _access_to_billable(access: str | None) -> bool | None:
+    """Map the ``access`` query param to a billable filter (PH28): ``app`` =
+    app-key (billable) turns, ``own`` = own-key (BYOK) turns, anything else =
+    both."""
+    if access == "app":
+        return True
+    if access == "own":
+        return False
+    return None
+
+
 def _parse_cursor(cursor: str | None) -> tuple[datetime, int] | None:
     if not cursor:
         return None
@@ -92,9 +104,13 @@ async def reports_summary(
     user: User = Depends(current_user),
     from_: str | None = Query(None, alias="from"),
     to: str | None = Query(None, alias="to"),
+    access: str | None = Query(None),
 ):
     start, end = _window(from_, to)
-    return ReportSummary(**await UsageReportRepository(user.id).summary(start, end))
+    billable = _access_to_billable(access)
+    return ReportSummary(
+        **await UsageReportRepository(user.id).summary(start, end, billable)
+    )
 
 
 @router.get("/by-model", response_model=ByModelResponse)
@@ -102,9 +118,12 @@ async def reports_by_model(
     user: User = Depends(current_user),
     from_: str | None = Query(None, alias="from"),
     to: str | None = Query(None, alias="to"),
+    access: str | None = Query(None),
 ):
     start, end = _window(from_, to)
-    models = await UsageReportRepository(user.id).by_model(start, end)
+    models = await UsageReportRepository(user.id).by_model(
+        start, end, _access_to_billable(access)
+    )
     return ByModelResponse(models=models)
 
 
@@ -113,9 +132,12 @@ async def reports_by_chat(
     user: User = Depends(current_user),
     from_: str | None = Query(None, alias="from"),
     to: str | None = Query(None, alias="to"),
+    access: str | None = Query(None),
 ):
     start, end = _window(from_, to)
-    chats = await UsageReportRepository(user.id).by_chat(start, end)
+    chats = await UsageReportRepository(user.id).by_chat(
+        start, end, _access_to_billable(access)
+    )
     return ByChatResponse(chats=chats)
 
 
@@ -125,12 +147,30 @@ async def reports_timeseries(
     from_: str | None = Query(None, alias="from"),
     to: str | None = Query(None, alias="to"),
     bucket: str = Query(BUCKET_DAY),
+    access: str | None = Query(None),
 ):
     if bucket not in (BUCKET_DAY, BUCKET_HOUR):
         bucket = BUCKET_DAY
     start, end = _window(from_, to)
-    points = await UsageReportRepository(user.id).timeseries(start, end, bucket)
+    points = await UsageReportRepository(user.id).timeseries(
+        start, end, bucket, _access_to_billable(access)
+    )
     return TimeseriesResponse(bucket=bucket, points=points)
+
+
+@router.get("/breakdown", response_model=BreakdownResponse)
+async def reports_breakdown(
+    user: User = Depends(current_user),
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = Query(None, alias="to"),
+    access: str | None = Query(None),
+):
+    """Nested access-key → model → chats tree for the Breakdown accordion (PH28)."""
+    start, end = _window(from_, to)
+    groups = await UsageReportRepository(user.id).breakdown(
+        start, end, _access_to_billable(access)
+    )
+    return BreakdownResponse(groups=groups)
 
 
 @router.get("/events", response_model=EventsResponse)
@@ -140,10 +180,15 @@ async def reports_events(
     to: str | None = Query(None, alias="to"),
     cursor: str | None = Query(None),
     limit: int = Query(DEFAULT_EVENTS_LIMIT, ge=1, le=200),
+    access: str | None = Query(None),
 ):
     start, end = _window(from_, to)
     page = await UsageReportRepository(user.id).events(
-        start, end, cursor=_parse_cursor(cursor), limit=limit
+        start,
+        end,
+        cursor=_parse_cursor(cursor),
+        limit=limit,
+        billable=_access_to_billable(access),
     )
     return EventsResponse(**page)
 
@@ -166,13 +211,15 @@ async def reports_events_csv(
     user: User = Depends(current_user),
     from_: str | None = Query(None, alias="from"),
     to: str | None = Query(None, alias="to"),
+    access: str | None = Query(None),
 ):
-    """Stream the activity log as CSV (same window as ``/events``).
+    """Stream the activity log as CSV (same window + access filter as ``/events``).
 
     Rows are streamed straight from a keyset-paged DB scan so a large export
     never materializes in memory (C3). The csv module handles quoting/escaping.
     """
     start, end = _window(from_, to)
+    billable = _access_to_billable(access)
     repo = UsageReportRepository(user.id)
 
     async def rows():
@@ -188,7 +235,7 @@ async def reports_events_csv(
         writer.writerow(_CSV_HEADER)
         yield flush()
 
-        async for r in repo.iter_events_for_csv(start, end):
+        async for r in repo.iter_events_for_csv(start, end, billable):
             writer.writerow(
                 [
                     r.created_at.isoformat(),

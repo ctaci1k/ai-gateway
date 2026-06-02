@@ -260,6 +260,35 @@ export interface TimeseriesResponse {
   points: TimeseriesPoint[];
 }
 
+// Access-key filter (PH28): app = built-in keys (billable), own = BYOK.
+export type ReportAccess = "app" | "own";
+
+export interface BreakdownChat {
+  chat_id: number | null;
+  title: string | null;
+  mode: ChatMode | null;
+  requests: number;
+  total_tokens: number;
+}
+
+export interface BreakdownModel {
+  model: string | null;
+  requests: number;
+  total_tokens: number;
+  chats: BreakdownChat[];
+}
+
+export interface BreakdownGroup {
+  access_key: "app" | "own";
+  requests: number;
+  total_tokens: number;
+  models: BreakdownModel[];
+}
+
+export interface BreakdownResponse {
+  groups: BreakdownGroup[];
+}
+
 // One row of the per-user activity log (richer than the admin UsageEventRecord).
 export interface ReportEvent {
   id: number;

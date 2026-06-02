@@ -269,10 +269,13 @@ Self-service дашборд історії активності акаунта. 
 
 **Спільні query-параметри вікна:** `from`/`to` — ISO-datetime (із суфіксом `Z` чи без; серіалізація — naive UTC). Якщо `from` не передано → дефолт **останні 30 днів**; для «усе» FE шле epoch-`from` (напр. `1970-01-01T00:00:00`). `to` за умовчанням = «зараз». Невалідний datetime → **422** (`validation_error`).
 
+**Фільтр за ключем доступу (PH28):** спільний query-параметр **`access`** = `app` (лише ходи на вбудованих ключах, `billable=true`) \| `own` (лише на власних BYOK-ключах, `billable=false`); відсутній = усе. Діє на **усіх** `/reports/*` ендпоінтах, включно з `events.csv` і `breakdown`.
+
 - `GET /reports/summary` → `200 ReportSummary` `{ total_requests, total_tokens, tokens_estimated (bool — чи є серед порахованих оцінені токени), by_mode {single,compare}, billable_vs_own {billable,own_key}, distinct_chats, success_rate (0..1), first_event|null, last_event|null }`.
 - `GET /reports/by-model` → `200 { models: [{ model|null, requests, total_tokens, successful }] }` (за спаданням запитів).
 - `GET /reports/by-chat` → `200 { chats: [{ chat_id|null, title|null, mode|null, model|null, requests, total_tokens, last_event|null }] }`. `chat_id=null` — група «видалені/ad-hoc» (чат видалено → `chat_id` SET NULL, або хід без чату). LEFT JOIN `chats`.
 - `GET /reports/timeseries?bucket=day|hour` → `200 { bucket, points: [{ bucket (datetime), requests, tokens }] }`. Групування — у Python (портативно SQLite/Postgres), gap-filled, за зростанням; bucket у naive UTC (FE підписує локаллю).
+- `GET /reports/breakdown` (PH28) → `200 { groups: [{ access_key:"app"|"own", requests, total_tokens, models: [{ model|null, requests, total_tokens, chats: [{ chat_id|null, title|null, mode|null, requests, total_tokens }] }] }] }`. Вкладене дерево **ключ доступу → модель → чати** для акордеон-drill-down; зібране в Python з однієї пласкої вибірки (LEFT JOIN chats), сортування за запитами спадно; `chat_id=null` — bucket «видалені/ad-hoc».
 - `GET /reports/events?cursor=&limit=` → `200 { events: [{ id, created_at, mode, model|null, total_tokens|null, token_estimated, success, billable, message, chat_id|null, chat_title|null }], next_cursor|null }`. Keyset-пагінація за `(created_at,id)` спадно; `limit` 1..200 (дефолт 50); `cursor` = `"<iso>|<id>"`.
 - `GET /reports/events.csv` → `200 text/csv` (`Content-Disposition: attachment`), стрім рядками з того самого вікна; колонки: `created_at, mode, model, chat_title, billable, total_tokens, token_estimated, success, message`. CSV-екранування — стандартним `csv`-модулем; великі обсяги не тримаються в памʼяті (keyset-сторінки).
 

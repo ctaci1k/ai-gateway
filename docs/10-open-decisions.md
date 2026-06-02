@@ -163,6 +163,8 @@
 - **Кнопка «Звіти» (для всіх) перестає бути заглушкою** (`ComingSoonModal("reports")` → реальний `ReportsModal`).
 ↪ **Реалізовано (PH27, 2026-06-02):** код + тести (BE `test_reports.py` 12 кейсів + `test_tokens.py`; FE — vitest 26, i18n-паритет). Деталі — [08-current-state.md](08-current-state.md) (секція PH27); контракти — [03-api-contracts.md](03-api-contracts.md) (`/reports/*` + `events.csv`); дані — [04-data-models.md](04-data-models.md) (ledger-колонки); фронтенд — [06-frontend-architecture.md](06-frontend-architecture.md) (дашборд). Гейти: BE 157 + ruff/black; FE tsc/eslint/prettier/vitest(26)/build. **Опційно (не зроблено):** адмін-перегляд звітів іншого юзера (бонус G).
 
+↪ **UX-апгрейд (PH28, 2026-06-02, Варіант B):** власник: дашборд у модалці «дрібний/незручний». Архітектор виніс Звіти у **повноекранний розділ** (як Admin), додав вкладку **«Розкладка»** з акордеон-drill-down **ключ доступу → модель → чати** і **глобальний фільтр за ключем доступу** (`access=app|own` на всіх `/reports/*` + новий `GET /reports/breakdown`). «Ключ доступу» — фільтр/факт, не рівень-секція (його місце — сегмент тулбара і верхній рівень drill-down). План — [plans/026-reports-fullpage-breakdown.md](plans/026-reports-fullpage-breakdown.md); деталі — [08-current-state.md](08-current-state.md) (секція PH28). Гейти: BE 159 + ruff/black; FE tsc/eslint/prettier/vitest(26)/build.
+
 ## Нові підтверджені вимоги (від власника, 2026-05-29)
 
 Окрім днів 10–14, додано до обсягу:

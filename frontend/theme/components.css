@@ -3328,31 +3328,73 @@ button.rail-sq:hover {
 }
 
 /* ===========================================================================
- * USAGE REPORTS (PH27, D-18) — per-user dashboard. Reuses the settings-dialog
- * frame; everything below is on design tokens (no hardcoded colors).
+ * USAGE REPORTS (PH27, D-18; full-page PH28) — per-user dashboard rendered as a
+ * full-page view in the main content area. Everything is on design tokens.
  * ======================================================================== */
-.rep-dialog {
-  max-width: 940px;
+.rep-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  max-width: 1180px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 22px 24px 8px;
 }
-.rep-title {
+.rep-page-head {
   display: flex;
   align-items: center;
-  gap: 9px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.rep-page-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--fg);
 }
 .rep-title-sub {
   color: var(--subtle);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
+}
+.rep-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.rep-back:hover {
+  background: var(--soft);
+  color: var(--fg);
 }
 
-/* Period filter bar */
-.rep-rangebar {
+/* Toolbar: period presets + access-key segment */
+.rep-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+.rep-toolbar-spacer {
+  flex: 1;
+}
+.rep-access {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--soft);
+  border-radius: 10px;
+  padding: 3px;
 }
 .rep-range-presets {
   display: inline-flex;
@@ -3399,14 +3441,135 @@ button.rail-sq:hover {
   color-scheme: dark light;
 }
 
-.rep-grid {
+/* Tabs nav + scrollable content */
+.rep-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.rep-tab {
+  padding: 11px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: 0.12s;
+}
+.rep-tab:hover {
+  color: var(--fg);
+}
+.rep-tab.is-active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+.rep-page-content {
+  flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  padding: 20px 2px 24px;
 }
-.rep-nav .settings-nav-item {
-  justify-content: flex-start;
+
+/* Breakdown accordion (PH28) */
+.rep-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.rep-content {
-  min-height: 320px;
+.rep-acc {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.rep-acc--lvl1 {
+  border-radius: 10px;
+}
+.rep-acc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--card);
+}
+.rep-acc--lvl1 .rep-acc-head {
+  background: transparent;
+  font-weight: 500;
+}
+.rep-acc-head:hover {
+  background: var(--soft);
+}
+.rep-acc-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.rep-acc-ic {
+  color: var(--subtle);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.rep-acc-ic.is-open {
+  transform: rotate(90deg);
+}
+.rep-acc-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rep-acc-stat {
+  color: var(--subtle);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rep-acc-panel {
+  padding: 6px 10px 10px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rep-acc-chats {
+  list-style: none;
+  margin: 0;
+  padding-left: 30px;
+  padding-top: 2px;
+}
+.rep-leaf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.rep-leaf--click {
+  cursor: pointer;
+}
+.rep-leaf--click:hover {
+  background: var(--soft);
+  color: var(--fg);
+}
+.rep-leaf--click:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.rep-leaf-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rep-tree-legend {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--subtle);
 }
 
 /* KPI cards */
@@ -3720,13 +3883,32 @@ button.rail-sq:hover {
 }
 
 @media (max-width: 768px) {
+  .rep-page {
+    padding: 16px 14px 6px;
+  }
   .rep-splits {
     grid-template-columns: 1fr;
   }
-  .rep-rangebar {
-    padding: 10px 14px;
+  .rep-toolbar {
+    gap: 10px;
+  }
+  .rep-toolbar-spacer {
+    display: none;
   }
   .rep-cell-msg {
     max-width: 160px;
+  }
+}
+
+@media (max-width: 430px) {
+  .rep-page {
+    padding: 12px 10px 6px;
+  }
+  .rep-page-title {
+    font-size: 19px;
+  }
+  .rep-range-presets,
+  .rep-access {
+    flex-wrap: wrap;
   }
 }

@@ -66,6 +66,33 @@ class TimeseriesResponse(BaseModel):
     points: list[TimeseriesPoint]
 
 
+class BreakdownChat(BaseModel):
+    chat_id: int | None
+    title: str | None
+    mode: str | None
+    requests: int
+    total_tokens: int
+
+
+class BreakdownModel(BaseModel):
+    model: str | None
+    requests: int
+    total_tokens: int
+    chats: list[BreakdownChat]
+
+
+class BreakdownGroup(BaseModel):
+    # "app" = app-key (billable) turns, "own" = own-key (BYOK) turns.
+    access_key: str
+    requests: int
+    total_tokens: int
+    models: list[BreakdownModel]
+
+
+class BreakdownResponse(BaseModel):
+    groups: list[BreakdownGroup]
+
+
 class UsageEventDetail(BaseModel):
     id: int
     created_at: datetime

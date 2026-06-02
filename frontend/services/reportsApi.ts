@@ -6,19 +6,23 @@
 
 import { API_URL, apiFetch, parseJsonResponse } from "@/services/apiClient";
 import type {
+  BreakdownResponse,
   ChatUsage,
   ModelUsage,
+  ReportAccess,
   ReportEventsPage,
   ReportSummary,
   TimeseriesResponse,
 } from "@/types/api";
 
-// The window the dashboard filters by. `from`/`to` are ISO strings; an absent
-// `from` means "all time" (the backend defaults to 30d only when nothing is
-// passed, so the UI always sends an explicit `from` except for "all").
+// The filter the dashboard applies to every tab. `from`/`to` are ISO strings;
+// an absent `from` means "all time" (the backend defaults to 30d only when
+// nothing is passed, so the UI always sends an explicit `from` except for
+// "all"). `access` (PH28) restricts to app-key or own-key turns; absent = both.
 export interface ReportRange {
   from?: string;
   to?: string;
+  access?: ReportAccess;
 }
 
 interface ByModelEnvelope {
@@ -32,6 +36,7 @@ function rangeQuery(range: ReportRange, extra: Record<string, string> = {}): str
   const params = new URLSearchParams();
   if (range.from) params.set("from", range.from);
   if (range.to) params.set("to", range.to);
+  if (range.access) params.set("access", range.access);
   for (const [k, v] of Object.entries(extra)) params.set(k, v);
   const query = params.toString();
   return query ? `?${query}` : "";
@@ -71,6 +76,11 @@ export async function getEvents(
   if (cursor) extra.cursor = cursor;
   const response = await apiFetch(`/reports/events${rangeQuery(range, extra)}`);
   return parseJsonResponse<ReportEventsPage>(response);
+}
+
+export async function getBreakdown(range: ReportRange): Promise<BreakdownResponse> {
+  const response = await apiFetch(`/reports/breakdown${rangeQuery(range)}`);
+  return parseJsonResponse<BreakdownResponse>(response);
 }
 
 // Direct download URL for the CSV export (opened in a new tab / via <a download>).

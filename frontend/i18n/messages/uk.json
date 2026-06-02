@@ -300,5 +300,12 @@
   "reports.loadMore": "Показати ще",
   "reports.state.loading": "Завантаження…",
   "reports.state.empty": "Немає активності за цей період.",
-  "reports.state.error": "Не вдалося завантажити звіт. Спробуйте ще раз."
+  "reports.state.error": "Не вдалося завантажити звіт. Спробуйте ще раз.",
+  "reports.tab.breakdown": "Розкладка",
+  "reports.access.label": "Ключ доступу",
+  "reports.access.all": "Усі",
+  "reports.access.app": "Ключі застосунку",
+  "reports.access.own": "Власні ключі",
+  "reports.breakdown.legend": "У кожному рядку: запити · токени. Розгорніть для деталізації: ключ доступу → модель → чати.",
+  "reports.back": "Назад"
 }

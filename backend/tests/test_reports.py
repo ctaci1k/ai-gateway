@@ -257,6 +257,93 @@ async def test_quota_counts_only_billable(env):
     assert len(stamps) == 2
 
 
+# --- Access-key filter + breakdown (PH28) -----------------------------------
+
+
+async def test_access_filter_summary_and_events(env):
+    await _add(env.alice, created_at=_BASE, billable=True, tokens=10, message="app1")
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=1),
+        billable=False,
+        tokens=20,
+        message="own1",
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=2),
+        billable=True,
+        tokens=5,
+        message="app2",
+    )
+    repo = UsageReportRepository(env.alice)
+
+    all_s = await repo.summary(None, None)
+    assert all_s["total_requests"] == 3 and all_s["total_tokens"] == 35
+
+    app_s = await repo.summary(None, None, billable=True)
+    assert app_s["total_requests"] == 2 and app_s["total_tokens"] == 15
+
+    own_s = await repo.summary(None, None, billable=False)
+    assert own_s["total_requests"] == 1 and own_s["total_tokens"] == 20
+
+    own_events = await repo.events(None, None, billable=False)
+    assert [e["message"] for e in own_events["events"]] == ["own1"]
+
+
+async def test_breakdown_tree_shape(env):
+    chat = await SavedChatRepository(env.alice).create_chat(
+        title="Chat A", mode="single", model="groq"
+    )
+    cid = chat["id"]
+    # app key → groq → Chat A (x2) + ad-hoc (x1); own key → cerebras → ad-hoc (x1)
+    await _add(
+        env.alice, created_at=_BASE, billable=True, model="groq", chat_id=cid, tokens=10
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=1),
+        billable=True,
+        model="groq",
+        chat_id=cid,
+        tokens=20,
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=2),
+        billable=True,
+        model="groq",
+        chat_id=None,
+        tokens=3,
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=3),
+        billable=False,
+        model="cerebras",
+        chat_id=None,
+        tokens=7,
+    )
+
+    groups = await UsageReportRepository(env.alice).breakdown(None, None)
+    by_key = {g["access_key"]: g for g in groups}
+    assert by_key["app"]["requests"] == 3 and by_key["app"]["total_tokens"] == 33
+    assert by_key["own"]["requests"] == 1 and by_key["own"]["total_tokens"] == 7
+
+    groq = next(m for m in by_key["app"]["models"] if m["model"] == "groq")
+    assert groq["requests"] == 3
+    chat_ids = {c["chat_id"] for c in groq["chats"]}
+    assert chat_ids == {cid, None}
+    named = next(c for c in groq["chats"] if c["chat_id"] == cid)
+    assert named["title"] == "Chat A" and named["requests"] == 2
+
+    # Filtered breakdown returns only the requested access group.
+    own_only = await UsageReportRepository(env.alice).breakdown(
+        None, None, billable=False
+    )
+    assert [g["access_key"] for g in own_only] == ["own"]
+
+
 # --- CSV export iterator ----------------------------------------------------
 
 

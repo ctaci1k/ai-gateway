@@ -17,6 +17,7 @@ import UsagePill from "@/components/topbar/UsagePill";
 import { useAdminView } from "@/store/AdminViewContext";
 import { useAuth } from "@/store/AuthContext";
 import { useI18n } from "@/store/LanguageContext";
+import { useReports } from "@/store/ReportsContext";
 import { useSettings } from "@/store/SettingsContext";
 import { useSidebar } from "@/store/SidebarContext";
 
@@ -25,6 +26,7 @@ export default function Topbar() {
   const { user } = useAuth();
   const { mobileOpen, openMobile } = useSidebar();
   const { open: openAdmin } = useAdminView();
+  const { close: closeReports } = useReports();
   const { open: openSettings } = useSettings();
 
   return (
@@ -69,7 +71,10 @@ export default function Topbar() {
         <button
           type="button"
           className="cc-iconbtn"
-          onClick={openAdmin}
+          onClick={() => {
+            closeReports();
+            openAdmin();
+          }}
           aria-label={t("admin.title")}
           title={t("admin.title")}
         >

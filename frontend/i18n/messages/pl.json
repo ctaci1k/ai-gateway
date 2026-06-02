@@ -300,5 +300,12 @@
   "reports.loadMore": "Pokaż więcej",
   "reports.state.loading": "Ładowanie…",
   "reports.state.empty": "Brak aktywności w tym okresie.",
-  "reports.state.error": "Nie udało się wczytać raportu. Spróbuj ponownie."
+  "reports.state.error": "Nie udało się wczytać raportu. Spróbuj ponownie.",
+  "reports.tab.breakdown": "Rozkład",
+  "reports.access.label": "Klucz dostępu",
+  "reports.access.all": "Wszystkie",
+  "reports.access.app": "Klucze aplikacji",
+  "reports.access.own": "Własne klucze",
+  "reports.breakdown.legend": "Każdy wiersz: zapytania · tokeny. Rozwiń, aby zejść głębiej: klucz dostępu → model → czaty.",
+  "reports.back": "Wstecz"
 }

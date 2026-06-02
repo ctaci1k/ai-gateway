@@ -58,20 +58,32 @@ class UsageReportRepository:
     def __init__(self, user_id: int):
         self._user_id = user_id
 
-    def _scope(self, start: datetime | None, end: datetime | None):
-        """Common WHERE: this user + the [start, end) window (bounds optional)."""
+    def _scope(
+        self,
+        start: datetime | None,
+        end: datetime | None,
+        billable: bool | None = None,
+    ):
+        """Common WHERE: this user + the [start, end) window + optional access-key
+        filter. ``billable`` True = app-key turns, False = own-key (BYOK), None =
+        both (PH28). Bounds are all optional."""
         clauses = [UsageEvent.user_id == self._user_id]
         if start is not None:
             clauses.append(UsageEvent.created_at >= start)
         if end is not None:
             clauses.append(UsageEvent.created_at < end)
+        if billable is not None:
+            clauses.append(UsageEvent.billable.is_(billable))
         return clauses
 
     async def summary(
-        self, start: datetime | None, end: datetime | None
+        self,
+        start: datetime | None,
+        end: datetime | None,
+        billable: bool | None = None,
     ) -> dict[str, Any]:
         """Headline KPIs for the Overview tab."""
-        scope = self._scope(start, end)
+        scope = self._scope(start, end, billable)
         async with session_scope() as session:
             totals = (
                 await session.execute(
@@ -142,10 +154,13 @@ class UsageReportRepository:
         }
 
     async def by_model(
-        self, start: datetime | None, end: datetime | None
+        self,
+        start: datetime | None,
+        end: datetime | None,
+        billable: bool | None = None,
     ) -> list[dict[str, Any]]:
         """Per-model breakdown, busiest first."""
-        scope = self._scope(start, end)
+        scope = self._scope(start, end, billable)
         async with session_scope() as session:
             rows = (
                 await session.execute(
@@ -171,12 +186,15 @@ class UsageReportRepository:
         ]
 
     async def by_chat(
-        self, start: datetime | None, end: datetime | None
+        self,
+        start: datetime | None,
+        end: datetime | None,
+        billable: bool | None = None,
     ) -> list[dict[str, Any]]:
         """Per-chat breakdown (LEFT JOIN chats). Events whose chat was deleted
         (chat_id SET NULL) or that were ad-hoc (no chat) collapse into a single
         ``chat_id=None`` bucket the UI labels as deleted/ad-hoc."""
-        scope = self._scope(start, end)
+        scope = self._scope(start, end, billable)
         async with session_scope() as session:
             rows = (
                 await session.execute(
@@ -209,7 +227,11 @@ class UsageReportRepository:
         ]
 
     async def timeseries(
-        self, start: datetime | None, end: datetime | None, bucket: str
+        self,
+        start: datetime | None,
+        end: datetime | None,
+        bucket: str,
+        billable: bool | None = None,
     ) -> list[dict[str, Any]]:
         """Requests + tokens grouped per day/hour, gap-filled and ascending.
 
@@ -220,7 +242,7 @@ class UsageReportRepository:
         """
         if bucket not in (BUCKET_DAY, BUCKET_HOUR):
             bucket = BUCKET_DAY
-        scope = self._scope(start, end)
+        scope = self._scope(start, end, billable)
         async with session_scope() as session:
             rows = (
                 await session.execute(
@@ -277,6 +299,7 @@ class UsageReportRepository:
         end: datetime | None,
         cursor: tuple[datetime, int] | None = None,
         limit: int = DEFAULT_EVENTS_LIMIT,
+        billable: bool | None = None,
     ) -> dict[str, Any]:
         """Keyset-paginated activity log, newest first.
 
@@ -285,7 +308,7 @@ class UsageReportRepository:
         the next cursor without a count query. LEFT JOIN chats for the title.
         """
         limit = max(1, min(limit, MAX_EVENTS_LIMIT))
-        scope = self._scope(start, end)
+        scope = self._scope(start, end, billable)
         async with session_scope() as session:
             query = (
                 select(
@@ -340,13 +363,107 @@ class UsageReportRepository:
             next_cursor = f"{last.created_at.isoformat()}|{last.id}"
         return {"events": items, "next_cursor": next_cursor}
 
-    async def iter_events_for_csv(self, start: datetime | None, end: datetime | None):
+    async def breakdown(
+        self,
+        start: datetime | None,
+        end: datetime | None,
+        billable: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        """Nested drill-down tree for the Breakdown accordion (PH28).
+
+        ``access key (app|own) -> model -> chats``, with requests + tokens summed
+        at every level. Built in Python from one flat scan (LEFT JOIN chats) so
+        the accordion can expand instantly without extra round-trips. When
+        ``billable`` is set, only that access-key group is returned.
+        """
+        scope = self._scope(start, end, billable)
+        async with session_scope() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        UsageEvent.billable,
+                        UsageEvent.selected_model,
+                        UsageEvent.chat_id,
+                        Chat.title,
+                        Chat.mode,
+                        UsageEvent.total_tokens,
+                    )
+                    .outerjoin(Chat, Chat.id == UsageEvent.chat_id)
+                    .where(*scope)
+                )
+            ).all()
+
+        # groups[access_key] = {requests, tokens, models[model] = {requests,
+        #   tokens, chats[chat_id] = {chat_id, title, mode, requests, tokens}}}
+        groups: dict[str, dict[str, Any]] = {}
+        for is_billable, model, chat_id, title, mode, tokens in rows:
+            tok = int(tokens or 0)
+            access_key = "app" if is_billable else "own"
+            group = groups.setdefault(
+                access_key, {"requests": 0, "tokens": 0, "models": {}}
+            )
+            group["requests"] += 1
+            group["tokens"] += tok
+
+            model_node = group["models"].setdefault(
+                model, {"requests": 0, "tokens": 0, "chats": {}}
+            )
+            model_node["requests"] += 1
+            model_node["tokens"] += tok
+
+            chat_node = model_node["chats"].setdefault(
+                chat_id,
+                {
+                    "chat_id": chat_id,
+                    "title": title,
+                    "mode": mode,
+                    "requests": 0,
+                    "total_tokens": 0,
+                },
+            )
+            chat_node["requests"] += 1
+            chat_node["total_tokens"] += tok
+
+        def _sorted(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return sorted(nodes, key=lambda n: n["requests"], reverse=True)
+
+        result: list[dict[str, Any]] = []
+        for access_key in ("app", "own"):
+            group = groups.get(access_key)
+            if group is None:
+                continue
+            models = []
+            for model, mnode in group["models"].items():
+                models.append(
+                    {
+                        "model": model,
+                        "requests": mnode["requests"],
+                        "total_tokens": mnode["tokens"],
+                        "chats": _sorted(list(mnode["chats"].values())),
+                    }
+                )
+            result.append(
+                {
+                    "access_key": access_key,
+                    "requests": group["requests"],
+                    "total_tokens": group["tokens"],
+                    "models": _sorted(models),
+                }
+            )
+        return result
+
+    async def iter_events_for_csv(
+        self,
+        start: datetime | None,
+        end: datetime | None,
+        billable: bool | None = None,
+    ):
         """Yield every event row in the window (oldest first) for CSV streaming.
 
         Pulls in id-ordered pages so the full export never materializes in
         memory at once (C3). Per-user scoped like every other method here.
         """
-        scope = self._scope(start, end)
+        scope = self._scope(start, end, billable)
         page = 1000
         last_id = 0
         while True:
