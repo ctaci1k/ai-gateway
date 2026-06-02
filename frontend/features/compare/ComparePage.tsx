@@ -14,17 +14,9 @@ import { postManualSelection } from "@/services/preferencesApi";
 import { useAuth } from "@/store/AuthContext";
 import { useChats } from "@/store/ChatsContext";
 import { useI18n } from "@/store/LanguageContext";
+import { deriveChatTitle } from "@/utils/chatTitle";
 
 import { useCompare } from "./useCompare";
-
-// A new chat is titled after its first message (F3). Keep the sidebar label
-// tidy; the backend clamps to 255 chars anyway.
-const TITLE_MAX_LEN = 60;
-
-function deriveTitle(message: string): string {
-  const clean = message.trim().replace(/\s+/g, " ");
-  return clean.length > TITLE_MAX_LEN ? `${clean.slice(0, TITLE_MAX_LEN)}…` : clean;
-}
 
 export default function ComparePage() {
   const { t } = useI18n();
@@ -51,7 +43,7 @@ export default function ComparePage() {
     // F1/F3: the first message of a draft auto-creates a chat titled after it.
     let chatId = activeChatId;
     if (chatId === null) {
-      chatId = await createActiveChat(deriveTitle(text));
+      chatId = await createActiveChat(deriveChatTitle(text), "compare");
       if (chatId === null) return; // limit reached / error — notice is shown
     }
 

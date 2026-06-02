@@ -1,4 +1,12 @@
 // frontend/features/chat/ChatPage.tsx
+//
+// Single mode (PH24, D-17): Single chats are now saved, named chats. This page
+// renders:
+//   - the model picker when starting a new Single chat (no model chosen yet);
+//   - otherwise the thread — persisted turns from the active saved chat plus the
+//     in-flight (optimistic) turn while streaming — and the composer.
+// The model is fixed for the chat (header chip is read-only; MainHead handles
+// the "change model only in a new chat" hint). RAG file attachment stays (G1).
 
 "use client";
 
@@ -11,24 +19,50 @@ import MessageBubble from "@/components/chat/MessageBubble";
 import MessageList from "@/components/chat/MessageList";
 import MessageScroll from "@/components/chat/MessageScroll";
 import PromptInput from "@/components/chat/PromptInput";
+import SingleModelPicker from "@/components/chat/SingleModelPicker";
 import RagSources from "@/components/rag/RagSources";
-import { IconClose } from "@/components/icons/Icons";
 import { useAuth } from "@/store/AuthContext";
+import { useChats } from "@/store/ChatsContext";
 import { useComposer } from "@/store/ComposerContext";
 import { useI18n } from "@/store/LanguageContext";
+import type { Message } from "@/types/Message";
 
 export default function ChatPage() {
   const { t } = useI18n();
   const { refresh } = useAuth();
+  const { activeChatId, activeChat } = useChats();
+  const {
+    singleProvider,
+    loading,
+    sendMessage,
+    streamingMessage,
+    pendingUserMessage,
+    sources,
+    error,
+  } = useComposer();
   const [message, setMessage] = useState("");
   const [scrollSignal, setScrollSignal] = useState(0);
-  const { messages, loading, sendMessage, streamingMessage, sources, error, clear } = useComposer();
 
-  const isEmpty = messages.length === 0 && !loading && !streamingMessage;
-  const canClear = messages.length > 0 || streamingMessage !== "";
+  // Picker state: a new Single chat with no model chosen yet.
+  if (!singleProvider && activeChatId === null) {
+    return (
+      <ChatContainer>
+        <SingleModelPicker />
+      </ChatContainer>
+    );
+  }
 
-  // Resolve the structured composer error: a translation key wins, else the raw
-  // backend message, else a generic fallback (texts via t() — golden rule).
+  // Persisted turns from the active saved Single chat → user + assistant bubbles.
+  const savedTurns: Message[] =
+    activeChat && activeChat.id === activeChatId && activeChat.mode === "single"
+      ? activeChat.messages.flatMap((m) => [
+          { id: `u-${m.id}`, role: "user" as const, content: m.payload.user_message },
+          { id: `a-${m.id}`, role: "assistant" as const, content: m.payload.best_response },
+        ])
+      : [];
+
+  const isEmpty = savedTurns.length === 0 && !loading && pendingUserMessage === null;
+
   const errorText = error
     ? error.messageKey
       ? t(error.messageKey)
@@ -37,28 +71,13 @@ export default function ChatPage() {
 
   function submit() {
     if (!message.trim() || loading) return;
-    // Jump the feed to the newest message as the turn starts.
     setScrollSignal((n) => n + 1);
-    // Refresh quota usage once the turn finishes so the limit banner is live.
     void sendMessage(message).then(() => refresh());
     setMessage("");
   }
 
   return (
     <ChatContainer>
-      <div className="single-bar">
-        <button
-          type="button"
-          className="single-clear"
-          onClick={clear}
-          disabled={!canClear}
-          title={t("single.clear")}
-        >
-          <IconClose size={14} />
-          <span>{t("single.clear")}</span>
-        </button>
-      </div>
-
       {errorText && (
         <div className="chat-top">
           <ErrorBanner error={errorText} />
@@ -67,10 +86,14 @@ export default function ChatPage() {
 
       <MessageScroll scrollSignal={scrollSignal}>
         {isEmpty ? (
-          <div className="msgs-empty">{t("chat.empty")}</div>
+          <div className="msgs-empty">{t("single.threadEmpty")}</div>
         ) : (
           <>
-            <MessageList messages={messages} />
+            <MessageList messages={savedTurns} />
+            {/* In-flight turn (optimistic) while streaming. */}
+            {pendingUserMessage !== null && (
+              <MessageBubble role="user" content={pendingUserMessage} />
+            )}
             {streamingMessage && <MessageBubble role="assistant" content={streamingMessage} />}
             {sources.length > 0 && <RagSources sources={sources} />}
           </>

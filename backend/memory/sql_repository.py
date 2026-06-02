@@ -19,6 +19,10 @@ from db.models import Interaction, Preference
 from memory import preferences_logic
 from memory.repository import ChatRepository
 
+# Key under Preference.data holding the user's judge-prompt override (PH24, E2).
+# A generic JSON column avoids a dedicated migration. None/absent = built-in.
+JUDGE_PROMPT_KEY = "judge_prompt_override"
+
 
 def _load_prefs_dict(pref: "Preference") -> dict[str, Any]:
     # Deep-copy so mutations don't touch SQLAlchemy's change-detection snapshot
@@ -122,6 +126,25 @@ class SqlChatRepository(ChatRepository):
         async with session_scope() as session:
             pref = await self._get_preference(session)
             return dict(pref.data or preferences_logic.default_preferences())
+
+    async def get_judge_prompt_override(self) -> str | None:
+        """Return the user's custom judge prompt, or None for the built-in (E2)."""
+        async with session_scope() as session:
+            pref = await self._get_preference(session)
+            value = (pref.data or {}).get(JUDGE_PROMPT_KEY)
+            return value if isinstance(value, str) and value.strip() else None
+
+    async def set_judge_prompt_override(self, prompt: str | None) -> None:
+        """Persist (or clear, when None/blank) the judge-prompt override (E2)."""
+        async with session_scope() as session:
+            pref = await self._get_preference(session)
+            data = _load_prefs_dict(pref)
+            if prompt and prompt.strip():
+                data[JUDGE_PROMPT_KEY] = prompt
+            else:
+                data.pop(JUDGE_PROMPT_KEY, None)
+            pref.data = data
+            flag_modified(pref, "data")
 
     async def to_json(self) -> str:
         messages = await self.get_messages()

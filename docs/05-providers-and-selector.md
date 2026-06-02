@@ -98,6 +98,10 @@ ResponseSelector.select_best_response
    └─► будь-яка помилка → SelectorFallback
 ```
 
+### Per-user override промпта судді (PH24/D-17, E2)
+
+Користувач може редагувати **системний промпт судді** у Налаштуваннях. Override зберігається per-user (`Preference.data['judge_prompt_override']`); `routes/chat.py` читає його (лише коли `selector_enabled`) і передає вниз: `OrchestratorService.process_chat → ResponseSelector.select_best_response → SelectorPromptBuilder.build_selector_prompt(judge_prompt_override=…)`. Коли override заданий — він **замінює** вбудований шаблон `selector_judge` (рендериться `render_template_string` з тими самими `$placeholders`); інакше — типовий `prompts.yaml`. Обов'язкові плейсхолдери валідуються на збереженні (`/preferences/judge-prompt`, [03](03-api-contracts.md)). BYOK-суддя й override — **ортогональні** (можна мати і свій ключ судді, і свій промпт).
+
 ### Навчання судді на ручних виборах (PH16/E, D-11)
 
 Мета: ручний перевибір користувача має **реально зміщувати** суддю (для цього він і існує).

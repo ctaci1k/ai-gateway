@@ -143,7 +143,13 @@ class Interaction(Base):
 
 
 class Chat(Base):
-    """A saved Compare chat (PH9). Holds an ordered list of compare turns."""
+    """A saved chat (PH9 / PH24). Holds an ordered list of turns.
+
+    ``mode`` distinguishes a Single chat (one model, streamed turns) from a
+    Compare chat (multi-model + judge). Single chats became first-class saved
+    chats in PH24 (D-17, rewriting D-3). ``model`` is the responder slot a Single
+    chat is bound to (fixed at creation); NULL for Compare chats.
+    """
 
     __tablename__ = "chats"
 
@@ -152,6 +158,12 @@ class Chat(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     title: Mapped[str] = mapped_column(String(255))
+    # "compare" (legacy default) or "single". A Single chat is bound to one model.
+    mode: Mapped[str] = mapped_column(
+        String(16), default="compare", server_default="compare", nullable=False
+    )
+    # The responder slot for a Single chat (e.g. "groq"); NULL for Compare.
+    model: Mapped[str] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow

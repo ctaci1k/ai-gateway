@@ -7,7 +7,7 @@
 **Backend**
 - FastAPI-застосунок (`backend/main.py`) з CORS і роутером.
 - `POST /chat` — Compare: паралельні запити до `groq`/`cerebras`/`sambanova`, збір `all_responses`, метадані виконання.
-- `POST /chat/stream` — Single: стрімінг NDJSON від обраної моделі (groq/cerebras/sambanova); підтримує `rag_enabled` (термінальна подія `sources`); після стріму пише хід у rolling-історію (PH13).
+- `POST /chat/stream` — Single: стрімінг NDJSON від обраної моделі (groq/cerebras/sambanova); підтримує `rag_enabled` (термінальна подія `sources`); після стріму пише хід у rolling-історію (PH13) **і — якщо переданий `chat_id` — у збережений Single-чат** (`chat_messages`, PH24/D-17).
 - `POST /chat/structured` — структурований (JSON) вивід.
 - AI Selector: **Groq-суддя**, нейтральна модель `qwen/qwen3-32b` (не збігається з жодним відповідачем → без self-bias) + rule-based fallback. Перенесено з Gemini у PH13 через ліміт Gemini 20/добу (D-9); Gemini лишається для RAG-embeddings. Причина fallback (`fallback_reason`) і ручний перевибір тепер показуються правдиво й оборотні. Провайдер, що впав, показується окремою карткою з причиною (`failed_providers[].reason`: rate_limited/timeout/empty_response/unavailable).
 - Персоналізація: накопичення `user_preferences` + `personalization_profile`, трекінг ручних виборів.
@@ -36,12 +36,26 @@
 - **Конфіг через Pydantic Settings** (`core/config.py`) з `.env`: ключі провайдерів, CORS origins, ліміти, rate-limit, лог-рівень.
 - **Уніфіковані помилки** (`core/errors.py`): коректні статус-коди + тіло `{error:{code,message}}` (D-5); фронтенд обробляє через `services/apiClient.js` (`ApiError`).
 - **CORS** із явного списку origins (`.env`), без `*`+credentials.
-- **Single ефемерний** (D-3): `/chat/stream` нічого не пише в `ChatBuffer`.
+- ~~**Single ефемерний** (D-3)~~ — **переписано D-17 (PH24):** Single-чати тепер зберігаються як іменовані (`chats.mode='single'` + `chat_id` у `/chat/stream`). Rolling-`interactions` для персоналізації лишається.
 - **Хардкод URL** прибрано: фронтенд бере базовий URL з `NEXT_PUBLIC_API_URL`.
 - **Надійний селектор** (D-6): structured JSON output Gemini (`response_mime_type`), стійкий парсер `extract_json`, застосовані `SELECTOR_MAX_RETRIES/MIN_CONFIDENCE/TEMPERATURE/MAX_TOKENS`.
 - **Rate limiting** (per-IP, mutating-методи) + конфігуровані ліміти запиту (`MAX_MESSAGE_LENGTH`).
 - **Структуроване логування** (`core/logging.py`): запити, помилки провайдерів, рішення судді.
 - **Базові тести** (`backend/tests/`, pytest): ChatBuffer, rule-based selector, агрегація провайдерів, ретраї/мін-впевненість селектора, `extract_json`, API-кейси (помилки/rate-limit).
+
+## ✅ PH24 — редизайн «Classic Console» · Single-чати зберігаються · реальні Налаштування (D-17)
+
+> Велика візуальна переробка під референс **Classic Console** + функційні зміни. **Переписує D-3** (Single тепер зберігається). Деталі рішення — [10-open-decisions.md](10-open-decisions.md) (D-17).
+
+- **(A) Новий chrome.** Повноширинний топбар (`components/layout/Topbar`): бренд (sparkle-градієнт), тема moon/sun (`ThemeToggle` → `ThemeContext.toggleTheme`), мова-дропдаун (`LangMenu`), usage-пілюля (`UsagePill`), Settings/Admin icon-btn (Admin лише адмін), акаунт-дропдаун (`AccountMenu`). Акордеонний сайдбар (`Sidebar` + `AccordionSection`): два згортувані блоки **Single Models / Compare**, кожен з `+ New Chat` і вкладеною **History** (`utils/relativeTime` — «щойно/N хв/год/дн тому», без назв днів); картка творця (`CreatorCard`). Спільний a11y-дропдаун `components/common/Dropdown` (Esc/click-out/focus-trap). CSS — `theme/components.css` (секція «CLASSIC CONSOLE CHROME», мапінг на семантичні токени; нові `--soft`/`--softer`).
+- **(B) Single-персистентність (переписує D-3).** `chats` отримала `mode` ('single'|'compare', дефолт 'compare') + `model` (слот Single; NULL для Compare) — Alembic `0006`. `SavedChatRepository.list_chats(mode=…)`/`create_chat(mode,model)`; `routes/chats.py` приймає `?mode=` і `mode`/`model` у body. `/chat/stream` приймає `chat_id` і **персистить Single-хід** у `chat_messages` (rolling-`interactions` лишається). FE: `ChatsContext` mode-aware (`singleChats`/`compareChats`), `ComposerContext` — стрімінг-контролер + create-on-first; `ChatPage` рендерить збережені ходи Single + оптимістичний хід; `SingleModelPicker` (вибір моделі для нового чату); `MainHead` (чип моделі / тег режиму). Ліміт збережених чатів — спільний 25; request-квоти НЕ змінено.
+- **(C) Зміна моделі.** Фіксується при створенні; у наявному Single-чаті чип read-only → підказка (`single.modelLocked`), без діалогу/очищення (старий `ModelSwitcher`/ConfirmDialog видалено).
+- **(E) Реальні Налаштування.** `SettingsModal` (розділи): **Промпт судді** (`JudgePromptSection`) — редагування + «Скинути до типового» + показ типового; персист per-user у `Preference.data['judge_prompt_override']` (репозиторій `get/set_judge_prompt_override`); endpoints `GET/PUT /preferences/judge-prompt` (CSRF на PUT, валідація обов'язкових плейсхолдерів); `build_selector_prompt`/`ResponseSelector`/`OrchestratorService` приймають `judge_prompt_override`. **API-ключі** (`ApiKeysSection`) — наявний BYOK-функціонал (`KeysForm`, винесено з `KeysModal`, без дублювання).
+- **(F) Заглушки «в розробці».** `ComingSoonModal` — Профіль і Аватар, Безпека (меню акаунта), Звіти (топ-бар, для **всіх**).
+- **(G) Наявний функціонал.** RAG-attach (`ComposerTools`) у Single+Compare; ручний перевибір Compare, `SelectorBanner`, картки провайдерів/невдач — без змін; ліміти/usage → топ-пілюля (`UsagePill` на `useSidebarStatus`/`/auth/me`) + composer-notice (own-key rate-limit/quota); правдиві назви BYOK (PH23/A) і очищення ключів при logout (PH23/B) збережено (живуть у `KeysContext`).
+- **(H) Responsive/a11y.** Бургер-шухляда (focus-trap/Esc/close-on-nav); брейкпоінти 900/768/430; меню/Settings на всю ширину, picker 1 колонка, таргети ≥44px, focus-visible.
+- **Видалено (мертве):** `ModelSwitcher(+test)`, `TopbarModeContext`, `LimitBanner`, `KeysModal`/`KeysButton`/`KeysStatusBanner`, `ChatList`, `NewChatButton`, `ProfileCard`, `AuthorCard`, `ChatModeSelector(+test)`, `LanguageSwitcher`, `SidebarToggle`/`StatusSquares`/`SidebarSquare`.
+- **Гейти:** BE **142 passed** + ruff/black; FE tsc/eslint/prettier/vitest(**25**)/build зелені; i18n паритет uk/pl/en (+нові ключі chrome/settings/picker/history/usage/comingSoon).
 
 ## ✅ PH23 — правдиві назви BYOK · очищення ключів при виході · мобільна версія + згортання сайдбара (D-16)
 

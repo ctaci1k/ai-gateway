@@ -27,3 +27,26 @@ export async function postManualSelection({
   });
   return parseJsonResponse<ManualSelectionResult>(response);
 }
+
+// ---- Judge-prompt override (PH24, E2) ----
+
+export interface JudgePrompt {
+  // The user's custom judge prompt, or null when using the built-in default.
+  override: string | null;
+  // The built-in default template (read-only) shown in the editor / used to reset.
+  default: string;
+}
+
+export async function getJudgePrompt(): Promise<JudgePrompt> {
+  const response = await apiFetch("/preferences/judge-prompt");
+  return parseJsonResponse<JudgePrompt>(response);
+}
+
+// Save the override; pass null to reset to the built-in default.
+export async function putJudgePrompt(override: string | null): Promise<JudgePrompt> {
+  const response = await apiFetch("/preferences/judge-prompt", {
+    method: "PUT",
+    body: { override },
+  });
+  return parseJsonResponse<JudgePrompt>(response);
+}

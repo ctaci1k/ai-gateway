@@ -63,3 +63,27 @@ def render_prompt(name: str, **values) -> str:
     than raising.
     """
     return string.Template(get_prompt(name)).safe_substitute(**values)
+
+
+def render_template_string(template: str, **values) -> str:
+    """Render an arbitrary ``$placeholder`` template string (PH24, E2).
+
+    Used for a per-user judge-prompt override that is stored outside the YAML
+    file. Same ``safe_substitute`` semantics as :func:`render_prompt`.
+    """
+    return string.Template(template).safe_substitute(**values)
+
+
+# Placeholders a custom judge prompt MUST keep so the judge still sees the
+# question, the responses, and the allowed labels (PH24, E2). Validated on save.
+JUDGE_PROMPT_REQUIRED_PLACEHOLDERS = (
+    "$user_message",
+    "$responses_block",
+    "$allowed_models_inline",
+    "$scores_example",
+)
+
+
+def default_judge_prompt() -> str:
+    """The built-in judge prompt template shown as the editable default (E2)."""
+    return get_prompt("selector_judge")

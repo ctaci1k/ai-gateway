@@ -4,11 +4,9 @@
 
 import AdminPanel from "@/components/admin/AdminPanel";
 import AuthScreen from "@/components/auth/AuthScreen";
-import TopbarModeContext from "@/components/chat/TopbarModeContext";
-import Sidebar from "@/components/sidebar/Sidebar";
+import MainHead from "@/components/layout/MainHead";
 import ChatPage from "@/features/chat/ChatPage";
 import ComparePage from "@/features/compare/ComparePage";
-import ChatLayout from "@/layouts/ChatLayout";
 import MainLayout from "@/layouts/MainLayout";
 import { useAdminView } from "@/store/AdminViewContext";
 import { useAuth } from "@/store/AuthContext";
@@ -32,14 +30,17 @@ export default function Home() {
   const showAdmin = adminViewOpen && Boolean(user?.is_admin);
 
   return (
-    <MainLayout sidebar={<Sidebar />} topbarContext={showAdmin ? undefined : <TopbarModeContext />}>
+    <MainLayout>
       {showAdmin ? (
         <AdminPanel />
       ) : (
-        <ChatLayout>
-          {mode === "single" && <ChatPage />}
-          {mode === "compare" && <ComparePage />}
-        </ChatLayout>
+        <>
+          <MainHead />
+          <div className="cc-stage">
+            {mode === "single" && <ChatPage />}
+            {mode === "compare" && <ComparePage />}
+          </div>
+        </>
       )}
     </MainLayout>
   );

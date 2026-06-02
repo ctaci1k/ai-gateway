@@ -10,10 +10,12 @@ import { AdminViewProvider } from "@/store/AdminViewContext";
 import { AuthProvider } from "@/store/AuthContext";
 import { ChatModeProvider } from "@/store/ChatModeContext";
 import { ChatsProvider } from "@/store/ChatsContext";
+import { ComingSoonProvider } from "@/store/ComingSoonContext";
 import { ComposerProvider } from "@/store/ComposerContext";
 import { KeysProvider } from "@/store/KeysContext";
 import { LanguageProvider } from "@/store/LanguageContext";
 import { RagProvider } from "@/store/RagContext";
+import { SettingsProvider } from "@/store/SettingsContext";
 import { SidebarProvider } from "@/store/SidebarContext";
 import { ThemeProvider } from "@/store/ThemeContext";
 
@@ -54,15 +56,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <AuthProvider>
               <KeysProvider>
                 <AdminViewProvider>
-                  <ChatsProvider>
-                    <RagProvider>
-                      <ChatModeProvider>
-                        <ComposerProvider>
-                          <SidebarProvider>{children}</SidebarProvider>
-                        </ComposerProvider>
-                      </ChatModeProvider>
-                    </RagProvider>
-                  </ChatsProvider>
+                  <SettingsProvider>
+                    <ComingSoonProvider>
+                      <ChatsProvider>
+                        <RagProvider>
+                          <ChatModeProvider>
+                            <ComposerProvider>
+                              <SidebarProvider>{children}</SidebarProvider>
+                            </ComposerProvider>
+                          </ChatModeProvider>
+                        </RagProvider>
+                      </ChatsProvider>
+                    </ComingSoonProvider>
+                  </SettingsProvider>
                 </AdminViewProvider>
               </KeysProvider>
             </AuthProvider>

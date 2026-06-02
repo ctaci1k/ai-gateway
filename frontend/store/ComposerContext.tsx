@@ -1,27 +1,32 @@
 // frontend/store/ComposerContext.tsx
 //
-// Composer-level state shared across Single and Compare (PH13/PH16):
-//   - singleProvider: which responder Single streams from (B1).
-//   - the Single chat thread itself (messages / streaming / sources / loading /
-//     error + sendMessage / clear), lifted into the store so the topbar
-//     ModelSwitcher and ChatPage share one source of truth (PH16/A1). This lets
-//     a model switch confirm-and-clear a non-empty thread.
-// RAG is applied automatically whenever the user has uploaded documents
-// (derived from RagContext), so there is no manual toggle to store.
+// Single-mode streaming controller (PH13 → PH24/D-17). Owns:
+//   - singleProvider: the model the current Single chat is bound to. `null`
+//     means "no model chosen yet" → the model picker is shown (a new chat).
+//   - the in-flight turn (pending user message + streaming assistant text +
+//     sources + loading + error). The PERSISTED thread lives in the saved chat
+//     (ChatsContext.activeChat), mirroring Compare — Single chats are now
+//     first-class saved chats (D-17, rewriting D-3's ephemeral Single).
+//
+// sendMessage creates the saved chat on the first message (titled after it,
+// bound to singleProvider), streams the answer, persists the turn server-side
+// (chat_id) and reloads the saved thread. RAG is applied automatically whenever
+// the user has uploaded documents.
 
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 import { streamChat } from "@/services/chatApi";
+import { useChats } from "@/store/ChatsContext";
 import { useKeys } from "@/store/KeysContext";
 import { useRagDocuments } from "@/store/RagContext";
+import { deriveChatTitle } from "@/utils/chatTitle";
 import type { FailureReason, RagSource, StreamEvent } from "@/types/api";
-import type { Message } from "@/types/Message";
 
 // A composer error is rendered in the component layer, so it carries either a
-// translation key (preferred — e.g. the BYOK own-key rate-limit message) or a
-// raw backend message as a fallback. Keeps texts out of the store (golden rule).
+// translation key (preferred) or a raw backend message. Texts stay out of the
+// store (golden rule).
 export interface ComposerError {
   messageKey?: string;
   message?: string;
@@ -40,73 +45,86 @@ class StreamError extends Error {
 
 // Built-in responder models available for Single (mirrors the backend roster).
 export const SINGLE_PROVIDERS = ["groq", "cerebras", "sambanova"] as const;
-// A Single selection can also be a BYOK custom slot or the judge slot (NQ6),
-// so the selected provider is a plain string.
+// A Single selection can also be a BYOK custom slot or the judge slot (NQ6).
 export type SingleProvider = string;
 
 interface ComposerValue {
-  singleProvider: SingleProvider;
-  setSingleProvider: (provider: SingleProvider) => void;
-  // Single chat thread (lifted into the store, PH16/A1).
-  messages: Message[];
+  // The model the current/draft Single chat is bound to; null → pick a model.
+  singleProvider: SingleProvider | null;
+  // Choose a model (picker / opening a saved chat) and reset the in-flight turn.
+  openSingle: (provider: SingleProvider | null) => void;
   loading: boolean;
   streamingMessage: string;
+  // The user's message for the in-flight turn (optimistic), null when idle.
+  pendingUserMessage: string | null;
   sources: RagSource[];
   error: ComposerError | null;
-  // True while the thread has any visible content (a sent/streaming message).
-  hasSingleThread: boolean;
   sendMessage: (message: string) => Promise<void>;
-  clear: () => void;
 }
 
 const ComposerContext = createContext<ComposerValue | null>(null);
 
 export function ComposerProvider({ children }: { children: ReactNode }) {
-  const [singleProvider, setSingleProvider] = useState<SingleProvider>("groq");
+  const [singleProvider, setSingleProvider] = useState<SingleProvider | null>(null);
 
   // RAG is applied automatically whenever the user has any documents.
   const { documents } = useRagDocuments();
   const ragEnabled = documents.length > 0;
 
-  // BYOK transit overrides for the request (null when no own keys are active);
-  // byokModelId tells whether the chosen Single slot runs on the user's own key.
   const { byokPayload, byokModelId } = useKeys();
+  const { activeChatId, createActiveChat, reloadActive } = useChats();
 
-  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [sources, setSources] = useState<RagSource[]>([]);
   const [error, setError] = useState<ComposerError | null>(null);
 
-  // B2 / A1: clear only the visual thread. Rolling history in the DB is intact.
-  const clear = useCallback(() => {
-    setMessages([]);
+  // Switch the active Single model (or null → picker) and drop any in-flight
+  // turn. Used by the picker, opening a saved chat, and starting a new chat.
+  const openSingle = useCallback((provider: SingleProvider | null) => {
+    setSingleProvider(provider);
     setStreamingMessage("");
+    setPendingUserMessage(null);
     setSources([]);
     setError(null);
   }, []);
 
   const sendMessage = useCallback(
     async (message: string) => {
-      if (!message.trim()) {
+      const provider = singleProvider;
+      if (!message.trim() || !provider) {
         return;
       }
 
       setError(null);
       setSources([]);
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: message }]);
+      setPendingUserMessage(message);
       setLoading(true);
       setStreamingMessage("");
+
+      // First message of a draft creates the saved Single chat (titled after it,
+      // bound to the chosen model). Subsequent messages append to the same chat.
+      let chatId = activeChatId;
+      if (chatId === null) {
+        chatId = await createActiveChat(deriveChatTitle(message), "single", provider);
+        if (chatId === null) {
+          // Limit reached / error — the notice is shown by ChatsContext.
+          setLoading(false);
+          setPendingUserMessage(null);
+          return;
+        }
+      }
 
       try {
         const res = await streamChat({
           message,
-          provider: singleProvider,
+          provider,
           ragEnabled,
           byok: byokPayload(),
+          chatId,
         });
         const reader = res.body?.getReader();
-
         if (!reader) {
           throw new Error("No response stream");
         }
@@ -118,92 +136,84 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
+          if (done) break;
 
           buffer += decoder.decode(value);
           const lines = buffer.split("\n");
           buffer = lines.pop() ?? "";
 
           for (const line of lines) {
-            if (!line.trim()) {
-              continue;
-            }
-
+            if (!line.trim()) continue;
             let event: StreamEvent;
             try {
               event = JSON.parse(line) as StreamEvent;
             } catch {
               continue; // ignore malformed NDJSON lines
             }
-
             if (event.type === "token") {
               fullResponse += event.content;
               setStreamingMessage(fullResponse);
             } else if (event.type === "sources") {
               streamSources = event.sources;
             } else if (event.type === "error") {
-              // Surface a backend stream error (e.g. empty reasoning output),
-              // carrying its reason so the catch handler can localize a BYOK
-              // own-key rate-limit (PH18/8).
               throw new StreamError(event.content, event.reason ?? null);
             }
           }
         }
 
-        setMessages((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), role: "assistant", content: fullResponse },
-        ]);
-        setStreamingMessage("");
         setSources(streamSources);
+        // The turn is persisted server-side; reload the saved thread, then drop
+        // the optimistic in-flight turn (now rendered from the saved chat).
+        await reloadActive(chatId);
+        setPendingUserMessage(null);
+        setStreamingMessage("");
       } catch (err) {
-        // A provider rate-limit on the user's *own* key means their provider
-        // account is exhausted — a distinct, localized message from our quota
-        // (PH18/8, D-13). Everything else surfaces the raw backend message.
         const ownKeyRateLimited =
           err instanceof StreamError &&
           err.reason === "rate_limited" &&
-          byokModelId(singleProvider) !== null;
+          byokModelId(provider) !== null;
         if (ownKeyRateLimited) {
           setError({ messageKey: "errors.ownKeyRateLimited" });
         } else {
           setError({ message: err instanceof Error ? err.message : undefined });
         }
         setStreamingMessage("");
+        setPendingUserMessage(null);
       } finally {
         setLoading(false);
       }
     },
-    [singleProvider, ragEnabled, byokPayload, byokModelId],
+    [
+      singleProvider,
+      ragEnabled,
+      byokPayload,
+      byokModelId,
+      activeChatId,
+      createActiveChat,
+      reloadActive,
+    ],
   );
-
-  const hasSingleThread = messages.length > 0 || streamingMessage !== "";
 
   const value = useMemo<ComposerValue>(
     () => ({
       singleProvider,
-      setSingleProvider,
-      messages,
+      openSingle,
       loading,
       streamingMessage,
+      pendingUserMessage,
       sources,
       error,
-      hasSingleThread,
       sendMessage,
-      clear,
     }),
     [
       singleProvider,
-      messages,
+      openSingle,
       loading,
       streamingMessage,
+      pendingUserMessage,
       sources,
       error,
-      hasSingleThread,
       sendMessage,
-      clear,
     ],
   );
 

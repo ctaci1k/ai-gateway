@@ -4,22 +4,36 @@
 // apiClient (cookies + CSRF); components never call fetch directly.
 
 import { apiFetch, parseJsonResponse } from "@/services/apiClient";
-import type { ChatDetail, ChatSummary } from "@/types/api";
+import type { ChatDetail, ChatMode, ChatSummary } from "@/types/api";
 
 interface ChatListResponse {
   chats: ChatSummary[];
 }
 
-export async function listChats(): Promise<ChatSummary[]> {
-  const response = await apiFetch("/chats");
+// PH24: chats are mode-aware. `mode` filters the list to Single or Compare
+// chats; omit it to list all.
+export async function listChats(mode?: ChatMode): Promise<ChatSummary[]> {
+  const path = mode ? `/chats?mode=${mode}` : "/chats";
+  const response = await apiFetch(path);
   const data = await parseJsonResponse<ChatListResponse>(response);
   return data.chats;
 }
 
-export async function createChat(title?: string): Promise<ChatDetail> {
+export interface CreateChatParams {
+  title?: string;
+  mode?: ChatMode;
+  // The fixed responder slot for a Single chat (ignored for Compare).
+  model?: string | null;
+}
+
+export async function createChat({
+  title,
+  mode = "compare",
+  model = null,
+}: CreateChatParams = {}): Promise<ChatDetail> {
   const response = await apiFetch("/chats", {
     method: "POST",
-    body: { title: title ?? null },
+    body: { title: title ?? null, mode, model },
   });
   return parseJsonResponse<ChatDetail>(response);
 }

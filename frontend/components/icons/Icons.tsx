@@ -150,3 +150,78 @@ export const IconSparkle = (p: IconProps) => (
     <path d="M12 2.6c.62 4.6 2.18 6.18 6.8 6.8-4.62.62-6.18 2.18-6.8 6.8-.62-4.62-2.18-6.18-6.8-6.8 4.62-.62 6.18-2.2 6.8-6.8z" />
   </Ico>
 );
+
+// --- Classic Console chrome icons (PH24, ported from ent-icons.jsx) ---
+
+export const IconChevronRight = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M9 6l6 6-6 6" />
+  </Ico>
+);
+
+export const IconGear = (p: IconProps) => (
+  <Ico {...p}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" />
+  </Ico>
+);
+
+export const IconShield = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z" />
+  </Ico>
+);
+
+export const IconHistory = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M3 3v5h5" />
+    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+    <path d="M12 7v5l3 2" />
+  </Ico>
+);
+
+export const IconModels = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M12 2l3 3-3 3-3-3 3-3z" />
+    <path d="M5 9l3 3-3 3-3-3 3-3z" />
+    <path d="M19 9l3 3-3 3-3-3 3-3z" />
+    <path d="M12 16l3 3-3 3-3-3 3-3z" />
+  </Ico>
+);
+
+export const IconLogout = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="M16 17l5-5-5-5" />
+    <path d="M21 12H9" />
+  </Ico>
+);
+
+export const IconCode = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M16 18l6-6-6-6" />
+    <path d="M8 6l-6 6 6 6" />
+  </Ico>
+);
+
+export const IconReport = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M3 3v18h18" />
+    <rect x="7" y="11" width="3" height="6" rx="0.5" />
+    <rect x="12" y="7" width="3" height="10" rx="0.5" />
+    <rect x="17" y="13" width="3" height="4" rx="0.5" />
+  </Ico>
+);
+
+export const IconMoon = (p: IconProps) => (
+  <Ico {...p}>
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+  </Ico>
+);
+
+export const IconSun = (p: IconProps) => (
+  <Ico {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+  </Ico>
+);

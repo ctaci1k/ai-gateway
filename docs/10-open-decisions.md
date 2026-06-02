@@ -139,6 +139,19 @@
 - **(E) Повний responsive** під телефон (360/390/430px): без горизонтального скролу, Compare у 1 колонку, діалоги на всю ширину, таргети ≥44px.
 ↪ **Реалізовано (PH23, 2026-05-31):** усе вище в коді + тести (`store/KeysContext.test.ts` +6, усього 22 FE). Деталі — [08-current-state.md](08-current-state.md) (секція PH23); фронтенд — [06-frontend-architecture.md](06-frontend-architecture.md) (сайдбар: згортання/шухляда/статуси). Бекенд не змінювався. Гейти: FE tsc/eslint/prettier/vitest(22)/build.
 
+## D-17 ✅ Редизайн «Classic Console» + Single-чати зберігаються + реальні Налаштування (план 024)
+
+**Рішення (2026-06-02):** велика візуальна переробка під референс **«AI Gateway · Classic Console»** + функційні зміни. **Переписує D-3** (Single більше не «ефемерний як іменований чат») і уточнює D-1/D-9 (промпт судді).
+
+- **(Single-персистентність — переписує D-3)** Single-чати тепер **зберігаються** як іменовані (назва = текст 1-го повідомлення; **прив'язані до однієї моделі**, зафіксованої при створенні; окремий список історії). Таблиця `chats` отримала `mode` ('single'|'compare', дефолт 'compare' для легасі) і `model` (слот для Single; NULL для Compare) — Alembic `0006`. `/chat/stream` приймає `chat_id` і **персистить хід** у `chat_messages` (дзеркалить `/chat`). Уточнення PH13 (rolling-`interactions` для персоналізації) **лишається чинним**. Без `chat_id` Single нічого не зберігає у `chats` (іменований Single створюється явно через `POST /chats`).
+- **(Ліміти НЕ чіпали)** Request-квота лишається **сумарною** на Single+Compare (рішення власника 2). Ліміт **збережених** чатів (`SAVED_CHATS_LIMIT=25`) — **спільний** на обидва режими.
+- **(Зміна моделі)** Модель фіксується при створенні Single-чату; у наявному чаті клік по чипу показує підказку «змінити модель можна лише в новому чаті» — **без діалогу й без очищення** (прибрано теперішній ConfirmDialog-флоу `ModelSwitcher`).
+- **(Реальні Налаштування)** Екран Settings (модалка з розділами): **Промпт судді** — редагування системного промпта судді з «Скинути до типового» + показ типового; персист **per-user** у `Preference.data['judge_prompt_override']` (без міграції), бекенд застосовує при суддівстві (`build_selector_prompt` override); валідація обов'язкових плейсхолдерів. **API-ключі (BYOK)** — перенесено наявний функціонал (`KeysForm`, без дублювання логіки) у розділ Settings.
+- **(Заглушки «в розробці»)** Профіль і Аватар, Безпека (меню акаунта), Звіти (кнопка для **всіх**, у топ-барі) — спільна `ComingSoonModal`.
+- **(Chrome за enterprise-конвенцією)** Новий топбар (бренд, тема moon/sun, мова-дропдаун, usage-пілюля, Settings/Admin icon-btn, акаунт-дропдаун); акордеонний сайдбар (Single Models / Compare з New Chat + History, відносний час); картка творця. **BYOK → у Settings**; **ліміти/usage → топ-індикатор** + composer-notice; сайдбар чистий (замінює PH23-рейл/квадратики; мобільну бургер-шухляду збережено).
+- **(Увесь наявний функціонал лишився)** прикріплення файлів (RAG), ручний перевибір Compare, банер судді, картки провайдерів/невдач, правдиві назви BYOK (PH23/A), очищення ключів при logout (PH23/B).
+↪ **Реалізовано (PH24, 2026-06-02):** код + тести (BE `test_chats.py` мода/модель/Single-persist, `test_judge_prompt.py`; FE `utils/relativeTime.test.ts`). Деталі — [08-current-state.md](08-current-state.md) (секція PH24); контракти — [03-api-contracts.md](03-api-contracts.md) (chats `mode`, `/chat/stream chat_id`, `/preferences/judge-prompt`); дані — [04-data-models.md](04-data-models.md) (`chats.mode/model`, `judge_prompt_override`); суддя — [05-providers-and-selector.md](05-providers-and-selector.md) (override промпта); фронтенд — [06-frontend-architecture.md](06-frontend-architecture.md) (Classic Console chrome, Settings, історія Single).
+
 ## Нові підтверджені вимоги (від власника, 2026-05-29)
 
 Окрім днів 10–14, додано до обсягу:

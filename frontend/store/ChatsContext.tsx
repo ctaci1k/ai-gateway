@@ -1,8 +1,10 @@
 // frontend/store/ChatsContext.tsx
 //
-// Saved Compare chats state (PH9): the chat list, the active chat (with its
-// persisted turns), and CRUD actions. Components read/act through this context
-// instead of calling services directly.
+// Saved chats state (PH9 / PH24). Holds the chat list, the active chat (with its
+// persisted turns), and CRUD actions. PH24 (D-17): chats are mode-aware — Single
+// chats are now first-class saved chats alongside Compare. The list keeps all of
+// the user's chats; `singleChats` / `compareChats` are derived per mode. The
+// saved-chat limit (SAVED_CHATS_LIMIT) is shared across both modes.
 
 "use client";
 
@@ -18,14 +20,16 @@ import {
 
 import { createChat, deleteChat, getChat, listChats, renameChat } from "@/services/chatsApi";
 import { useAuth } from "@/store/AuthContext";
-import type { ChatDetail, ChatSummary } from "@/types/api";
+import type { ChatDetail, ChatMode, ChatSummary } from "@/types/api";
 
-// Mirrors the backend SAVED_CHATS_LIMIT (OD-3: 25); creation is also guarded
-// server-side (409), which we surface as an error if the limits ever diverge.
+// Mirrors the backend SAVED_CHATS_LIMIT (OD-3: 25), shared across Single +
+// Compare; creation is also guarded server-side (409).
 export const SAVED_CHATS_LIMIT = 25;
 
 interface ChatsValue {
   chats: ChatSummary[];
+  singleChats: ChatSummary[];
+  compareChats: ChatSummary[];
   activeChatId: number | null;
   activeChat: ChatDetail | null;
   loading: boolean;
@@ -36,11 +40,15 @@ interface ChatsValue {
   clearNotice: () => void;
   refresh: () => Promise<void>;
   selectChat: (id: number | null) => Promise<void>;
-  // F2: enter an empty local draft (no server persist until the first message).
+  // Enter an empty local draft (no server persist until the first message).
   newChat: () => Promise<void>;
-  // F1/F3: persist a chat titled after the first message; returns its id (or
-  // null when blocked by the limit / an error). Used by Compare on first send.
-  createActiveChat: (title: string) => Promise<number | null>;
+  // Persist a chat titled after the first message; returns its id (or null when
+  // blocked by the limit / an error). Used by both modes on first send.
+  createActiveChat: (
+    title: string,
+    mode?: ChatMode,
+    model?: string | null,
+  ) => Promise<number | null>;
   rename: (id: number, title: string) => Promise<void>;
   remove: (id: number) => Promise<void>;
   // Re-fetch a chat (defaults to the active one) plus the list after a turn.
@@ -76,8 +84,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Load chats once authenticated; reset everything on sign-out. State is set
-  // from async callbacks (not synchronously) to keep effects side-effect-only.
+  // Load chats once authenticated; reset everything on sign-out.
   useEffect(() => {
     let active = true;
     if (status === "authenticated") {
@@ -119,9 +126,9 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // F2: "+" opens an empty local draft — nothing is persisted until the first
-  // message (createActiveChat). Repeated "+" on an empty draft is a no-op. When
-  // the limit is reached we surface the notice instead of starting a draft.
+  // "New chat" opens an empty local draft — nothing is persisted until the first
+  // message (createActiveChat). When the shared limit is reached we surface the
+  // notice instead of starting a draft.
   const newChat = useCallback(async () => {
     setError(null);
     setNotice(null);
@@ -133,11 +140,14 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     setActiveChat(null);
   }, [chats]);
 
-  // F1/F3: on the first Compare message, persist a chat titled after it. The id
-  // is returned so the caller can run the turn against it without waiting for
-  // the activeChatId state to propagate.
+  // On the first message, persist a chat titled after it. The id is returned so
+  // the caller can run the turn against it without waiting for state to settle.
   const createActiveChat = useCallback(
-    async (title: string): Promise<number | null> => {
+    async (
+      title: string,
+      mode: ChatMode = "compare",
+      model: string | null = null,
+    ): Promise<number | null> => {
       setError(null);
       setNotice(null);
       if (chats.length >= SAVED_CHATS_LIMIT) {
@@ -145,7 +155,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         return null;
       }
       try {
-        const chat = await createChat(title);
+        const chat = await createChat({ title, mode, model });
         setChats((prev) => [chat, ...prev]);
         setActiveChatId(chat.id);
         setActiveChat(chat);
@@ -181,9 +191,9 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Re-fetch a chat (after a Compare turn is persisted) and refresh the list so
-  // title / ordering stay accurate. Defaults to the active chat, but accepts an
-  // explicit id for a just-created chat whose state hasn't propagated yet (F1).
+  // Re-fetch a chat (after a turn is persisted) and refresh the list so title /
+  // ordering stay accurate. Defaults to the active chat, but accepts an explicit
+  // id for a just-created chat whose state hasn't propagated yet.
   const reloadActive = useCallback(
     async (id?: number) => {
       const target = id ?? activeChatId;
@@ -198,9 +208,14 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     [activeChatId],
   );
 
+  const singleChats = useMemo(() => chats.filter((c) => c.mode === "single"), [chats]);
+  const compareChats = useMemo(() => chats.filter((c) => c.mode === "compare"), [chats]);
+
   const value = useMemo<ChatsValue>(
     () => ({
       chats,
+      singleChats,
+      compareChats,
       activeChatId,
       activeChat,
       loading,
@@ -218,6 +233,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     }),
     [
       chats,
+      singleChats,
+      compareChats,
       activeChatId,
       activeChat,
       loading,

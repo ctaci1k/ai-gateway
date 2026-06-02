@@ -11,6 +11,8 @@ export interface StreamChatParams {
   ragEnabled?: boolean;
   // Transit-only BYOK overrides (PH17); omitted when the user has no own keys.
   byok?: ByokPayload | null;
+  // PH24 (D-17): when set, the Single turn is persisted into this saved chat.
+  chatId?: number | null;
 }
 
 // Single mode: returns the streaming Response (NDJSON) for the caller to read.
@@ -19,10 +21,17 @@ export async function streamChat({
   provider,
   ragEnabled = false,
   byok = null,
+  chatId = null,
 }: StreamChatParams): Promise<Response> {
   const response = await apiFetch("/chat/stream", {
     method: "POST",
-    body: { message, provider, rag_enabled: ragEnabled, ...(byok ? { byok } : {}) },
+    body: {
+      message,
+      provider,
+      rag_enabled: ragEnabled,
+      ...(chatId != null ? { chat_id: chatId } : {}),
+      ...(byok ? { byok } : {}),
+    },
   });
   return ensureOk(response);
 }

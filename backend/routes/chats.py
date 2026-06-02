@@ -2,7 +2,9 @@
 """Saved Compare chats CRUD (PH9). All endpoints are per-user isolated;
 mutations require CSRF. Single mode stays ephemeral (D-3)."""
 
-from fastapi import APIRouter, Depends
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query
 
 from core.auth import current_user, require_csrf
 from core.logging import get_logger, log_event
@@ -23,8 +25,13 @@ logger = get_logger("chats")
 
 
 @router.get("", response_model=ChatListResponse)
-async def list_chats(user: User = Depends(current_user)):
-    chats = await SavedChatRepository(user.id).list_chats()
+async def list_chats(
+    user: User = Depends(current_user),
+    mode: Literal["single", "compare"] | None = Query(default=None),
+):
+    # PH24: the history lists are mode-aware (Single vs Compare); omitting `mode`
+    # returns all chats (back-compatible).
+    chats = await SavedChatRepository(user.id).list_chats(mode=mode)
     return ChatListResponse(chats=chats)
 
 
@@ -34,8 +41,12 @@ async def list_chats(user: User = Depends(current_user)):
     dependencies=[Depends(require_csrf)],
 )
 async def create_chat(payload: ChatCreateRequest, user: User = Depends(current_user)):
-    chat = await SavedChatRepository(user.id).create_chat(payload.title)
-    log_event(logger, "chat_created", user_id=user.id, chat_id=chat["id"])
+    chat = await SavedChatRepository(user.id).create_chat(
+        payload.title, mode=payload.mode, model=payload.model
+    )
+    log_event(
+        logger, "chat_created", user_id=user.id, chat_id=chat["id"], mode=payload.mode
+    )
     return ChatDetail(**chat)
 
 

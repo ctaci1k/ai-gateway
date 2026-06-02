@@ -1,60 +1,74 @@
 // frontend/components/sidebar/Sidebar.tsx
+//
+// Classic Console sidebar (PH24, A3): two collapsible groups — Single Models and
+// Compare — each with "+ New Chat" and a nested History list of that mode's
+// saved chats; a creator card is pinned at the bottom. Settings / Admin / theme
+// / language live in the topbar now, not here.
+//
+// Mobile (PH23, kept): the sidebar becomes an off-canvas drawer opened by the
+// topbar burger — focus-trapped, Esc-closable, and closed after navigation.
 
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import LimitBanner from "@/components/account/LimitBanner";
-import { IconGrid } from "@/components/icons/Icons";
-import KeysButton from "@/components/keys/KeysButton";
-import KeysModal from "@/components/keys/KeysModal";
-import KeysStatusBanner from "@/components/keys/KeysStatusBanner";
-import { useAdminView } from "@/store/AdminViewContext";
-import { useAuth } from "@/store/AuthContext";
+import { IconGrid, IconModels } from "@/components/icons/Icons";
 import { useChatMode } from "@/store/ChatModeContext";
 import { useChats } from "@/store/ChatsContext";
-import { useKeys } from "@/store/KeysContext";
+import { useComposer } from "@/store/ComposerContext";
 import { useI18n } from "@/store/LanguageContext";
 import { useSidebar } from "@/store/SidebarContext";
+import type { ChatSummary } from "@/types/api";
 
-import AuthorCard from "./AuthorCard";
-import ChatList from "./ChatList";
-import ChatModeSelector from "./ChatModeSelector";
-import LanguageSwitcher from "./LanguageSwitcher";
-import NewChatButton from "./NewChatButton";
-import ProfileCard from "./ProfileCard";
-import SidebarSquare from "./SidebarSquare";
-import SidebarToggle from "./SidebarToggle";
-import StatusSquares from "./StatusSquares";
+import AccordionSection from "./AccordionSection";
+import CreatorCard from "./CreatorCard";
 
-// Focusable elements inside the drawer, for the mobile focus trap.
 const FOCUSABLE =
   'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Refresh relative timestamps roughly every 30s without re-rendering on every
+// frame; cheap and keeps "N min ago" honest.
+const TICK_MS = 30_000;
+
 export default function Sidebar() {
-  const { mode } = useChatMode();
-  const { user } = useAuth();
-  const { open: openAdmin, isOpen: adminOpen } = useAdminView();
-  const { open: openKeys, isOpen: keysOpen } = useKeys();
-  const { activeChatId } = useChats();
-  const { collapsed, mobileOpen, closeMobile } = useSidebar();
   const { t } = useI18n();
-  // Saved chats are Compare-only (B5): Single has no saved-chats section.
-  const showSavedChats = mode === "compare";
+  const { mode, setMode } = useChatMode();
+  const {
+    singleChats,
+    compareChats,
+    activeChatId,
+    selectChat,
+    newChat,
+    loading,
+    error,
+    rename,
+    remove,
+    notice,
+  } = useChats();
+  const { openSingle } = useComposer();
+  const { mobileOpen, closeMobile } = useSidebar();
+
+  // Independent accordions (cc default: Single open, Compare collapsed); either
+  // can be expanded without closing the other.
+  const [singleOpen, setSingleOpen] = useState(true);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [histSingleOpen, setHistSingleOpen] = useState(true);
+  const [histCompareOpen, setHistCompareOpen] = useState(true);
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), TICK_MS);
+    return () => clearInterval(id);
+  }, []);
 
   const asideRef = useRef<HTMLElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
-  // Mobile drawer a11y (PH23/C3): trap Tab focus while open, Esc closes, and
-  // focus returns to the trigger on close. Only runs when the drawer is open
-  // (mobileOpen is set exclusively by the mobile burger).
+  // Mobile drawer a11y (PH23): trap Tab while open, Esc closes, restore focus.
   useEffect(() => {
     if (!mobileOpen) return undefined;
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
     const aside = asideRef.current;
-    // Only currently-visible controls (skip the desktop-only collapse button,
-    // which is display:none in the mobile drawer) — getClientRects() is empty
-    // for display:none, regardless of the fixed-positioned drawer.
     const focusables = () =>
       aside
         ? Array.from(aside.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
@@ -90,10 +104,7 @@ export default function Sidebar() {
     };
   }, [mobileOpen, closeMobile]);
 
-  // Close the drawer after the user navigates (picks a mode / chat / admin) or
-  // opens the BYOK modal — ChatGPT-style. Closing on keys-open also avoids two
-  // competing focus traps (drawer + modal). Skips the initial mount so opening
-  // the drawer doesn't immediately close it.
+  // Close the drawer after navigating (mode / chat changes).
   const firstNav = useRef(true);
   useEffect(() => {
     if (firstNav.current) {
@@ -101,56 +112,87 @@ export default function Sidebar() {
       return;
     }
     closeMobile();
-  }, [mode, activeChatId, adminOpen, keysOpen, closeMobile]);
+  }, [mode, activeChatId, closeMobile]);
 
-  const className = [
-    "sidebar",
-    collapsed ? "sidebar--collapsed" : "",
-    mobileOpen ? "sidebar--mobile-open" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  // --- handlers ---
+  function newSingle() {
+    setMode("single");
+    setSingleOpen(true);
+    void newChat(); // clears active chat → draft
+    openSingle(null); // → model picker
+  }
+
+  function newCompare() {
+    setMode("compare");
+    setCompareOpen(true);
+    void newChat();
+  }
+
+  function pickSingle(chat: ChatSummary) {
+    setMode("single");
+    void selectChat(chat.id);
+    openSingle(chat.model); // bind composer to this chat's fixed model
+  }
+
+  function pickCompare(chat: ChatSummary) {
+    setMode("compare");
+    void selectChat(chat.id);
+  }
+
+  const limitNotice = notice ? (
+    <div className="cc-newchat-notice" role="status">
+      {t(notice, { limit: 25 })}
+    </div>
+  ) : null;
+
+  const className = ["cc-side", mobileOpen ? "cc-side--mobile-open" : ""].filter(Boolean).join(" ");
 
   return (
     <aside ref={asideRef} className={className} aria-label={t("sidebar.label")}>
-      <SidebarToggle />
-      <ProfileCard />
-      <ChatModeSelector />
-      {showSavedChats && (
-        <>
-          <NewChatButton />
-          <ChatList />
-        </>
-      )}
-      <LanguageSwitcher />
-      {user?.is_admin && (
-        <button className="sidebar-admin" type="button" onClick={openAdmin}>
-          <IconGrid size={16} />
-          <span className="sb-label">{t("admin.nav")}</span>
-        </button>
-      )}
-
-      {/* Status: full banners (expanded) + compact squares (collapsed rail) —
-          both from the single source useSidebarStatus (D1). */}
-      <KeysStatusBanner />
-      <LimitBanner />
-      <StatusSquares />
-
-      <KeysButton />
-      <div className="rail-only">
-        <SidebarSquare tone="neutral" label={t("keys.trigger")} onClick={openKeys}>
-          {t("keys.shortLabel")}
-        </SidebarSquare>
+      <div className="cc-side-scroll thin-scroll">
+        <AccordionSection
+          icon={<IconModels size={17} />}
+          label={t("sidebar.singleTitle")}
+          sub={t("sidebar.singleSub")}
+          open={singleOpen}
+          onToggle={() => setSingleOpen((o) => !o)}
+          newChatLabel={t("chat.new")}
+          onNewChat={newSingle}
+          chats={singleChats}
+          activeChatId={mode === "single" ? activeChatId : null}
+          loading={loading}
+          error={error}
+          histOpen={histSingleOpen}
+          onHistToggle={() => setHistSingleOpen((o) => !o)}
+          nowMs={nowMs}
+          notice={mode === "single" ? limitNotice : null}
+          onPickChat={pickSingle}
+          onRename={rename}
+          onRemove={remove}
+        />
+        <AccordionSection
+          icon={<IconGrid size={17} />}
+          label={t("sidebar.compareTitle")}
+          sub={t("sidebar.compareSub")}
+          open={compareOpen}
+          onToggle={() => setCompareOpen((o) => !o)}
+          newChatLabel={t("chat.new")}
+          onNewChat={newCompare}
+          chats={compareChats}
+          activeChatId={mode === "compare" ? activeChatId : null}
+          loading={loading}
+          error={error}
+          histOpen={histCompareOpen}
+          onHistToggle={() => setHistCompareOpen((o) => !o)}
+          nowMs={nowMs}
+          notice={mode === "compare" ? limitNotice : null}
+          onPickChat={pickCompare}
+          onRename={rename}
+          onRemove={remove}
+        />
       </div>
 
-      <AuthorCard />
-      <div className="rail-only">
-        <SidebarSquare tone="neutral" label={t("author.name")}>
-          {t("author.initials")}
-        </SidebarSquare>
-      </div>
-
-      <KeysModal />
+      <CreatorCard />
     </aside>
   );
 }

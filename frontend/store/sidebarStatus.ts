@@ -37,10 +37,10 @@ export function useSidebarStatus(): SidebarStatus {
   const { user } = useAuth();
 
   let byok: ByokStatus = null;
-  if (mode === "single") {
+  if (mode === "single" && singleProvider) {
     const onOwnKey = singleProvider === JUDGE_SLOT ? judgeActive : isOwnKey(singleProvider);
     if (onOwnKey) byok = { tone: "ok", kind: "single", model: byokModelId(singleProvider) ?? "" };
-  } else if (byokPayload() !== null) {
+  } else if (mode === "compare" && byokPayload() !== null) {
     // Compare: green only when every participant (responders + judge) is own-key.
     const customSlots = activeResponders.filter((r) => r.custom).map((r) => r.slot);
     const slots = [...DEFAULT_RESPONDER_SLOTS, ...customSlots];

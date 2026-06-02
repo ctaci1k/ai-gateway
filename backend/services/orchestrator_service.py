@@ -18,6 +18,7 @@ class OrchestratorService:
         providers_map: dict | None = None,
         judge_provider=None,
         judge_label: dict | None = None,
+        judge_prompt_override: str | None = None,
     ):
 
         if personalization_profile is None:
@@ -92,6 +93,7 @@ class OrchestratorService:
                 personalization_profile=(personalization_profile),
                 judge_provider=judge_provider,
                 judge_label=judge_label,
+                judge_prompt_override=judge_prompt_override,
             )
 
             selected_model = selector_result.get("selected_model")

@@ -52,6 +52,7 @@ class ResponseSelector:
         personalization_profile: dict | None = None,
         judge_provider=None,
         judge_label: dict | None = None,
+        judge_prompt_override: str | None = None,
     ):
         personalization_context = ResponseSelector.build_personalization_context(
             personalization_profile or {}
@@ -72,6 +73,7 @@ class ResponseSelector:
             user_message=user_message,
             responses=responses,
             personalization_context=personalization_context,
+            judge_prompt_override=judge_prompt_override,
         )
 
         # Retry the judge on transient failures / unparseable output (D-6).

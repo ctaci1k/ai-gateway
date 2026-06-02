@@ -268,5 +268,83 @@ def test_single_stream_does_not_create_chats(auth_client):
         json={"message": "hello", "provider": "groq"},
         headers=headers,
     )
-    # D-3: Single mode never creates a saved chat.
+    # Without a chat_id, Single mode never creates a saved chat (D-17 keeps this:
+    # a saved Single chat is created explicitly via POST /chats first).
     assert client.get("/chats").json()["chats"] == []
+
+
+def test_create_single_chat_carries_mode_and_model(auth_client):
+    client, headers = auth_client
+    resp = client.post(
+        "/chats",
+        json={"title": "ask groq", "mode": "single", "model": "groq"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["mode"] == "single"
+    assert body["model"] == "groq"
+    # A Compare chat keeps mode=compare and a null model by default.
+    cmp = client.post("/chats", json={"title": "cmp"}, headers=headers).json()
+    assert cmp["mode"] == "compare"
+    assert cmp["model"] is None
+
+
+def test_list_chats_mode_filter(auth_client):
+    client, headers = auth_client
+    client.post(
+        "/chats",
+        json={"title": "s1", "mode": "single", "model": "groq"},
+        headers=headers,
+    )
+    client.post("/chats", json={"title": "c1", "mode": "compare"}, headers=headers)
+
+    singles = client.get("/chats?mode=single").json()["chats"]
+    assert [c["title"] for c in singles] == ["s1"]
+    assert singles[0]["model"] == "groq"
+
+    compares = client.get("/chats?mode=compare").json()["chats"]
+    assert [c["title"] for c in compares] == ["c1"]
+
+    # No filter → both chats.
+    assert len(client.get("/chats").json()["chats"]) == 2
+
+
+def test_single_stream_persists_into_named_chat(auth_client, monkeypatch):
+    """D-17 (PH24): a Single turn is appended to the active saved Single chat,
+    mirroring Compare's chat_id persistence."""
+    from services.provider_service import ProviderService
+
+    async def _fake_stream(message, provider_name, provider=None):
+        yield {"type": "token", "content": "hello ", "model": "m", "provider": "groq"}
+        yield {"type": "token", "content": "world", "model": "m", "provider": "groq"}
+
+    monkeypatch.setattr(ProviderService, "generate_stream", staticmethod(_fake_stream))
+
+    chat_id = client_single_chat(auth_client)
+    client, headers = auth_client
+
+    resp = client.post(
+        "/chat/stream",
+        json={"message": "hi there", "provider": "groq", "chat_id": chat_id},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    # Drain the streamed body so the generator's persistence tail runs.
+    _ = resp.text
+
+    detail = client.get(f"/chats/{chat_id}").json()
+    assert detail["message_count"] == 1
+    turn = detail["messages"][0]["payload"]
+    assert turn["user_message"] == "hi there"
+    assert turn["best_response"] == "hello world"
+    assert turn["compare_mode"] is False
+
+
+def client_single_chat(auth_client) -> int:
+    client, headers = auth_client
+    return client.post(
+        "/chats",
+        json={"title": "single", "mode": "single", "model": "groq"},
+        headers=headers,
+    ).json()["id"]

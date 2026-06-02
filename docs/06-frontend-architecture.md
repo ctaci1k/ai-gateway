@@ -50,13 +50,17 @@ frontend/
 - `useCompare`: `POST /chat` з `providers:["groq","cerebras","sambanova"]`, `selectorEnabled:true`; розкладає `all_responses` у колонки з оцінками/часом.
 - API base URL **захардкоджено** у сервісах (`http://127.0.0.1:8000`).
 
-## Сайдбар: згортання + мобільна шухляда + статуси (PH23)
+## Chrome «Classic Console» (PH24/D-17)
 
-- **`SidebarContext`** (`store/SidebarContext.tsx`): `collapsed` (desktop-рейл, персист `localStorage`, SSR-safe гідрація) + `mobileOpen` (ефемерна шухляда). Дії: `toggleCollapsed`/`openMobile`/`closeMobile`.
-- **Desktop-рейл — через CSS** (`@media(min-width:769px) .sidebar--collapsed`): ховає текст/банери, показує `.rail-only` квадратики; **немає дубльованого JSX** — той самий `Sidebar` рендериться в усіх трьох станах (full / rail / mobile drawer), станами керує CSS.
-- **Mobile-шухляда** (`@media(max-width:768px)`): бургер у `MainLayout` (`openMobile`), `.sidebar` як off-canvas + backdrop; a11y — focus-trap (лише видимі focusables), Esc, close-on-nav (зміна mode/chat/admin/keys).
-- **Єдине джерело статусів** — `store/sidebarStatus.ts::useSidebarStatus()` (`byok` ok/warn + `limited`); і повні банери (`KeysStatusBanner`/`LimitBanner`), і компактні квадратики (`StatusSquares`/`SidebarSquare`) читають **його** — без дублювання логіки. Кольори лише через токени (`--success`/`--danger`); кожен квадратик має tooltip + `aria-label`.
-- **Responsive:** Compare reflow у 1 колонку (`.modal-grid`), діалоги на всю ширину (bottom-sheet), таргети ≥44px, `overflow-wrap:anywhere` для довгих BYOK-`model_id`; явний `viewport` у `app/layout.tsx`.
+Редизайн під референс `design-reference/classic-console/`. Структура — повноширинний топбар над рядком сайдбар+контент (`layouts/MainLayout` → `.cc-root` → `Topbar` + `.cc-body`(`Sidebar` + `.cc-main`)).
+
+- **Топбар** (`components/layout/Topbar`): бренд; тема moon/sun (`components/topbar/ThemeToggle` → `ThemeContext.toggleTheme`); мова-дропдаун (`LangMenu`); usage-пілюля (`UsagePill` — `X/N` + popover лишку хв/день/скид + own-key, на `useSidebarStatus`+`/auth/me`); Settings/Admin icon-btn (Admin лише адмін); акаунт-дропдаун (`AccountMenu`: профіль/налаштування/безпека/вихід); бургер (mobile).
+- **Дропдауни** — спільний a11y `components/common/Dropdown` (відкриття/Esc/click-out/focus-trap, `role="menu"`).
+- **Сайдбар** (`components/sidebar/Sidebar` + `AccordionSection`): два незалежні акордеони **Single Models / Compare**, кожен з `+ New Chat` і вкладеною **History** (рядки: назва + відносний час через `utils/relativeTime`, активний підсвічений, inline rename/delete); `CreatorCard` унизу. Mobile — off-canvas шухляда (`SidebarContext`, focus-trap/Esc/close-on-nav, backdrop у `MainLayout`).
+- **Налаштування** (`components/settings/SettingsModal`, стан `store/SettingsContext`): розділи **Промпт судді** (`JudgePromptSection`, `services/preferencesApi.getJudgePrompt/putJudgePrompt`) і **API-ключі** (`ApiKeysSection` → `KeysForm`, винесено з `KeysModal`). Заглушки — `components/common/ComingSoonModal` (стан `ComingSoonContext`): Профіль/Безпека/Звіти.
+- **Стан чатів** — `ChatsContext` mode-aware (`singleChats`/`compareChats`, спільний ліміт 25); `ComposerContext` — стрімінг-контролер Single + create-on-first (`utils/chatTitle`); `ChatPage` рендерить збережені Single-ходи + оптимістичний хід або `SingleModelPicker`; `MainHead` — чип моделі (fixed-at-creation, підказка) / тег режиму.
+- **Збережено з PH23:** mobile-шухляда (адаптована), `useSidebarStatus` (→ топ-індикатор), очищення BYOK-ключів при logout (`KeysContext`), правдиві назви BYOK.
+- **Responsive (`theme/components.css`, секція Classic Console):** 900 (ховає підзаголовок), 768 (бургер+шухляда, меню/Settings на всю ширину, picker 1 колонка), 430 (ховає usage-пілюлю); таргети ≥44px, focus-visible.
 
 ## Golden Rules (обов'язкові)
 

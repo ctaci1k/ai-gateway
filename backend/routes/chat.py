@@ -79,6 +79,14 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
         rag_sources = await RagService.retrieve(user.id, request.message)
         rag_context = RagService.build_context(rag_sources) if rag_sources else None
 
+    # Per-user judge-prompt override (PH24, E2): when set, it replaces the
+    # built-in judge instructions; only relevant when the selector runs.
+    judge_prompt_override = (
+        await repository.get_judge_prompt_override()
+        if request.selector_enabled
+        else None
+    )
+
     result = await OrchestratorService.process_chat(
         message=request.message,
         provider_names=provider_names,
@@ -89,6 +97,7 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
         providers_map=providers_map,
         judge_provider=judge_provider,
         judge_label=judge_label,
+        judge_prompt_override=judge_prompt_override,
     )
 
     selector_metadata = result["selector_metadata"]
@@ -285,10 +294,10 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                 + "\n"
             )
 
-        # Persist the completed Single turn to rolling history only (PH13/B3,
-        # refines D-3): the visual thread is ephemeral, but the turn is recorded
-        # in the DB for personalization. This never creates a saved (Compare)
-        # chat — SavedChatRepository is intentionally untouched here.
+        # Persist the completed Single turn. Always recorded in rolling history
+        # for personalization (PH13/B3). PH24 (D-17): when a saved Single chat is
+        # active (chat_id set), the turn is ALSO appended to that named chat —
+        # Single chats are now first-class saved chats, mirroring Compare.
         full_text = "".join(parts).strip()
         if completed and full_text:
             single_response = {
@@ -297,7 +306,7 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                 "provider": request.provider,
                 "success": True,
             }
-            await repository.add_message(
+            interaction = dict(
                 user_message=request.message,
                 best_response=full_text,
                 selected_model=request.provider,
@@ -305,6 +314,24 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                 selector_used=False,
                 compare_mode=False,
             )
+            await repository.add_message(**interaction)
+
+            # Append to the saved Single chat when one is active. Wrapped so a
+            # foreign/stale chat_id can't break the already-delivered stream tail
+            # (the FE always creates+owns the chat before streaming).
+            if request.chat_id is not None:
+                try:
+                    record = preferences_logic.build_interaction_record(**interaction)
+                    await SavedChatRepository(user.id).add_message(
+                        request.chat_id, record
+                    )
+                except Exception as error:  # noqa: BLE001
+                    log_event(
+                        logger,
+                        "single_chat_persist_failed",
+                        chat_id=request.chat_id,
+                        error=str(error),
+                    )
 
         # Append-only usage audit + quota source of truth (PH15, D-10). The
         # streaming SDK path doesn't report token usage, so total_tokens is None.

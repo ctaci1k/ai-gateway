@@ -30,6 +30,8 @@ def _summary(chat: Chat, message_count: int) -> dict[str, Any]:
     return {
         "id": chat.id,
         "title": chat.title,
+        "mode": chat.mode,
+        "model": chat.model,
         "created_at": chat.created_at,
         "updated_at": chat.updated_at,
         "message_count": message_count,
@@ -62,14 +64,17 @@ class SavedChatRepository:
             raise NotFoundError("Chat not found")
         return chat
 
-    async def list_chats(self) -> list[dict[str, Any]]:
+    async def list_chats(self, mode: str | None = None) -> list[dict[str, Any]]:
+        """List the user's saved chats, newest first. ``mode`` filters to
+        Single ("single") or Compare ("compare") chats (PH24); None = all."""
         async with session_scope() as session:
+            query = select(Chat).where(Chat.user_id == self._user_id)
+            if mode is not None:
+                query = query.where(Chat.mode == mode)
             chats = (
                 (
                     await session.execute(
-                        select(Chat)
-                        .where(Chat.user_id == self._user_id)
-                        .order_by(Chat.updated_at.desc(), Chat.id.desc())
+                        query.order_by(Chat.updated_at.desc(), Chat.id.desc())
                     )
                 )
                 .scalars()
@@ -87,7 +92,14 @@ class SavedChatRepository:
             )
             return [_summary(c, counts.get(c.id, 0)) for c in chats]
 
-    async def create_chat(self, title: str | None = None) -> dict[str, Any]:
+    async def create_chat(
+        self,
+        title: str | None = None,
+        mode: str = "compare",
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        # The saved-chat limit is shared across Single + Compare (PH24): it caps
+        # total stored chats per user, not per mode. Request quotas are untouched.
         limit = get_settings().saved_chats_limit
         async with session_scope() as session:
             count = await session.scalar(
@@ -96,7 +108,12 @@ class SavedChatRepository:
             if count is not None and count >= limit:
                 raise ConflictError(f"Saved-chat limit reached (max {limit})")
 
-            chat = Chat(user_id=self._user_id, title=_clean_title(title))
+            chat = Chat(
+                user_id=self._user_id,
+                title=_clean_title(title),
+                mode=mode,
+                model=model if mode == "single" else None,
+            )
             session.add(chat)
             await session.flush()
             return {**_summary(chat, 0), "messages": []}

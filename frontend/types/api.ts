@@ -131,9 +131,15 @@ export interface ChatMessageRecord {
   payload: SavedInteraction;
 }
 
+// PH24 (D-17): chats carry a mode; Single chats are bound to one model.
+export type ChatMode = "single" | "compare";
+
 export interface ChatSummary {
   id: number;
   title: string;
+  mode: ChatMode;
+  // The responder slot for a Single chat (fixed at creation); null for Compare.
+  model: string | null;
   created_at: string;
   updated_at: string;
   message_count: number;

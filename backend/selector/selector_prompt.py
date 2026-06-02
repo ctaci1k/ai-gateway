@@ -3,7 +3,7 @@
 import hashlib
 import json
 
-from core.prompts import render_prompt
+from core.prompts import render_prompt, render_template_string
 
 
 class SelectorPromptBuilder:
@@ -61,7 +61,10 @@ class SelectorPromptBuilder:
 
     @staticmethod
     def build_selector_prompt(
-        user_message: str, responses: dict, personalization_context: dict | None = None
+        user_message: str,
+        responses: dict,
+        personalization_context: dict | None = None,
+        judge_prompt_override: str | None = None,
     ) -> tuple[str, dict[str, str]]:
         """Build the judge prompt and the label→slot map.
 
@@ -69,6 +72,10 @@ class SelectorPromptBuilder:
         so the judge cannot favour a known model name and CAN score/pick any
         participant, including custom BYOK slots (PH22). The caller maps the
         judge's verdict back to real slots via the returned map.
+
+        When ``judge_prompt_override`` is set (PH24, E2) it replaces the built-in
+        ``selector_judge`` template; the same ``$placeholders`` are substituted,
+        so an override that keeps them behaves identically structurally.
         """
 
         if personalization_context is None:
@@ -118,14 +125,17 @@ class SelectorPromptBuilder:
                 ),
             )
 
-        prompt = render_prompt(
-            "selector_judge",
+        render_values = dict(
             user_message=user_message,
             responses_block=responses_block,
             personalization_block=personalization_block,
             allowed_models_inline=allowed_models_inline,
             scores_example=scores_example,
         )
+        if judge_prompt_override:
+            prompt = render_template_string(judge_prompt_override, **render_values)
+        else:
+            prompt = render_prompt("selector_judge", **render_values)
         return prompt, label_to_slot
 
     @staticmethod
