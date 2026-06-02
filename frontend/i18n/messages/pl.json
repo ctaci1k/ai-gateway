@@ -143,6 +143,7 @@
   "keys.modelId": "ID modelu",
   "keys.baseUrlSelect": "Base URL (endpoint)",
   "keys.baseUrlChoose": "Wybierz endpoint…",
+  "keys.endpointDefault": "Endpoint domyślny",
   "keys.clear": "Wyczyść",
   "keys.incompleteBuiltin": "Wpisz klucz API i ID modelu albo naciśnij Wyczyść.",
   "keys.incompleteCustom": "Wybierz endpoint oraz wpisz klucz API i ID modelu.",

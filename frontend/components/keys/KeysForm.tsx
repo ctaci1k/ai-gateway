@@ -35,11 +35,13 @@ function cloneState(state: KeysState): KeysState {
   };
 }
 
-// A built-in slot (judge / default) is half-filled: exactly one of key/model set.
-function builtinIncomplete(apiKey: string, modelId: string): boolean {
-  const k = apiKey.trim() !== "";
-  const m = modelId.trim() !== "";
-  return (k || m) && !(k && m);
+// A built-in slot (judge / default) is half-filled: something is set (incl. a
+// base-URL override) but key+model aren't both present. Base URL is optional
+// here — empty means the built-in endpoint — so it doesn't count toward "complete".
+function builtinIncomplete(baseUrl: string, apiKey: string, modelId: string): boolean {
+  const filled = baseUrl.trim() !== "" || apiKey.trim() !== "" || modelId.trim() !== "";
+  const complete = apiKey.trim() !== "" && modelId.trim() !== "";
+  return filled && !complete;
 }
 
 // A custom slot is partially filled: something set, but not all of base+key+model.
@@ -112,7 +114,7 @@ export default function KeysForm() {
     });
   }, []);
 
-  const updateJudge = useCallback((field: "apiKey" | "modelId", value: string) => {
+  const updateJudge = useCallback((field: "apiKey" | "modelId" | "baseUrl", value: string) => {
     setSaved(false);
     setDraft((d) => ({ ...d, judge: { ...d.judge, [field]: value, active: false } }));
   }, []);
@@ -232,7 +234,7 @@ export default function KeysForm() {
       </ul>
 
       <div className="keys-rows">
-        {/* Judge row (built-in: no base URL, Clear resets to built-in) */}
+        {/* Judge row (built-in: optional base-URL override, Clear → built-in) */}
         <div className="keys-row">
           <div className="keys-row-head">
             <span className="keys-slot">{t("keys.judge")}</span>
@@ -246,6 +248,14 @@ export default function KeysForm() {
             </div>
           </div>
           <div className="keys-fields">
+            <BaseUrlSelect
+              id="keys-judge-baseurl"
+              label={t("keys.baseUrlSelect")}
+              value={draft.judge.baseUrl}
+              placeholder={t("keys.endpointDefault")}
+              info={baseUrlInfo}
+              onChange={(v) => updateJudge("baseUrl", v)}
+            />
             <div className="keys-field">
               <span className="keys-field-label">
                 <label htmlFor="keys-judge-key">{t("keys.apiKey")}</label>
@@ -277,7 +287,7 @@ export default function KeysForm() {
               />
             </div>
           </div>
-          {builtinIncomplete(draft.judge.apiKey, draft.judge.modelId) && (
+          {builtinIncomplete(draft.judge.baseUrl, draft.judge.apiKey, draft.judge.modelId) && (
             <p className="keys-hint">{t("keys.incompleteBuiltin")}</p>
           )}
           {judgeResult && !judgeResult.ok && <p className="keys-error">{t("keys.keyFailed")}</p>}
@@ -293,7 +303,7 @@ export default function KeysForm() {
             : t("keys.responderSlot", { n: defaultSlots.indexOf(r.slot) + 1 });
           const incomplete = r.custom
             ? customIncomplete(r.baseUrl, r.apiKey, r.modelId)
-            : builtinIncomplete(r.apiKey, r.modelId);
+            : builtinIncomplete(r.baseUrl, r.apiKey, r.modelId);
           return (
             <div className="keys-row" key={r.slot}>
               <div className="keys-row-head">
@@ -322,15 +332,16 @@ export default function KeysForm() {
                 )}
               </div>
               <div className="keys-fields">
-                {r.custom && (
-                  <BaseUrlSelect
-                    id={`keys-${r.slot}-baseurl`}
-                    label={t("keys.baseUrlSelect")}
-                    value={r.baseUrl}
-                    info={baseUrlInfo}
-                    onChange={(v) => updateResponder(index, "baseUrl", v)}
-                  />
-                )}
+                <BaseUrlSelect
+                  id={`keys-${r.slot}-baseurl`}
+                  label={t("keys.baseUrlSelect")}
+                  value={r.baseUrl}
+                  // Default slots: optional override, empty = built-in endpoint.
+                  // Custom slots: an endpoint must be chosen.
+                  placeholder={r.custom ? t("keys.baseUrlChoose") : t("keys.endpointDefault")}
+                  info={baseUrlInfo}
+                  onChange={(v) => updateResponder(index, "baseUrl", v)}
+                />
                 <div className="keys-field">
                   <span className="keys-field-label">
                     <label htmlFor={`keys-${r.slot}-key`}>{t("keys.apiKey")}</label>

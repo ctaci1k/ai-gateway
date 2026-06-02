@@ -143,6 +143,7 @@
   "keys.modelId": "ID моделі",
   "keys.baseUrlSelect": "Base URL (ендпоінт)",
   "keys.baseUrlChoose": "Оберіть ендпоінт…",
+  "keys.endpointDefault": "Типовий ендпоінт",
   "keys.clear": "Очистити",
   "keys.incompleteBuiltin": "Впишіть і API-ключ, і ID моделі, або натисніть «Очистити».",
   "keys.incompleteCustom": "Оберіть ендпоінт і впишіть API-ключ та ID моделі.",

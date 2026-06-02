@@ -138,13 +138,14 @@ export function buildPersistedState(
             active: bySlot[r.slot]?.ok ?? false,
           };
         }
-        // Built-in default slot: complete → keep (endpoint stays built-in, no
-        // override); incomplete → blank back to the built-in.
+        // Built-in default slot: complete (key+model) → keep, preserving any
+        // base-URL override (empty = built-in endpoint); incomplete → blank back
+        // to the built-in (a base-URL-only row never sticks).
         const complete = r.apiKey.trim() !== "" && r.modelId.trim() !== "";
         return complete
           ? {
               slot: r.slot,
-              baseUrl: "",
+              baseUrl: r.baseUrl.trim(),
               apiKey: r.apiKey.trim(),
               modelId: r.modelId.trim(),
               custom: false,

@@ -96,6 +96,26 @@ describe("buildPersistedState", () => {
     expect(next.judge.active).toBe(false);
   });
 
+  it("keeps a base-URL override on a complete built-in slot (PH29.1)", () => {
+    const draft: KeysState = {
+      judge: { baseUrl: "", apiKey: "", modelId: "", active: false },
+      responders: [
+        {
+          slot: "groq",
+          baseUrl: " https://api.openai.com/v1 ",
+          apiKey: "k",
+          modelId: "m",
+          custom: false,
+          active: false,
+        },
+      ],
+    };
+    const next = buildPersistedState(draft, { groq: { slot: "groq", ok: true } });
+    const groq = next.responders.find((r) => r.slot === "groq")!;
+    expect(groq.baseUrl).toBe("https://api.openai.com/v1");
+    expect(groq.active).toBe(true);
+  });
+
   it("blanks a half-filled built-in slot back to built-in (PH29.1)", () => {
     const draft: KeysState = {
       judge: { baseUrl: "", apiKey: "only-key", modelId: "", active: false },

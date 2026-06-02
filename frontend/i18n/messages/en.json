@@ -143,6 +143,7 @@
   "keys.modelId": "Model ID",
   "keys.baseUrlSelect": "Base URL (endpoint)",
   "keys.baseUrlChoose": "Choose an endpoint…",
+  "keys.endpointDefault": "Default endpoint",
   "keys.clear": "Clear",
   "keys.incompleteBuiltin": "Enter both the API key and the model ID, or press Clear.",
   "keys.incompleteCustom": "Choose an endpoint and enter the API key and model ID.",
