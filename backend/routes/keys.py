@@ -38,7 +38,7 @@ from schemas.keys import (
 from services.provider_service import (
     JUDGE_BYOK_SLOT,
     ProviderService,
-    classify_provider_failure,
+    classify_discovery_failure,
 )
 
 router = APIRouter(prefix="/keys", tags=["keys"])
@@ -235,9 +235,16 @@ async def list_models(
         )
         ids = await provider.list_models()
     except Exception as error:  # noqa: BLE001 — fall back to manual entry
-        reason = classify_provider_failure(str(error))
+        # Precise reason (PH30.2): 404 → no_models (manual OK), 401/403 → bad_key
+        # (fix the key, don't unlock manual), etc.
+        reason = classify_discovery_failure(error)
         log_event(
-            logger, "byok_models", slot=slot, ok=False, error=type(error).__name__
+            logger,
+            "byok_models",
+            slot=slot,
+            ok=False,
+            error=type(error).__name__,
+            reason=reason,
         )
         return ByokModelsResponse(models=[], error_reason=reason)
 

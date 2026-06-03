@@ -59,6 +59,33 @@ class TransientProvider(OpenAICompatibleProvider):
         self.max_output_tokens = max_tokens
 
 
+def classify_discovery_failure(error: Exception) -> str:
+    """Classify a ``GET /models`` failure for BYOK discovery (PH30.2).
+
+    Distinguishes (by the SDK's HTTP status) the legitimate "this provider has no
+    /models endpoint" case from a bad key, so the UI unlocks manual model entry
+    ONLY when appropriate — never on an auth failure:
+      - 404 → ``no_models`` (provider lacks /models, e.g. Perplexity) → manual OK
+      - 401/403 → ``bad_key`` (fix the key; do NOT unlock manual)
+      - 429 → ``rate_limited``
+      - timeout / connection → ``timeout`` / ``unavailable``
+      - anything else → fall back to the text-based chat classifier.
+    """
+    status = getattr(error, "status_code", None)
+    if status == 404:
+        return "no_models"
+    if status in (401, 403):
+        return "bad_key"
+    if status == 429:
+        return "rate_limited"
+    name = type(error).__name__.lower()
+    if "timeout" in name:
+        return "timeout"
+    if "connection" in name:
+        return "unavailable"
+    return classify_provider_failure(str(error))
+
+
 def classify_provider_failure(error: str) -> str:
     """Map a provider error string to a stable reason code so the UI can show a
     localized, human reason in the failed model's column (PH13)."""

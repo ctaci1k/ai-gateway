@@ -307,6 +307,50 @@ def test_models_discovery_falls_back_on_error(client, monkeypatch):
     assert body["error_reason"] is not None
 
 
+class _StatusError(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+def test_models_discovery_404_is_no_models(client, monkeypatch):
+    async def missing(self):
+        raise _StatusError(404)
+
+    monkeypatch.setattr(TransientProvider, "list_models", missing)
+    headers = _csrf(_register(client, "disc404"))
+    resp = client.post(
+        "/keys/models", json={"slot": "groq", "api_key": "k"}, headers=headers
+    )
+    assert resp.json()["error_reason"] == "no_models"
+
+
+def test_models_discovery_401_is_bad_key(client, monkeypatch):
+    async def unauthorized(self):
+        raise _StatusError(401)
+
+    monkeypatch.setattr(TransientProvider, "list_models", unauthorized)
+    headers = _csrf(_register(client, "disc401"))
+    resp = client.post(
+        "/keys/models", json={"slot": "groq", "api_key": "bad"}, headers=headers
+    )
+    assert resp.json()["error_reason"] == "bad_key"
+
+
+def test_models_discovery_empty_list_has_no_error(client, monkeypatch):
+    async def empty(self):
+        return []
+
+    monkeypatch.setattr(TransientProvider, "list_models", empty)
+    headers = _csrf(_register(client, "discempty"))
+    resp = client.post(
+        "/keys/models", json={"slot": "groq", "api_key": "k"}, headers=headers
+    )
+    body = resp.json()
+    assert body["models"] == []
+    assert body["error_reason"] is None
+
+
 def test_models_discovery_reuses_stored_key(client, monkeypatch):
     _ok_validate(monkeypatch)
 

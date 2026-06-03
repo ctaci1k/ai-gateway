@@ -1,21 +1,23 @@
 // frontend/components/keys/ModelCombobox.tsx
 //
-// Model-id combobox for a BYOK slot (PH30/D, model discovery). Built on a native
-// <input list> + <datalist>, which gives a MANUAL fallback for free: the user
-// can always type any model id, even when discovery is unavailable.
+// Model picker for a BYOK slot (PH30/D; select-only in PH30.2). The model id is
+// chosen from a <select> populated by discovery (POST /keys/models, server-side
+// so the key never reaches a third party from the browser) — NO free typing in
+// the normal case.
 //
-// "Load models" calls POST /keys/models (server-side, so the key never reaches
-// a third party from the browser) and fills the datalist. Three safeguards:
-//   (a) large lists → the native datalist already does typeahead filtering;
-//   (b) /models includes non-chat models → a heuristic chat filter + a
-//       "show all" toggle (the server tags each id with is_chat);
-//   (c) no /models / error → a readable reason, and manual entry still works.
-// Results are cached per (endpoint + key) for the session. Live validation on
-// Save still applies (picking from the list isn't a guarantee it works).
+// Smart manual fallback (the plan's "never block" guard, gated by the failure
+// reason so a bad key can't unlock free typing):
+//   - 404 `no_models` (provider has no /models, e.g. Perplexity) OR an empty list
+//     on a valid key → a manual <input> appears so the slot stays usable;
+//   - 401/403 `bad_key` → stay select-only + "check your key" (the real fix);
+//   - 429 / timeout / network → stay select-only + "try again".
+// Large lists get the heuristic chat filter + a "show all" toggle. Results are
+// cached per (endpoint + key) for the session. Live validation on Save still
+// applies (picking from the list isn't a guarantee it works).
 
 "use client";
 
-import { useCallback, useId, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { fetchModels, type ModelInfo } from "@/services/keysApi";
 import { useI18n } from "@/store/LanguageContext";
@@ -42,14 +44,6 @@ function cacheKey(baseUrl: string, apiKey: string, slot: string | undefined): st
   return `${baseUrl}|${apiKey ? `k:${apiKey}` : `stored:${slot ?? ""}`}`;
 }
 
-// Map a backend failure reason to an existing, readable i18n message.
-const REASON_KEY: Record<string, string> = {
-  rate_limited: "compare.fail.rateLimited",
-  timeout: "compare.fail.timeout",
-  empty_response: "compare.fail.emptyResponse",
-  unavailable: "compare.fail.unavailable",
-};
-
 export default function ModelCombobox({
   id,
   value,
@@ -62,7 +56,6 @@ export default function ModelCombobox({
   stored,
 }: ModelComboboxProps) {
   const { t } = useI18n();
-  const listId = useId();
   const [status, setStatus] = useState<Status>("idle");
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [reason, setReason] = useState<string | null>(null);
@@ -90,6 +83,7 @@ export default function ModelCombobox({
       });
       if (result.error_reason) {
         setReason(result.error_reason);
+        setModels([]);
         setStatus("error");
         return;
       }
@@ -98,6 +92,7 @@ export default function ModelCombobox({
       setStatus("loaded");
     } catch {
       setReason("unavailable");
+      setModels([]);
       setStatus("error");
     }
   }, [baseUrl, apiKey, slot]);
@@ -106,23 +101,48 @@ export default function ModelCombobox({
   const hiddenCount = models.length - chatModels.length;
   const visible = showAll ? models : chatModels;
 
+  // Manual entry is unlocked ONLY when the provider genuinely has no /models
+  // (404) or returned an empty list on a valid key — never on a bad key (401/403).
+  const manual =
+    (status === "error" && reason === "no_models") || (status === "loaded" && models.length === 0);
+
+  // The current value may not be in the (filtered) list — keep it selectable so a
+  // saved/prefilled model id always shows.
+  const valueMissing = value !== "" && !visible.some((m) => m.id === value);
+
+  const fieldClass = invalid
+    ? "keys-input keys-input--model keys-input--invalid"
+    : "keys-input keys-input--model";
+
   return (
     <div className="keys-model">
       <div className="keys-model-row">
-        <input
-          id={id}
-          className={
-            invalid
-              ? "keys-input keys-input--model keys-input--invalid"
-              : "keys-input keys-input--model"
-          }
-          list={listId}
-          value={value}
-          placeholder={placeholder}
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        {manual ? (
+          <input
+            id={id}
+            className={fieldClass}
+            value={value}
+            placeholder={placeholder}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        ) : (
+          <select
+            id={id}
+            className={fieldClass}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+          >
+            <option value="">{t("keys.selectModel")}</option>
+            {valueMissing && <option value={value}>{value}</option>}
+            {visible.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           type="button"
           className="keys-model-load"
@@ -132,15 +152,10 @@ export default function ModelCombobox({
           {status === "loading" ? t("keys.loadingModels") : t("keys.loadModels")}
         </button>
       </div>
-      <datalist id={listId}>
-        {visible.map((m) => (
-          <option key={m.id} value={m.id} />
-        ))}
-      </datalist>
 
-      {status === "loaded" && (
+      {status === "loaded" && models.length > 0 && (
         <p className="keys-hint">
-          {visible.length > 0 ? t("keys.modelsFound", { n: visible.length }) : t("keys.noModels")}
+          {t("keys.modelsFound", { n: visible.length })}
           {hiddenCount > 0 && (
             <>
               {" "}
@@ -156,12 +171,12 @@ export default function ModelCombobox({
           )}
         </p>
       )}
-      {status === "error" && (
-        <p className="keys-hint">
-          {t("keys.modelsError", {
-            reason: t(REASON_KEY[reason ?? "unavailable"] ?? "compare.fail.unavailable"),
-          })}
-        </p>
+      {manual && <p className="keys-hint">{t("keys.noModelsManual")}</p>}
+      {status === "error" && reason === "bad_key" && (
+        <p className="keys-hint">{t("keys.models.badKey")}</p>
+      )}
+      {status === "error" && reason !== "bad_key" && reason !== "no_models" && (
+        <p className="keys-hint">{t("keys.models.retry")}</p>
       )}
     </div>
   );
