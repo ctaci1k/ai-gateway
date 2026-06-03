@@ -1,24 +1,24 @@
 // frontend/components/keys/BaseUrlSelect.tsx
 //
-// Base-URL picker for BYOK slots (PH29; reworked in PH29.1). A plain native
-// <select> over the curated catalogue (utils/byokEndpoints.BYOK_BASE_URLS) — no
-// groups, no built-in providers and no free-text "Custom…": the user picks one
-// verified OpenAI-compatible endpoint, period.
+// Base-URL picker for a BYOK slot (PH29; reworked PH29.1; PH30 fix). A plain
+// native <select> over the endpoints offered for this slot — no free text.
 //
-// The empty value ("") renders a disabled+hidden placeholder, so it shows as the
-// resting state but can't be re-picked from the list:
-//  - built-in slots (judge + AI 1/2/3): "" means the built-in endpoint and the
-//    way back to it is the "Clear" button (the catalogue lists only override
-//    targets, never the built-in providers);
-//  - custom slots (AI 4/5): "" means "choose an endpoint" (required).
-// The caller controls the placeholder text. A non-empty value not in the
-// catalogue (e.g. legacy storage) is shown as an extra option so it stays visible.
+// The empty value ("") is the slot's DEFAULT endpoint, rendered as a named
+// placeholder so a regular user can tell what they're getting:
+//  - built-in slots (judge + AI 1/2/3): "" = the slot's own built-in provider
+//    (e.g. "Groq · default endpoint"); the OTHER built-ins + all compatibles are
+//    listed as override options;
+//  - custom slots (AI 4/5): "" = "choose an endpoint" (required), every provider
+//    is listed.
+// The caller passes the option list (`options`) and the placeholder text. A
+// non-empty value not in the list (legacy / explicit own-provider) is shown as an
+// extra option so it stays visible.
 
 "use client";
 
 import { type ReactNode } from "react";
 
-import { BYOK_BASE_URLS, isKnownUrl } from "@/utils/byokEndpoints";
+import { presetForUrl, type ByokEndpoint } from "@/utils/byokEndpoints";
 
 interface BaseUrlSelectProps {
   id: string;
@@ -26,8 +26,10 @@ interface BaseUrlSelectProps {
   onChange: (value: string) => void;
   // Visible field label (e.g. t("keys.baseUrlSelect")).
   label: string;
-  // Text for the empty-value placeholder option (e.g. "Default endpoint" for
-  // built-in slots, "Choose an endpoint…" for custom slots).
+  // Endpoints offered for this slot (selectableEndpointsForSlot).
+  options: readonly ByokEndpoint[];
+  // Text for the empty-value default option (e.g. "Groq · default endpoint" for a
+  // built-in slot, "Choose an endpoint…" for a custom slot).
   placeholder: string;
   // Optional info affordance (an <InfoTip>) rendered beside the label.
   info?: ReactNode;
@@ -38,10 +40,14 @@ export default function BaseUrlSelect({
   value,
   onChange,
   label,
+  options,
   placeholder,
   info,
 }: BaseUrlSelectProps) {
-  const legacy = value !== "" && !isKnownUrl(value);
+  // A non-empty value not already in the option list (a known provider excluded
+  // from this slot, or a legacy stored URL) gets an extra option so it shows.
+  const inList = value === "" || options.some((e) => e.url === value);
+  const extraLabel = presetForUrl(value)?.label ?? value;
 
   return (
     <div className="keys-baseurl">
@@ -55,15 +61,13 @@ export default function BaseUrlSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
-        <option value="" disabled hidden>
-          {placeholder}
-        </option>
-        {BYOK_BASE_URLS.map((e) => (
+        <option value="">{placeholder}</option>
+        {options.map((e) => (
           <option key={e.url} value={e.url}>
             {e.label}
           </option>
         ))}
-        {legacy && <option value={value}>{value}</option>}
+        {!inList && <option value={value}>{extraLabel}</option>}
       </select>
     </div>
   );

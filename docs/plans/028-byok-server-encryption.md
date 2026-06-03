@@ -224,7 +224,7 @@ updated: 2026-06-03
   BYOK, write-only, combobox моделей, довідник провайдерів; `docs/08` — секція PH30;
   `CLAUDE.md`/брифи — оновити згадку «ключі лише в sessionStorage» (тепер —
   зашифровано в БД).
-- [ ] **F2. Деплой.** Owner-handoff: додати `BYOK_ENCRYPTION_KEY` у прод-секрети
+- [x] **F2. Деплой.** Owner-handoff: додати `BYOK_ENCRYPTION_KEY` у прод-секрети
   (GitHub Actions/VPS) **до** деплою. `status: done`; коміт + `git push origin main`
   → CI→Docker→VPS (Alembic `0008` застосується на старті).
 
@@ -247,21 +247,21 @@ updated: 2026-06-03
       (owner-action: завести секрет у прод перед/разом із пушем).
 
 ## СТАН (читається першим у новій сесії)
-- Останній виконаний крок: **F1** — доки оновлено: `docs/10` (D-20: реверс D-12,
+- Останній виконаний крок: **F2 — ЗАВЕРШЕНО (status: done).** Власник підтвердив
+  `BYOK_ENCRYPTION_KEY` у прод-секретах; коміт `997f907` запушено в `main`
+  (`ad85c90..997f907`) → CI→Docker→VPS, Alembic `0008` застосується на старті.
+  **ВЕСЬ ПЛАН PH30 ЗАКРИТО.**
+- Попередній крок: **F1** — доки оновлено: `docs/10` (D-20: реверс D-12,
   модель загроз, рівні Good/Better/Ideal, discovery, довідник), `docs/08` (секція
   PH30 A–E), `docs/03` (`/keys` CRUD + `/keys/models` + прибраний транзит у
   `/chat*`), `docs/04` (таблиця `byok_credentials` + envelope; `ByokConfig` тепер
   з БД), `docs/06` (серверний BYOK, write-only, ModelCombobox, ProviderGuide),
   `CLAUDE.md` (BYOK зашифровано в БД). DoD-чеклист закрито (крім деплою). ⚠️ Блоки
   A–E — історія нижче / у docs/08 (PH30).
-- Наступний крок: **F2** — деплой. Owner-action: завести `BYOK_ENCRYPTION_KEY` у
-  прод-секрети (GitHub Actions/VPS) перед/разом із пушем — інакше прод не
-  шифрує/розшифрує (BYOK-сховище graceful-disabled, чат працює без BYOK). Потім
-  `git add . && git commit -m "PH30: BYOK server-side encrypted storage (D-20) +
-  model discovery + key directory" && git push origin main`.
-- Порядок блоків: A✅→B✅→C✅→D✅→E✅→F1✅→F2 (деплой).
-- Заблоковано: **ні** (технічно готово). Owner-action перед/разом із F2:
-  `BYOK_ENCRYPTION_KEY` у прод-секрети.
+- Наступний крок: **— немає (план завершено).** Опційно: моніторити GitHub
+  Actions / прод і перевірити наживо збереження ключа + дропдаун моделей.
+- Порядок блоків: A✅→B✅→C✅→D✅→E✅→F1✅→F2✅.
+- Заблоковано: **ні**. Усе зроблено й задеплоєно.
 
 ### Історія E
 - Блок E (довідник ключів) завершено. E1:

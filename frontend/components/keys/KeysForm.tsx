@@ -34,7 +34,12 @@ import {
   type DraftState,
   type KeysState,
 } from "@/store/KeysContext";
-import { providerLinksForSlot, providerLinksForUrl } from "@/utils/byokEndpoints";
+import {
+  builtinForSlot,
+  providerLinksForSlot,
+  providerLinksForUrl,
+  selectableEndpointsForSlot,
+} from "@/utils/byokEndpoints";
 import { JUDGE_MODEL, judgeModelName } from "@/utils/judge";
 import { responderLabel } from "@/utils/models";
 
@@ -352,7 +357,10 @@ export default function KeysForm() {
               id="keys-judge-baseurl"
               label={t("keys.baseUrlSelect")}
               value={draft.judge.baseUrl}
-              placeholder={t("keys.endpointDefault")}
+              options={selectableEndpointsForSlot(JUDGE_SLOT, false)}
+              placeholder={t("keys.endpointNamed", {
+                provider: builtinForSlot(JUDGE_SLOT)?.label ?? "Groq",
+              })}
               info={baseUrlInfo}
               onChange={(v) => updateJudge("baseUrl", v)}
             />
@@ -401,11 +409,17 @@ export default function KeysForm() {
         {/* Responder rows */}
         {draft.responders.map((r, index) => {
           const result = results[r.slot];
+          // Built-in slots are named by their provider (AI 1 · Groq) so the user
+          // can tell which key goes where; custom slots keep the AI n numbering.
+          const builtin = builtinForSlot(r.slot);
           const slotLabel = r.custom
             ? t("keys.customResponderNumbered", {
                 n: defaultSlots.length + customSlots.indexOf(r.slot) + 1,
               })
-            : t("keys.responderSlot", { n: defaultSlots.indexOf(r.slot) + 1 });
+            : t("keys.responderSlotNamed", {
+                n: defaultSlots.indexOf(r.slot) + 1,
+                provider: builtin?.label ?? r.slot,
+              });
           const incomplete = r.custom
             ? isCustomIncomplete(r.baseUrl, r.apiKey, r.modelId, r.stored)
             : isBuiltinIncomplete(r.baseUrl, r.apiKey, r.modelId, r.stored);
@@ -442,9 +456,15 @@ export default function KeysForm() {
                   id={`keys-${r.slot}-baseurl`}
                   label={t("keys.baseUrlSelect")}
                   value={r.baseUrl}
-                  // Default slots: optional override, empty = built-in endpoint.
+                  options={selectableEndpointsForSlot(r.slot, r.custom)}
+                  // Built-in slots: empty = the slot's own provider (named
+                  // default); the other built-ins + compatibles are overrides.
                   // Custom slots: an endpoint must be chosen.
-                  placeholder={r.custom ? t("keys.baseUrlChoose") : t("keys.endpointDefault")}
+                  placeholder={
+                    r.custom
+                      ? t("keys.baseUrlChoose")
+                      : t("keys.endpointNamed", { provider: builtin?.label ?? r.slot })
+                  }
                   info={baseUrlInfo}
                   onChange={(v) => updateResponder(index, "baseUrl", v)}
                 />
