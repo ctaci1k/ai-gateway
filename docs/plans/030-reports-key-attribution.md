@@ -134,8 +134,8 @@ updated: 2026-06-03
   `0009`; `docs/03` — поле `key_fingerprint` у `/reports/{by-model,breakdown,
   events,events.csv}`; `docs/06` — атрибуція ключа (`KeyBadge`/`keySource`);
   `docs/08` — секція PH31; `docs/10` — рішення **D-21**.
-- [ ] **D2. Деплой.** `status: done`; коміт + `git push origin main`
-  (Alembic `0009` на старті). **Нового owner-action нема** (без нового env).
+- [x] **D2. Деплой.** `status: done`; коміт `209ba0f` + `git push origin main`
+  (Alembic `0009` застосується на старті). **Нового owner-action нема** (без нового env).
 
 ## Definition of Done
 - [x] У звітах кожен рядок моделі позначено: **«Вбудована»** (app-ключ) або
@@ -161,7 +161,7 @@ updated: 2026-06-03
   `components/reports/{KeyBadge.tsx,reportUtils.ts,ByModelTab,BreakdownTab,
   ActivityLogTab}.tsx`, `i18n/messages/{en,pl,uk}.json`, `theme/components.css`.
   Блок D: `docs/{03,04,06,08,10}` + цей план.
-- Наступний крок: **D2** — фінальні гейти зелені → коміт + `git push origin main`
-  (Alembic `0009` застосується на старті). Owner-action: нема.
-- Порядок блоків: A ✅ → B ✅ → C ✅ → D1 ✅ → D2 (деплой).
+- Наступний крок: **— план завершено (status: done).** Коміт `209ba0f`
+  запушено в `main`; CI/CD задеплоїть (Alembic `0009` на старті). Owner-action: нема.
+- Порядок блоків: A ✅ → B ✅ → C ✅ → D1 ✅ → D2 ✅.
 - Заблоковано: **ні**. Owner-action: нема.
