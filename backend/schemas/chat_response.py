@@ -17,6 +17,10 @@ class ProviderResponse(BaseModel):
     execution_time: float
     provider: str
     success: bool
+    # PH32 (D-22): True when this slot ran on the user's own (BYOK) key. Persisted
+    # with the turn so the replayed Compare banner/cards show the real model from
+    # the SAVED turn, never the current keys (self-describing turn).
+    is_byok: bool = False
 
 
 class FailedProvider(BaseModel):
@@ -25,6 +29,10 @@ class FailedProvider(BaseModel):
     # Stable reason code (PH13): rate_limited / timeout / empty_response /
     # unavailable. Lets the UI show a localized reason in the failed column.
     reason: str | None = None
+    # PH32 (D-22): the failed responder's real model id + key source, so the
+    # replayed failed card is self-describing too.
+    model: str | None = None
+    is_byok: bool = False
 
 
 class ExecutionMetadataItem(BaseModel):
@@ -33,6 +41,7 @@ class ExecutionMetadataItem(BaseModel):
     execution_time: float
     model: str | None = None
     error: str | None = None
+    is_byok: bool = False
 
 
 class RagSource(BaseModel):

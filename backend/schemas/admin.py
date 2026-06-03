@@ -33,6 +33,9 @@ class UsageEventOut(BaseModel):
     mode: str
     message: str
     selected_model: str | None
+    # PH32 (D-22): the REAL model that answered/won this turn (``selected_model``
+    # stays the slot). NULL for legacy rows → the FE falls back to the slot label.
+    model_name: str | None = None
     total_tokens: int | None
     success: bool
 

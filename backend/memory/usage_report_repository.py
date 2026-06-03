@@ -165,6 +165,11 @@ class UsageReportRepository:
         same model appears separately when run on the built-in app key
         (``key_fingerprint=NULL``) vs the user's own key (masked), and once per
         distinct own key. ``key_fingerprint`` is returned for the UI badge.
+
+        PH32 (D-22): the grouping also includes ``model_name`` (the REAL model),
+        so an own key pointed at different real models on the same slot splits
+        into separate rows; ``model_name`` is returned for the truthful label
+        (built-in → the slot label; BYOK → the real model id).
         """
         scope = self._scope(start, end, billable)
         async with session_scope() as session:
@@ -173,12 +178,17 @@ class UsageReportRepository:
                     select(
                         UsageEvent.selected_model,
                         UsageEvent.key_fingerprint,
+                        UsageEvent.model_name,
                         func.count(UsageEvent.id),
                         _tokens_sum(),
                         _success_sum(),
                     )
                     .where(*scope)
-                    .group_by(UsageEvent.selected_model, UsageEvent.key_fingerprint)
+                    .group_by(
+                        UsageEvent.selected_model,
+                        UsageEvent.key_fingerprint,
+                        UsageEvent.model_name,
+                    )
                     .order_by(func.count(UsageEvent.id).desc())
                 )
             ).all()
@@ -186,11 +196,19 @@ class UsageReportRepository:
             {
                 "model": model,
                 "key_fingerprint": key_fingerprint,
+                "model_name": model_name,
                 "requests": requests,
                 "total_tokens": int(tokens or 0),
                 "successful": int(successful or 0),
             }
-            for model, key_fingerprint, requests, tokens, successful in rows
+            for (
+                model,
+                key_fingerprint,
+                model_name,
+                requests,
+                tokens,
+                successful,
+            ) in rows
         ]
 
     async def by_chat(
@@ -214,6 +232,10 @@ class UsageReportRepository:
                         func.count(UsageEvent.id),
                         _tokens_sum(),
                         func.max(UsageEvent.created_at),
+                        # PH32 (D-22): a representative REAL model for the chat so
+                        # the By-chat row shows the truth (built-in → slot label
+                        # via the FE fallback; BYOK → the real model id).
+                        func.max(UsageEvent.model_name),
                     )
                     .outerjoin(Chat, Chat.id == UsageEvent.chat_id)
                     .where(*scope)
@@ -227,11 +249,21 @@ class UsageReportRepository:
                 "title": title,
                 "mode": mode,
                 "model": model,
+                "model_name": model_name,
                 "requests": requests,
                 "total_tokens": int(tokens or 0),
                 "last_event": last_event,
             }
-            for chat_id, title, mode, model, requests, tokens, last_event in rows
+            for (
+                chat_id,
+                title,
+                mode,
+                model,
+                requests,
+                tokens,
+                last_event,
+                model_name,
+            ) in rows
         ]
 
     async def timeseries(
@@ -324,6 +356,7 @@ class UsageReportRepository:
                     UsageEvent.created_at,
                     UsageEvent.mode,
                     UsageEvent.selected_model,
+                    UsageEvent.model_name,
                     UsageEvent.total_tokens,
                     UsageEvent.token_estimated,
                     UsageEvent.success,
@@ -356,6 +389,7 @@ class UsageReportRepository:
                 "created_at": r.created_at,
                 "mode": r.mode,
                 "model": r.selected_model,
+                "model_name": r.model_name,
                 "total_tokens": r.total_tokens,
                 "token_estimated": r.token_estimated,
                 "success": r.success,
@@ -390,6 +424,10 @@ class UsageReportRepository:
         the same model splits into separate nodes by key source (built-in vs each
         own key); ``key_fingerprint`` is carried on each model node for the badge.
         The top-level access-key grouping (PH28) is unchanged.
+
+        PH32 (D-22): the model-node key also includes ``model_name`` (the REAL
+        model), carried on each node so the UI shows the truthful label (built-in
+        → the slot label; BYOK → the real model id).
         """
         scope = self._scope(start, end, billable)
         async with session_scope() as session:
@@ -399,6 +437,7 @@ class UsageReportRepository:
                         UsageEvent.billable,
                         UsageEvent.selected_model,
                         UsageEvent.key_fingerprint,
+                        UsageEvent.model_name,
                         UsageEvent.chat_id,
                         Chat.title,
                         Chat.mode,
@@ -409,11 +448,20 @@ class UsageReportRepository:
                 )
             ).all()
 
-        # groups[access_key] = {requests, tokens, models[(model, fp)] = {model,
-        #   key_fingerprint, requests, tokens, chats[chat_id] = {chat_id, title,
-        #   mode, requests, tokens}}}
+        # groups[access_key] = {requests, tokens, models[(model, fp, model_name)] =
+        #   {model, key_fingerprint, model_name, requests, tokens,
+        #   chats[chat_id] = {chat_id, title, mode, requests, tokens}}}
         groups: dict[str, dict[str, Any]] = {}
-        for is_billable, model, key_fingerprint, chat_id, title, mode, tokens in rows:
+        for (
+            is_billable,
+            model,
+            key_fingerprint,
+            model_name,
+            chat_id,
+            title,
+            mode,
+            tokens,
+        ) in rows:
             tok = int(tokens or 0)
             access_key = "app" if is_billable else "own"
             group = groups.setdefault(
@@ -423,10 +471,11 @@ class UsageReportRepository:
             group["tokens"] += tok
 
             model_node = group["models"].setdefault(
-                (model, key_fingerprint),
+                (model, key_fingerprint, model_name),
                 {
                     "model": model,
                     "key_fingerprint": key_fingerprint,
+                    "model_name": model_name,
                     "requests": 0,
                     "tokens": 0,
                     "chats": {},
@@ -462,6 +511,7 @@ class UsageReportRepository:
                     {
                         "model": mnode["model"],
                         "key_fingerprint": mnode["key_fingerprint"],
+                        "model_name": mnode["model_name"],
                         "requests": mnode["requests"],
                         "total_tokens": mnode["tokens"],
                         "chats": _sorted(list(mnode["chats"].values())),
@@ -500,6 +550,7 @@ class UsageReportRepository:
                             UsageEvent.created_at,
                             UsageEvent.mode,
                             UsageEvent.selected_model,
+                            UsageEvent.model_name,
                             UsageEvent.total_tokens,
                             UsageEvent.token_estimated,
                             UsageEvent.success,

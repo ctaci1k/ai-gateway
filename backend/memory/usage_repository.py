@@ -83,6 +83,7 @@ class UsageRepository:
         billable: bool = True,
         token_estimated: bool = False,
         key_fingerprint: str | None = None,
+        model_name: str | None = None,
     ) -> None:
         """Append one usage event for the turn (one row per request; a Compare
         request is a single event — D-10).
@@ -91,8 +92,10 @@ class UsageRepository:
         ad-hoc); ``billable`` is False for BYOK turns (recorded but not charged);
         ``token_estimated`` flags an estimated ``total_tokens``. PH31 (D-21):
         ``key_fingerprint`` is the display-only mask of the BYOK key used for the
-        winning model (NULL = built-in app key). Defaults keep backward
-        compatibility with pre-PH27/PH31 callers."""
+        winning model (NULL = built-in app key). PH32 (D-22): ``model_name`` is
+        the REAL model that answered/won the turn (``selected_model`` stays the
+        slot); NULL for legacy rows. Defaults keep backward compatibility with
+        pre-PH27/PH31/PH32 callers."""
         async with session_scope() as session:
             session.add(
                 UsageEvent(
@@ -106,5 +109,6 @@ class UsageRepository:
                     billable=billable,
                     token_estimated=token_estimated,
                     key_fingerprint=key_fingerprint,
+                    model_name=model_name,
                 )
             )

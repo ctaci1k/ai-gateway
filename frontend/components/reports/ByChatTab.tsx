@@ -92,7 +92,7 @@ export default function ByChatTab({ range, nowMs, readOnly }: ByChatTabProps) {
                   {deleted ? t("reports.chat.deleted") : c.title}
                 </th>
                 <td>{c.mode ? t(`reports.mode.${c.mode}`) : "—"}</td>
-                <td>{modelLabel(c.model)}</td>
+                <td>{c.model_name ?? modelLabel(c.model)}</td>
                 <td className="rep-num">{formatInt(c.requests)}</td>
                 <td className="rep-num">{formatInt(c.total_tokens)}</td>
                 <td>{c.last_event ? formatRelativeTime(c.last_event, nowMs, relLabels) : "—"}</td>

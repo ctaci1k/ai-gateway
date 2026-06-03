@@ -54,6 +54,7 @@ export default function CompareModal({
             executionTime={row.executionTime}
             winner={row.provider === winnerModel}
             selected={row.provider === selectedModel}
+            isByok={row.is_byok}
             fallback={fallback}
             judgeName={judgeName}
             onSelect={() => onSelect(row.provider)}

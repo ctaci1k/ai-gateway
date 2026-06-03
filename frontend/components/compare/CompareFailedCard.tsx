@@ -6,10 +6,9 @@
 
 "use client";
 
-import { useKeys } from "@/store/KeysContext";
 import { useI18n } from "@/store/LanguageContext";
 import type { FailedProvider, FailureReason } from "@/types/api";
-import { responderLabel } from "@/utils/models";
+import { modelDisplay } from "@/utils/models";
 
 const REASON_KEY: Record<FailureReason, string> = {
   rate_limited: "compare.fail.rateLimited",
@@ -20,17 +19,17 @@ const REASON_KEY: Record<FailureReason, string> = {
 
 export default function CompareFailedCard({ failed }: { failed: FailedProvider }) {
   const { t } = useI18n();
-  const { byokModelId, isOwnKey } = useKeys();
 
-  // Show the model's real display name (PH17/B): a BYOK slot shows the user's
-  // model_id, otherwise the registry label (Llama / GLM / DeepSeek), falling
-  // back to the raw key for any provider not in the registry.
-  const name = byokModelId(failed.provider) ?? responderLabel(failed.provider);
+  // Truthful name (PH32, D-22): a replayed failed card is self-describing — it
+  // reads the key source + real model FROM THE SAVED TURN (failed.is_byok /
+  // failed.model), never the current keys. Built-in → friendly slot label; own
+  // key → the real model id.
+  const name = modelDisplay(failed.provider, failed.model, !!failed.is_byok);
 
   // A rate-limit on the user's *own* key means their provider account is
   // exhausted — a distinct message from the app's shared-key rate limit
-  // (PH18/8, D-13).
-  const ownKeyRateLimited = failed.reason === "rate_limited" && isOwnKey(failed.provider);
+  // (PH18/8, D-13). Read from the saved turn (self-describing), not current keys.
+  const ownKeyRateLimited = failed.reason === "rate_limited" && !!failed.is_byok;
   const reasonKey = ownKeyRateLimited
     ? "compare.fail.ownKeyRateLimited"
     : failed.reason

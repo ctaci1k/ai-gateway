@@ -7,7 +7,7 @@
 
 import KeyBadge from "@/components/reports/KeyBadge";
 import { RepEmpty, RepError, RepLoading } from "@/components/reports/RepState";
-import { formatInt, modelLabel, useReportData } from "@/components/reports/reportUtils";
+import { formatInt, reportModel, useReportData } from "@/components/reports/reportUtils";
 import { getByModel, type ReportRange } from "@/services/reportsApi";
 import { useI18n } from "@/store/LanguageContext";
 
@@ -53,7 +53,7 @@ export default function ByModelTab({ range }: ByModelTabProps) {
             return (
               <tr key={`${m.model ?? "unknown"}|${m.key_fingerprint ?? "builtin"}`}>
                 <th scope="row" className="rep-cell-strong">
-                  {modelLabel(m.model)}
+                  {reportModel(m)}
                 </th>
                 <td>
                   <KeyBadge fingerprint={m.key_fingerprint} />

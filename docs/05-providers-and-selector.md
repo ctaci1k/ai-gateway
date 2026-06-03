@@ -72,6 +72,7 @@ async def generate_stream(self, message: str) -> AsyncGenerator[str, None]
 ### BYOK — транзитні провайдери (PH17, D-12)
 
 - `TransientProvider(OpenAICompatibleProvider)` — будується **на час одного запиту** з `(base_url + api_key + model_id)`; `model_name = model_id` (правдива назва в UI). **Не кешується**, ключ відкидається з інстансом (NQ5).
+- **PH32 (D-22) — самоописний хід.** `_safe_generate(slot, provider, message)` обчислює `is_byok = isinstance(provider, TransientProvider)` і повертає `is_byok` + реальну `model` (із `provider.model_name`) **в обох гілках** (успіх і невдача). `execute_many` прокидає `is_byok` у кожен `all_responses[slot]`, у кожен `failed_providers[*]` (+`model`) і в `execution_metadata[*]`. Завдяки цьому збережений хід несе джерело ключа й реальну модель кожної відповіді → replay Compare (банер переможця + картки) показує правду **без** звертання до поточних ключів.
 - `resolve_responders(provider_slots, byok_responders)` — мапить кожен слот: є BYOK-ключ → `TransientProvider`; інакше → вбудований синглтон (ключ застосунку). Підтримує **3–5** відповідачів (3 дефолтні + до 2 кастомних; кастомним потрібен `base_url`).
 - `build_transient_judge(entry)` — транзитний суддя (дефолтний endpoint — Groq). `JUDGE_BYOK_SLOT = "byok-judge"`.
 - `OpenAICompatibleProvider.validate_credentials()` — легкий тест-виклик для `POST /keys/validate`; кидає на будь-якій помилці API; нічого не зберігає, ключ не логується.

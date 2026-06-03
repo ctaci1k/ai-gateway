@@ -17,3 +17,24 @@ export const RESPONDER_LABELS: Readonly<Record<string, string>> = {
 export function responderLabel(provider: string): string {
   return RESPONDER_LABELS[provider] ?? provider;
 }
+
+// Truthful model name for any HISTORICAL / report surface (PH32, D-22). The
+// single source of truth for "what model really answered", BYOK-aware:
+//   - built-in (isByok=false)        → the friendly slot label (Llama / GLM / …)
+//   - own key  (isByok=true)         → the real model id (e.g. gpt-4o)
+//   - legacy own-key row without the
+//     real model (model null)        → falls back to the slot label
+// ``slot`` is the routing identity (selected_model / responder key); ``model`` is
+// the denormalized real model (usage_events.model_name, or all_responses.model on
+// a replayed turn). Composer / active-model surfaces deliberately do NOT use this
+// — they show what you'll send with the CURRENT keys (byokModelId), which is
+// correct, not a gap (D-22).
+export function modelDisplay(
+  slot: string | null,
+  model: string | null | undefined,
+  isByok: boolean,
+): string {
+  if (isByok && model) return model;
+  if (slot) return responderLabel(slot);
+  return model || "—";
+}

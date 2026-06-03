@@ -328,6 +328,8 @@ def test_usage_events_record_tokens_for_admin_audit(client, monkeypatch):
     assert usage["total_tokens"] == 84  # 42 per request (mocked)
     assert {e["mode"] for e in usage["events"]} == {"single", "compare"}
     assert all(e["total_tokens"] == 42 for e in usage["events"])
+    # PH32 (D-22): the audit carries the REAL model that answered/won the turn.
+    assert all(e["model_name"] == "m" for e in usage["events"])
 
 
 # --- Fixed per-minute window: full reset (PH18/6, D-13) ---------------------

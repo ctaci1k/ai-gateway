@@ -13,6 +13,7 @@ import * as adminApi from "@/services/adminApi";
 import { useAdminView } from "@/store/AdminViewContext";
 import { useI18n } from "@/store/LanguageContext";
 import type { AdminUserSummary, AdminUserUsage } from "@/types/api";
+import { responderLabel } from "@/utils/models";
 
 // "" → null (unlimited); a number string → that number.
 function parseLimit(value: string): number | null {
@@ -419,7 +420,9 @@ function UsageDetail({ loading, usage }: { loading: boolean; usage: AdminUserUsa
               <tr key={ev.id}>
                 <td>{ev.mode}</td>
                 <td className="admin-cell-msg">{ev.message}</td>
-                <td>{ev.selected_model ?? "—"}</td>
+                <td>
+                  {ev.model_name ?? (ev.selected_model ? responderLabel(ev.selected_model) : "—")}
+                </td>
                 <td>{ev.total_tokens ?? "—"}</td>
                 <td>{ev.success ? t("admin.ok") : t("admin.failed")}</td>
               </tr>

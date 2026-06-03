@@ -197,6 +197,9 @@ _CSV_HEADER = [
     "created_at",
     "mode",
     "model",
+    # PH32 (D-22): the REAL model that answered (the slot column above may be a
+    # built-in slot id pointed at a different own-key model).
+    "model_name",
     "key_fingerprint",
     "chat_title",
     "billable",
@@ -242,6 +245,7 @@ async def reports_events_csv(
                     r.created_at.isoformat(),
                     r.mode,
                     r.selected_model or "",
+                    r.model_name or "",
                     r.key_fingerprint or "",
                     r.title or "",
                     "true" if r.billable else "false",

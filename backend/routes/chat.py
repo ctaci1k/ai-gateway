@@ -186,6 +186,11 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
     # Attribute the winning model to its key source for reports (PH31, D-21):
     # the BYOK key of the winning slot → masked fingerprint, else NULL (built-in).
     key_fp = _selected_key_fingerprint(byok, result["selected_model"])
+    # Denormalize the REAL winning model (PH32, D-22). ``selected_model`` stays
+    # the slot (stable grouper); ``model_name`` is the true model that won — the
+    # winning slot's entry in ``all_responses`` (NULL when it has none).
+    winner = result["all_responses"].get(result["selected_model"]) or {}
+    model_name = winner.get("model")
     await UsageRepository(user.id).record(
         mode="compare" if result["compare_mode"] else "single",
         message=request.message,
@@ -196,6 +201,7 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
         chat_id=request.chat_id,
         billable=should_charge,
         key_fingerprint=key_fp,
+        model_name=model_name,
     )
 
     return ChatResponse(
@@ -400,16 +406,23 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
         else:
             total_tokens = estimate_tokens(request.message, full_text)
             token_estimated = True
+        # PH32 (D-22): align the Single ledger with Compare — ``selected_model``
+        # is the SLOT (request.provider, the stable grouper that already matches
+        # the interaction record), and the REAL streamed model goes to
+        # ``model_name``. Legacy Single rows kept the api-id in selected_model and
+        # are not backfilled (the slot id can't be recovered from an api-id) — a
+        # documented boundary (D-22): they show their raw api-id, which is true.
         await UsageRepository(user.id).record(
             mode="single",
             message=request.message,
-            selected_model=model_name or request.provider,
+            selected_model=request.provider,
             success=completed and bool(full_text),
             total_tokens=total_tokens,
             token_estimated=token_estimated,
             chat_id=chat_link,
             billable=should_charge,
             key_fingerprint=key_fp,
+            model_name=model_name,
         )
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")

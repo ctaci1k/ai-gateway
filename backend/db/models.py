@@ -198,6 +198,16 @@ class UsageEvent(Base):
     # report rows by ``(selected_model, key_fingerprint)``.
     key_fingerprint: Mapped[str] = mapped_column(String(32), nullable=True)
 
+    # PH32 (D-22): the REAL model that answered/won this turn, denormalized at
+    # record time. ``selected_model`` stays the SLOT (stable grouper: groq /
+    # cerebras / sambanova / byok-judge / custom); when a user points their own
+    # key at a built-in slot (e.g. groq → gpt-4o), the slot label would lie, so
+    # the true model id is carried here. Compare = the winning slot's
+    # ``all_responses[slot]["model"]``; Single = the streamed ``model_name``.
+    # NULL for pre-PH32 rows → the FE falls back to the slot label. The plaintext
+    # key is NEVER stored here; this is only a model identifier.
+    model_name: Mapped[str] = mapped_column(String(128), nullable=True)
+
     user: Mapped[User] = relationship(back_populates="usage_events")
 
 

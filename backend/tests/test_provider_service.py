@@ -123,3 +123,77 @@ async def test_unknown_provider_marked_failed(monkeypatch):
     result = await ProviderService.execute_many(message="ping", provider_names=["nope"])
     assert result["failed_providers"][0]["provider"] == "nope"
     assert result["execution_summary"]["successful_models"] == 0
+
+
+# --- Self-describing turn: is_byok per-response (PH32, D-22) -----------------
+
+
+def _transient(slot, model_id):
+    from services.provider_service import TransientProvider
+
+    return TransientProvider(
+        slot=slot,
+        base_url="https://example.test/v1",
+        api_key="user-secret-key",
+        model_id=model_id,
+    )
+
+
+async def test_execute_many_marks_is_byok_and_real_model():
+    """A BYOK slot is flagged ``is_byok=True`` with its real model id; a built-in
+    slot is ``is_byok=False`` — and the failed responder is self-describing too."""
+    byok = _transient("groq", "gpt-4o")
+
+    async def ok_full(message):
+        return {"text": "hi", "total_tokens": 5}
+
+    byok.generate_full = ok_full
+
+    cerebras = _OkProvider()  # built-in singleton → is_byok False
+    failing = _transient("sambanova", "claude-x")
+
+    async def boom(message):
+        raise RuntimeError("boom")
+
+    failing.generate_full = boom
+
+    providers_map = {"groq": byok, "cerebras": cerebras, "sambanova": failing}
+    result = await ProviderService.execute_many(
+        message="ping", providers_map=providers_map
+    )
+
+    assert result["all_responses"]["groq"]["is_byok"] is True
+    assert result["all_responses"]["groq"]["model"] == "gpt-4o"
+    assert result["all_responses"]["cerebras"]["is_byok"] is False
+
+    failed = {f["provider"]: f for f in result["failed_providers"]}
+    # A failed BYOK responder still carries its real model id + key source.
+    assert failed["sambanova"]["is_byok"] is True
+    assert failed["sambanova"]["model"] == "claude-x"
+
+    meta = {m["provider"]: m for m in result["execution_metadata"]}
+    assert meta["groq"]["is_byok"] is True
+    assert meta["sambanova"]["is_byok"] is True
+    assert meta["cerebras"]["is_byok"] is False
+
+
+def test_interaction_record_preserves_is_byok():
+    """The saved Compare turn keeps ``is_byok``/``model`` per response so replay
+    is self-describing (PH32, D-22) — no current-keys lookup at render time."""
+    from memory.preferences_logic import build_interaction_record
+
+    record = build_interaction_record(
+        user_message="q",
+        best_response="a",
+        all_responses={
+            "groq": {"response": "a", "model": "gpt-4o", "is_byok": True},
+        },
+        failed_providers=[
+            {"provider": "cerebras", "model": "claude-x", "is_byok": True},
+        ],
+        selected_model="groq",
+    )
+    assert record["all_responses"]["groq"]["is_byok"] is True
+    assert record["all_responses"]["groq"]["model"] == "gpt-4o"
+    assert record["failed_providers"][0]["is_byok"] is True
+    assert record["failed_providers"][0]["model"] == "claude-x"

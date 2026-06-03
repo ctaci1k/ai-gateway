@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { IconDownload } from "@/components/icons/Icons";
 import KeyBadge from "@/components/reports/KeyBadge";
 import { RepEmpty, RepError, RepLoading } from "@/components/reports/RepState";
-import { formatDateTime, formatTokens, modelLabel } from "@/components/reports/reportUtils";
+import { formatDateTime, formatTokens, reportModel } from "@/components/reports/reportUtils";
 import { eventsCsvUrl, getEvents, type ReportRange } from "@/services/reportsApi";
 import { useI18n } from "@/store/LanguageContext";
 import type { ReportEvent } from "@/types/api";
@@ -108,7 +108,7 @@ export default function ActivityLogTab({ range }: ActivityLogTabProps) {
                 <tr key={e.id} className="rep-row">
                   <td className="rep-nowrap">{formatDateTime(e.created_at)}</td>
                   <td>{t(`reports.mode.${e.mode}`)}</td>
-                  <td>{modelLabel(e.model)}</td>
+                  <td>{reportModel(e)}</td>
                   <td>
                     <KeyBadge fingerprint={e.key_fingerprint} />
                   </td>

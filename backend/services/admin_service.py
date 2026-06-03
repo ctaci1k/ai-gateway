@@ -92,6 +92,7 @@ class AdminService:
                 "mode": r.mode,
                 "message": r.message,
                 "selected_model": r.selected_model,
+                "model_name": r.model_name,
                 "total_tokens": r.total_tokens,
                 "success": r.success,
             }

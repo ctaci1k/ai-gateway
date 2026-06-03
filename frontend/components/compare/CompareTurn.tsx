@@ -25,15 +25,21 @@ export default function CompareTurn({ interaction, selectedModel, onSelect }: Co
     interaction.selector_scores,
     metadata.selector_confidence || 0,
   );
-  const winnerModel = metadata.selected_model ?? interaction.selected_model ?? null;
+  const winnerSlot = metadata.selected_model ?? interaction.selected_model ?? null;
+  // PH32 (D-22): the REAL winning model from the SAVED turn — self-describing, so
+  // the banner shows the truth on replay (built-in → slot label; own key → the
+  // real model) without consulting the current keys.
+  const winner = winnerSlot ? interaction.all_responses?.[winnerSlot] : undefined;
 
   return (
     <div className="compare-turn">
       <MessageBubble role="user" content={interaction.user_message} />
 
       <SelectorBanner
-        selectedModel={winnerModel}
+        selectedModel={winnerSlot}
         selectorModel={metadata.selector_model}
+        winnerModel={winner?.model}
+        winnerIsByok={winner?.is_byok}
         confidence={metadata.selector_confidence}
         fallback={metadata.fallback_used}
         fallbackReason={metadata.fallback_reason}
@@ -43,7 +49,7 @@ export default function CompareTurn({ interaction, selectedModel, onSelect }: Co
         responses={rows}
         failedProviders={interaction.failed_providers || []}
         selectedModel={selectedModel}
-        winnerModel={winnerModel}
+        winnerModel={winnerSlot}
         judgeModel={metadata.selector_model}
         fallback={metadata.fallback_used}
         onSelect={onSelect}

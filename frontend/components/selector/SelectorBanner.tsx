@@ -6,13 +6,18 @@ import { IconInfo } from "@/components/icons/Icons";
 import { useI18n } from "@/store/LanguageContext";
 import type { FallbackReason } from "@/types/api";
 import { judgeModelName } from "@/utils/judge";
-import { responderLabel } from "@/utils/models";
+import { modelDisplay } from "@/utils/models";
 
 interface SelectorBannerProps {
   selectedModel?: string | null;
   // The judge model id (selector_metadata.selector_model). Drives the friendly
   // label so the UI never hardcodes a vendor name (D-9).
   selectorModel?: string | null;
+  // PH32 (D-22): the REAL winning model + its key source from the SAVED turn, so
+  // the banner names the truth on replay (built-in → slot label; own key → the
+  // real model) without consulting the current keys.
+  winnerModel?: string | null;
+  winnerIsByok?: boolean;
   confidence?: number;
   fallback?: boolean;
   fallbackReason?: FallbackReason | null;
@@ -29,6 +34,8 @@ const REASON_KEY: Record<FallbackReason, string> = {
 export default function SelectorBanner({
   selectedModel,
   selectorModel = null,
+  winnerModel = null,
+  winnerIsByok = false,
   confidence,
   fallback = false,
   fallbackReason = null,
@@ -54,8 +61,10 @@ export default function SelectorBanner({
               {judgeName ? ` (${judgeName})` : ""}
             </b>{" "}
             — {t("selector.selected")}{" "}
-            {selectedModel ? responderLabel(selectedModel) : t("common.unknown")} ·{" "}
-            {t("selector.confidence")} {Number(confidence || 0).toFixed(2)}
+            {selectedModel
+              ? modelDisplay(selectedModel, winnerModel, winnerIsByok)
+              : t("common.unknown")}{" "}
+            · {t("selector.confidence")} {Number(confidence || 0).toFixed(2)}
           </>
         )}
       </div>

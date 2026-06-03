@@ -9,6 +9,10 @@ export interface ProviderResponse {
   execution_time: number;
   provider: string;
   success: boolean;
+  // PH32 (D-22): True when this slot ran on the user's own (BYOK) key. Persisted
+  // with the turn so the replayed banner/cards are self-describing (no current-
+  // keys lookup). Absent on pre-PH32 saved turns → treated as false.
+  is_byok?: boolean;
 }
 
 export type FailureReason = "rate_limited" | "timeout" | "empty_response" | "unavailable";
@@ -17,6 +21,10 @@ export interface FailedProvider {
   provider: string;
   error: string | null;
   reason?: FailureReason | null;
+  // PH32 (D-22): the failed responder's real model id + key source, so the
+  // replayed failed card is self-describing.
+  model?: string | null;
+  is_byok?: boolean;
 }
 
 export interface ExecutionMetadataItem {
@@ -106,6 +114,9 @@ export interface CompareRow {
   executionTime: number;
   score: number;
   confidence: number;
+  // PH32 (D-22): key source of this slot on the saved turn → drives the truthful
+  // card label on replay without consulting the current keys.
+  is_byok?: boolean;
 }
 
 // ---- Saved Compare chats (PH9) ----
@@ -191,6 +202,9 @@ export interface UsageEventRecord {
   mode: string;
   message: string;
   selected_model: string | null;
+  // PH32 (D-22): the REAL model that answered/won (selected_model stays the slot);
+  // null → fall back to the slot label.
+  model_name: string | null;
   total_tokens: number | null;
   success: boolean;
 }
@@ -236,6 +250,8 @@ export interface ModelUsage {
   // PH31 (D-21): masked BYOK key behind this model (first4••••last4); null =
   // the built-in app key. The same model splits into separate rows by key source.
   key_fingerprint: string | null;
+  // PH32 (D-22): the REAL model that answered; null → fall back to the slot label.
+  model_name: string | null;
   requests: number;
   total_tokens: number;
   successful: number;
@@ -247,6 +263,8 @@ export interface ChatUsage {
   title: string | null;
   mode: ChatMode | null;
   model: string | null;
+  // PH32 (D-22): a representative REAL model for the chat; null → slot fallback.
+  model_name: string | null;
   requests: number;
   total_tokens: number;
   last_event: string | null;
@@ -278,6 +296,8 @@ export interface BreakdownModel {
   model: string | null;
   // PH31 (D-21): masked BYOK key behind this model node; null = built-in.
   key_fingerprint: string | null;
+  // PH32 (D-22): the REAL model for this node; null → fall back to the slot label.
+  model_name: string | null;
   requests: number;
   total_tokens: number;
   chats: BreakdownChat[];
@@ -300,6 +320,8 @@ export interface ReportEvent {
   created_at: string;
   mode: string;
   model: string | null;
+  // PH32 (D-22): the REAL model that answered this turn; null → slot fallback.
+  model_name: string | null;
   total_tokens: number | null;
   token_estimated: boolean;
   success: boolean;

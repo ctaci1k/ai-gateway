@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 
 import type { ReportRange } from "@/services/reportsApi";
-import { responderLabel } from "@/utils/models";
+import { modelDisplay, responderLabel } from "@/utils/models";
 
 export type RangePreset = "24h" | "7d" | "30d" | "all" | "custom";
 
@@ -61,6 +61,20 @@ export function formatPercent(rate: number): string {
 export function modelLabel(model: string | null): string {
   if (!model) return "—";
   return responderLabel(model);
+}
+
+// Truthful model label for a report row that carries the real model (PH32, D-22).
+// ``model`` is the slot (selected_model); ``model_name`` is the denormalized real
+// model; key-source is inferred from ``key_fingerprint`` (own key ⇒ show the real
+// model). Built-in rows fall back to the friendly slot label; legacy own-key rows
+// without a real model also fall back to the slot. Used by the model-attributed
+// tabs (By-model / Breakdown / Activity); By-chat uses a chat-level fallback.
+export function reportModel(row: {
+  model: string | null;
+  model_name: string | null;
+  key_fingerprint: string | null;
+}): string {
+  return modelDisplay(row.model, row.model_name, !!row.key_fingerprint);
 }
 
 // Key-source attribution for a report row (PH31, D-21). A null fingerprint means

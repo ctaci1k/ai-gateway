@@ -2,9 +2,8 @@
 
 "use client";
 
-import { useKeys } from "@/store/KeysContext";
 import { useI18n } from "@/store/LanguageContext";
-import { RESPONDER_LABELS } from "@/utils/models";
+import { modelDisplay } from "@/utils/models";
 
 import ManualSelectionButton from "./ManualSelectionButton";
 import ModelScoreCard from "./ModelScoreCard";
@@ -17,6 +16,8 @@ interface CompareColumnProps {
   executionTime: number;
   winner: boolean;
   selected: boolean;
+  // PH32 (D-22): key source of this slot on the SAVED turn (self-describing).
+  isByok?: boolean;
   fallback?: boolean;
   judgeName?: string | null;
   onSelect: () => void;
@@ -30,18 +31,17 @@ export default function CompareColumn({
   executionTime,
   winner,
   selected,
+  isByok = false,
   fallback = false,
   judgeName = null,
   onSelect,
 }: CompareColumnProps) {
   const { t } = useI18n();
-  const { byokModelId } = useKeys();
 
-  // Truthful name (PH23/A1): when this slot runs on the user's own key — including
-  // an *overridden* default slot (e.g. sambanova pointed at another provider) —
-  // show the entered model_id, mirroring CompareFailedCard. Otherwise a built-in
-  // slot shows its friendly registry label, falling back to model_id / provider.
-  const name = byokModelId(provider) ?? RESPONDER_LABELS[provider] ?? model ?? provider;
+  // Truthful name (PH32, D-22): a replayed historical card reads the key source
+  // FROM THE SAVED TURN (isByok) + the real model, never the current keys —
+  // built-in → friendly slot label; own key → the real model id.
+  const name = modelDisplay(provider, model, isByok);
 
   return (
     <div className={winner ? "rcard rcard-win" : "rcard"}>

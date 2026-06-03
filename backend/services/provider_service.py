@@ -262,6 +262,7 @@ class ProviderService:
                     "execution_time": result["execution_time"],
                     "model": result.get("model"),
                     "error": result.get("error"),
+                    "is_byok": result.get("is_byok", False),
                 }
             )
 
@@ -286,6 +287,9 @@ class ProviderService:
                     "total_tokens": tokens,
                     "provider": provider_name,
                     "success": True,
+                    # PH32 (D-22): persisted with the turn → replay banner + cards
+                    # show the real model without consulting the current keys.
+                    "is_byok": result.get("is_byok", False),
                 }
 
             else:
@@ -297,6 +301,10 @@ class ProviderService:
                         "provider": provider_name,
                         "error": result["error"],
                         "reason": result.get("reason"),
+                        # PH32 (D-22): a failed responder is self-describing too —
+                        # its real model id + key source for the replayed card.
+                        "model": result.get("model"),
+                        "is_byok": result.get("is_byok", False),
                     }
                 )
 
@@ -327,6 +335,11 @@ class ProviderService:
 
         start_time = time.perf_counter()
 
+        # Key source of the chosen slot (PH32, D-22): a transient provider runs
+        # on the user's own key. Carried through so the saved turn is
+        # self-describing (replay shows the truth without the current keys).
+        is_byok = isinstance(provider, TransientProvider)
+
         try:
 
             if not provider:
@@ -337,6 +350,7 @@ class ProviderService:
                     "error": "Provider not found",
                     "execution_time": 0,
                     "model": None,
+                    "is_byok": False,
                 }
 
             result = await provider.generate_full(message)
@@ -350,6 +364,7 @@ class ProviderService:
                 "total_tokens": result.get("total_tokens"),
                 "model": provider.model_name,
                 "execution_time": (execution_time),
+                "is_byok": is_byok,
             }
 
         except Exception as error:
@@ -373,7 +388,12 @@ class ProviderService:
                 "error": str(error),
                 "reason": reason,
                 "execution_time": (execution_time),
-                "model": None,
+                # PH32 (D-22): a failed BYOK responder still carries its real
+                # model id (so the failed card shows the truth on replay); the
+                # built-in singleton's name is known too. ``None`` only when the
+                # provider was missing entirely (handled above).
+                "model": provider.model_name,
+                "is_byok": is_byok,
             }
 
     @staticmethod

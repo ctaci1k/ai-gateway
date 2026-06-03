@@ -512,3 +512,91 @@ def test_single_turn_records_key_fingerprint(client, monkeypatch):
     assert "user••••1234" in fingerprints  # the BYOK turn (user-key-1234)
     # The plaintext key never reaches the ledger column.
     assert all("user-key-1234" != (fp or "") for fp in fingerprints)
+
+
+# --- True model name in the ledger (PH32, D-22) -----------------------------
+
+
+def _ledger_models():
+    """Read the persisted (selected_model, model_name) pairs from the DB."""
+    import sqlite3
+
+    from tests.conftest import _TEST_DB
+
+    con = sqlite3.connect(_TEST_DB)
+    rows = con.execute("select selected_model, model_name from usage_events").fetchall()
+    con.close()
+    return rows
+
+
+def test_single_turn_records_slot_and_real_model(client, monkeypatch):
+    """A Single turn records the SLOT in ``selected_model`` and the REAL streamed
+    model in ``model_name`` (PH32, D-22)."""
+    monkeypatch.setattr(ProviderService, "generate_stream", staticmethod(_fake_stream))
+    headers = _make_limited_user(client, "singlemodel")
+
+    client.post(
+        "/chat/stream", json={"message": "hi", "provider": "groq"}, headers=headers
+    )
+
+    rows = _ledger_models()
+    assert rows == [("groq", "m")]  # slot in selected_model, real model in model_name
+
+
+def test_compare_turn_records_winning_real_model(client, monkeypatch):
+    """A Compare turn records the winning SLOT in ``selected_model`` and the real
+    winning model in ``model_name`` (PH32, D-22)."""
+    monkeypatch.setattr(
+        OrchestratorService, "process_chat", staticmethod(_fake_process_chat)
+    )
+    headers = _make_limited_user(client, "comparemodel")
+
+    client.post(
+        "/chat",
+        json={
+            "message": "hi",
+            "providers": ["groq", "cerebras", "sambanova"],
+            "compare_mode": True,
+            "selector_enabled": True,
+        },
+        headers=headers,
+    )
+
+    rows = _ledger_models()
+    # selected_model = winning slot ("groq"); model_name = the slot's real model.
+    assert rows == [("groq", "m")]
+
+
+def test_byok_override_records_real_model_not_slot(client, monkeypatch):
+    """When a user's own key on a built-in slot answers with a different model,
+    ``model_name`` carries the REAL model while ``selected_model`` stays the slot
+    (PH32, D-22) — the core fix: the slot label no longer lies."""
+    _ok_validate(monkeypatch)
+
+    async def stream_real_model(message, provider_name="groq", provider=None):
+        # The transient BYOK provider reports its own model_id (e.g. gpt-4o).
+        model = provider.model_name if provider is not None else provider_name
+        yield {
+            "type": "token",
+            "content": "hi",
+            "provider": provider_name,
+            "model": model,
+        }
+
+    monkeypatch.setattr(
+        ProviderService, "generate_stream", staticmethod(stream_real_model)
+    )
+    headers = _make_limited_user(client, "byokoverride")
+    # Store an own key on the built-in groq slot pointing at a different model.
+    assert _store(
+        client,
+        headers,
+        [{"slot": "groq", "api_key": "user-key-1234", "model_id": "gpt-4o"}],
+    ).json()["results"][0]["ok"]
+
+    client.post(
+        "/chat/stream", json={"message": "hi", "provider": "groq"}, headers=headers
+    )
+
+    rows = _ledger_models()
+    assert ("groq", "gpt-4o") in rows  # slot stays "groq"; real model is recorded

@@ -46,6 +46,7 @@ async def _add(
     chat_id=None,
     message="hi",
     key_fingerprint=None,
+    model_name=None,
 ):
     async with session_scope() as session:
         session.add(
@@ -61,6 +62,7 @@ async def _add(
                 token_estimated=estimated,
                 chat_id=chat_id,
                 key_fingerprint=key_fingerprint,
+                model_name=model_name,
             )
         )
 
@@ -196,6 +198,79 @@ async def test_breakdown_splits_model_by_key_source(env):
     own_groq = by_key["own"]["models"][0]
     assert own_groq["model"] == "groq"
     assert own_groq["key_fingerprint"] == "gsk_••••OTzu"
+
+
+async def test_by_model_splits_and_carries_real_model(env):
+    # Same slot "groq" on one own key but TWO different real models (the user
+    # repointed model_id) → two rows split by model_name, each carrying it.
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        model="groq",
+        key_fingerprint="gsk_••••OTzu",
+        model_name="gpt-4o",
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=1),
+        model="groq",
+        key_fingerprint="gsk_••••OTzu",
+        model_name="gpt-4o-mini",
+    )
+
+    models = await UsageReportRepository(env.alice).by_model(None, None)
+    by_real = {m["model_name"]: m for m in models if m["model"] == "groq"}
+    assert set(by_real) == {"gpt-4o", "gpt-4o-mini"}
+    assert by_real["gpt-4o"]["requests"] == 1
+
+
+async def test_breakdown_carries_real_model(env):
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        model="groq",
+        billable=False,
+        key_fingerprint="gsk_••••OTzu",
+        model_name="gpt-4o",
+    )
+    groups = await UsageReportRepository(env.alice).breakdown(None, None)
+    own_groq = {g["access_key"]: g for g in groups}["own"]["models"][0]
+    assert own_groq["model_name"] == "gpt-4o"
+
+
+async def test_by_chat_carries_real_model(env):
+    chat = await SavedChatRepository(env.alice).create_chat(
+        title="c", mode="single", model="groq"
+    )
+    cid = chat["id"]
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        chat_id=cid,
+        model="groq",
+        model_name="gpt-4o",
+    )
+    chats = await UsageReportRepository(env.alice).by_chat(None, None)
+    row = {c["chat_id"]: c for c in chats}[cid]
+    assert row["model_name"] == "gpt-4o"
+
+
+async def test_events_and_csv_carry_real_model(env):
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        message="rm",
+        model="groq",
+        model_name="gpt-4o",
+    )
+    page = await UsageReportRepository(env.alice).events(None, None)
+    assert page["events"][0]["model_name"] == "gpt-4o"
+
+    rows = [
+        r
+        async for r in UsageReportRepository(env.alice).iter_events_for_csv(None, None)
+    ]
+    assert rows[0].model_name == "gpt-4o"
 
 
 async def test_events_and_csv_carry_key_fingerprint(env):
@@ -509,5 +584,6 @@ def test_reports_summary_and_csv_http(client, monkeypatch):
     assert csv_resp.status_code == 200
     assert csv_resp.headers["content-type"].startswith("text/csv")
     body = csv_resp.text
-    assert "created_at,mode,model,key_fingerprint" in body
+    # PH32 (D-22): the real-model column sits right after the slot column.
+    assert "created_at,mode,model,model_name,key_fingerprint" in body
     assert "hello world" in body

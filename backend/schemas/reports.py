@@ -34,6 +34,10 @@ class ModelUsage(BaseModel):
     # (``first4••••last4``); NULL = the built-in app key. Splits the same model
     # into separate rows by key source.
     key_fingerprint: str | None
+    # PH32 (D-22): the REAL model that answered (the slot label would lie for an
+    # own key on a built-in slot). NULL for legacy rows → the FE falls back to the
+    # slot label.
+    model_name: str | None = None
     requests: int
     total_tokens: int
     successful: int
@@ -50,6 +54,9 @@ class ChatUsage(BaseModel):
     title: str | None
     mode: str | None
     model: str | None
+    # PH32 (D-22): a representative REAL model for the chat; NULL → FE falls back
+    # to the slot label.
+    model_name: str | None = None
     requests: int
     total_tokens: int
     last_event: datetime | None
@@ -82,6 +89,8 @@ class BreakdownModel(BaseModel):
     model: str | None
     # PH31 (D-21): masked BYOK key behind this model node; NULL = built-in.
     key_fingerprint: str | None
+    # PH32 (D-22): the REAL model for this node; NULL → FE falls back to the slot.
+    model_name: str | None = None
     requests: int
     total_tokens: int
     chats: list[BreakdownChat]
@@ -104,6 +113,9 @@ class UsageEventDetail(BaseModel):
     created_at: datetime
     mode: str
     model: str | None
+    # PH32 (D-22): the REAL model that answered this turn; NULL → FE falls back to
+    # the slot label.
+    model_name: str | None = None
     total_tokens: int | None
     token_estimated: bool
     success: bool
