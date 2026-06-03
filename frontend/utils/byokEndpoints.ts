@@ -31,7 +31,7 @@ export interface ByokEndpoint {
   keysUrl: string;
   /** Page listing the provider's available models. */
   modelsUrl: string;
-  /** False when no key is needed (local Ollama). */
+  /** False when no key is needed (a no-auth provider). */
   needsKey: boolean;
 }
 
@@ -149,14 +149,6 @@ export const BYOK_BASE_URLS: readonly ByokEndpoint[] = [
     keysUrl: "https://www.perplexity.ai/settings/api",
     modelsUrl: "https://docs.perplexity.ai/getting-started/models",
     needsKey: true,
-  },
-  {
-    id: "ollama",
-    label: "Ollama (local)",
-    url: "http://localhost:11434/v1",
-    keysUrl: "",
-    modelsUrl: "https://ollama.com/library",
-    needsKey: false,
   },
 ];
 

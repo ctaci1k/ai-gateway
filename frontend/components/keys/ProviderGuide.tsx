@@ -2,8 +2,8 @@
 //
 // "Where to get keys & models?" directory (PH30, plan 028 / Block E2). A button
 // next to the BYOK intro that opens an accessible panel listing every provider
-// with deep links to its API-keys page and its models list. Ollama is marked as
-// needing no key (local). No logos (owner decision).
+// with deep links to its API-keys page and its models list. A no-auth provider
+// (if any) is marked as needing no key. No logos (owner decision).
 //
 // External links ONLY open provider docs in a new tab — no keys or data ever
 // leave the app (D-12/D-20 untouched). All links are target="_blank"
