@@ -82,14 +82,17 @@ class UsageRepository:
         chat_id: int | None = None,
         billable: bool = True,
         token_estimated: bool = False,
+        key_fingerprint: str | None = None,
     ) -> None:
         """Append one usage event for the turn (one row per request; a Compare
         request is a single event — D-10).
 
         PH27 (D-18): ``chat_id`` links the turn to a saved chat (NULL for
         ad-hoc); ``billable`` is False for BYOK turns (recorded but not charged);
-        ``token_estimated`` flags an estimated ``total_tokens``. Defaults keep
-        backward compatibility with pre-PH27 callers."""
+        ``token_estimated`` flags an estimated ``total_tokens``. PH31 (D-21):
+        ``key_fingerprint`` is the display-only mask of the BYOK key used for the
+        winning model (NULL = built-in app key). Defaults keep backward
+        compatibility with pre-PH27/PH31 callers."""
         async with session_scope() as session:
             session.add(
                 UsageEvent(
@@ -102,5 +105,6 @@ class UsageRepository:
                     chat_id=chat_id,
                     billable=billable,
                     token_estimated=token_estimated,
+                    key_fingerprint=key_fingerprint,
                 )
             )

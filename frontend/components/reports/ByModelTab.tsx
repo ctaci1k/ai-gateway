@@ -5,6 +5,7 @@
 
 "use client";
 
+import KeyBadge from "@/components/reports/KeyBadge";
 import { RepEmpty, RepError, RepLoading } from "@/components/reports/RepState";
 import { formatInt, modelLabel, useReportData } from "@/components/reports/reportUtils";
 import { getByModel, type ReportRange } from "@/services/reportsApi";
@@ -30,6 +31,7 @@ export default function ByModelTab({ range }: ByModelTabProps) {
         <thead>
           <tr>
             <th scope="col">{t("reports.col.model")}</th>
+            <th scope="col">{t("reports.col.key")}</th>
             <th scope="col" className="rep-num">
               {t("reports.col.requests")}
             </th>
@@ -49,10 +51,13 @@ export default function ByModelTab({ range }: ByModelTabProps) {
             const successPct = m.requests > 0 ? Math.round((m.successful / m.requests) * 100) : 0;
             const share = (m.total_tokens / maxTokens) * 100;
             return (
-              <tr key={m.model ?? "unknown"}>
+              <tr key={`${m.model ?? "unknown"}|${m.key_fingerprint ?? "builtin"}`}>
                 <th scope="row" className="rep-cell-strong">
                   {modelLabel(m.model)}
                 </th>
+                <td>
+                  <KeyBadge fingerprint={m.key_fingerprint} />
+                </td>
                 <td className="rep-num">{formatInt(m.requests)}</td>
                 <td className="rep-num">{formatInt(m.total_tokens)}</td>
                 <td className="rep-num">{successPct}%</td>

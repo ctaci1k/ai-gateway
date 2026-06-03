@@ -233,6 +233,9 @@ export interface ReportSummary {
 
 export interface ModelUsage {
   model: string | null;
+  // PH31 (D-21): masked BYOK key behind this model (first4••••last4); null =
+  // the built-in app key. The same model splits into separate rows by key source.
+  key_fingerprint: string | null;
   requests: number;
   total_tokens: number;
   successful: number;
@@ -273,6 +276,8 @@ export interface BreakdownChat {
 
 export interface BreakdownModel {
   model: string | null;
+  // PH31 (D-21): masked BYOK key behind this model node; null = built-in.
+  key_fingerprint: string | null;
   requests: number;
   total_tokens: number;
   chats: BreakdownChat[];
@@ -299,6 +304,8 @@ export interface ReportEvent {
   token_estimated: boolean;
   success: boolean;
   billable: boolean;
+  // PH31 (D-21): masked BYOK key used for this turn's model; null = built-in.
+  key_fingerprint: string | null;
   message: string;
   chat_id: number | null;
   chat_title: string | null;

@@ -63,6 +63,18 @@ export function modelLabel(model: string | null): string {
   return responderLabel(model);
 }
 
+// Key-source attribution for a report row (PH31, D-21). A null fingerprint means
+// the turn ran on the app's built-in key; otherwise it carries the display-only
+// mask (first4••••last4). The translatable "built-in" label is rendered by the
+// component (texts go through t()); this util only classifies + exposes the mask.
+export function keySource(fingerprint: string | null | undefined): {
+  builtin: boolean;
+  mask: string | null;
+} {
+  const mask = (fingerprint ?? "").trim();
+  return mask ? { builtin: false, mask } : { builtin: true, mask: null };
+}
+
 // The API serializes naive UTC without a tz designator; append `Z` so the
 // browser parses it as UTC (mirrors utils/relativeTime::parseUtc).
 function parseUtcMs(iso: string): number {

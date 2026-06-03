@@ -43,6 +43,16 @@
 - **Структуроване логування** (`core/logging.py`): запити, помилки провайдерів, рішення судді.
 - **Базові тести** (`backend/tests/`, pytest): ChatBuffer, rule-based selector, агрегація провайдерів, ретраї/мін-впевненість селектора, `extract_json`, API-кейси (помилки/rate-limit).
 
+## ✅ PH31 — Звіти: атрибуція моделі до джерела ключа (вбудована vs маска свого ключа, D-21)
+
+- **Що:** у Звітах кожна модель показує, ЧИМ викликана — бейдж **«Вбудована»** (app-ключ) або **модель + маска свого ключа** `перші4••••останні4` (напр. `gsk_••••OTzu`). Та сама модель як вбудована і як своя (і різні свої ключі) — **розділена** на окремі рядки/вузли в `by_model`/`breakdown`/журналі/CSV.
+- **БД:** нова колонка `usage_events.key_fingerprint` (String(32), nullable; Alembic `0009_usage_key_fingerprint`, `batch_alter_table`). `NULL` = вбудована; маска = свій ключ.
+- **Запис (display-only маска).** Чиста функція `memory/byok_repository.key_fingerprint(plaintext)` (`перші4••••останні4`, безпечний коротший варіант для коротких ключів). У `routes/chat.py` хелпер `_selected_key_fingerprint(byok, selected_slot)` бере ключ **обраної** моделі ходу (Compare: слот-переможець серед `byok.responders`; Single: judge-слот або responder за `request.provider`) і денормалізовано пише маску в `UsageRepository.record(key_fingerprint=…)` в обох шляхах. **Плейнтекст ключа ніколи в логах/відповідях/ledger; справжнє шифрування БД (AES-256-GCM, `byok_credentials`) не змінене.** Звіти суворо per-user — маску бачить лише власник.
+- **Агрегації.** `usage_report_repository`: `by_model` групує за `(selected_model, key_fingerprint)`; `breakdown` ключує вузол моделі парою `(model, key_fingerprint)` (верхній рівень `access_key`/billable — без змін); `events`+`iter_events_for_csv` несуть `key_fingerprint`. Схеми `ModelUsage`/`BreakdownModel`/`UsageEventDetail` + CSV-стовпець `key_fingerprint` (після `model`).
+- **Frontend.** Спільний `components/reports/KeyBadge.tsx` (бейдж «Вбудована»/mono-маска) + `reportUtils.keySource(fp)`; стовпець «Ключ» у By-model/Activity, бейдж у вузлі Breakdown; типи `types/api.ts`; i18n `reports.col.key`/`reports.builtinModel` (паритет uk/pl/en, для «свого» перевикористано `reports.billing.ownKey`); CSS `.rep-keybadge` на токенах (a11y title/aria-label).
+- **Свідомо поза обсягом:** правдиве ім'я моделі для BYOK-override на вбудованому слоті (показуємо назву слота + маску) — окремий майбутній план. `selected_model`/квоти/orchestrator/access-фільтр — не чіпалися. Нового env/owner-action нема.
+- **Гейти:** BE **187 passed** + ruff/black; FE tsc/eslint/prettier/vitest(29)/build; i18n паритет.
+
 ## ✅ PH30 — BYOK: серверне зашифроване per-account сховище (реверс D-12 → D-20) + model discovery + довідник ключів
 
 > Власник: «зробити як велика корпорація». Архітектор **реверснув D-12** (ключі більше не лише в `sessionStorage`, а зберігаються в БД **зашифровано**, per-account), додав **дропдаун реальних моделей** провайдера і **довідник ключів**. Рішення — [10-open-decisions.md](10-open-decisions.md) (D-20). План — [plans/028-byok-server-encryption.md](plans/028-byok-server-encryption.md).

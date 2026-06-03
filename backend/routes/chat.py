@@ -11,7 +11,7 @@ from core.prompts import render_prompt
 from core.tokens import estimate_tokens
 from db.models import User
 from memory import preferences_logic
-from memory.byok_repository import ByokRepository
+from memory.byok_repository import ByokRepository, key_fingerprint
 from memory.chats_repository import SavedChatRepository
 from memory.repository import get_chat_repository
 from memory.usage_repository import UsageRepository
@@ -42,6 +42,27 @@ def _build_byok_judge(byok: ByokConfig | None):
             {"provider": "byok", "model": judge.model_id},
         )
     return None, None
+
+
+def _selected_key_fingerprint(
+    byok: ByokConfig | None, selected_slot: str | None
+) -> str | None:
+    """Display-only mask of the BYOK key behind the winning model's slot, or
+    None when it ran on the app's built-in key (PH31, D-21).
+
+    Attribution follows the CHOSEN model of the turn: Compare = the winning
+    responder slot (``result["selected_model"]``); Single = the requested slot
+    (``request.provider``), which may be the judge slot (NQ6). The plaintext key
+    is read from the already-decrypted ByokConfig and NEVER logged — only the
+    ``first4••••last4`` mask is returned and persisted."""
+    if not byok or not selected_slot:
+        return None
+    if selected_slot == JUDGE_BYOK_SLOT:
+        return key_fingerprint(byok.judge.api_key) if byok.judge else None
+    for responder in byok.responders:
+        if responder.slot == selected_slot:
+            return key_fingerprint(responder.api_key)
+    return None
 
 
 @router.post(
@@ -162,6 +183,9 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
             request.message, result.get("best_response") or ""
         )
         token_estimated = True
+    # Attribute the winning model to its key source for reports (PH31, D-21):
+    # the BYOK key of the winning slot → masked fingerprint, else NULL (built-in).
+    key_fp = _selected_key_fingerprint(byok, result["selected_model"])
     await UsageRepository(user.id).record(
         mode="compare" if result["compare_mode"] else "single",
         message=request.message,
@@ -171,6 +195,7 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
         token_estimated=token_estimated,
         chat_id=request.chat_id,
         billable=should_charge,
+        key_fingerprint=key_fp,
     )
 
     return ChatResponse(
@@ -241,6 +266,11 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
     should_charge = not is_byok
     if should_charge:
         await QuotaService.check(user)
+
+    # Key-source attribution for reports (PH31, D-21): Single is bound to one
+    # slot (request.provider, possibly the judge), so its key source is fixed up
+    # front. NULL = the built-in app key; otherwise the masked own-key.
+    key_fp = _selected_key_fingerprint(byok, request.provider)
 
     # Single + RAG (PH13/C3): ground the chosen model in the user's documents.
     # The judge isn't involved in Single mode; we inject context straight into
@@ -379,6 +409,7 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
             token_estimated=token_estimated,
             chat_id=chat_link,
             billable=should_charge,
+            key_fingerprint=key_fp,
         )
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")

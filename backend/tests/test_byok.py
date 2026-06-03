@@ -434,3 +434,81 @@ def test_body_byok_is_ignored(client, monkeypatch):
         headers=headers,
     )
     assert client.get("/auth/me").json()["used_today"] == 1
+
+
+# --- Key-source attribution in reports (PH31, D-21) -------------------------
+
+
+def test_key_fingerprint_masks_plaintext():
+    from memory.byok_repository import key_fingerprint
+
+    # Long key → first4••••last4 (the plaintext is never fully revealed).
+    fp = key_fingerprint("gsk_abcdefghijklOTzu")
+    assert fp == "gsk_••••OTzu"
+    assert "abcdefghijkl" not in fp
+    # Short/edge keys reveal at most a masked tail, never the whole value.
+    assert key_fingerprint("ab") == "••••"
+    assert key_fingerprint("abcd") == "••••cd"
+    assert key_fingerprint("") == ""
+    assert key_fingerprint("   ") == ""
+
+
+def test_selected_key_fingerprint_attributes_by_slot():
+    from routes.chat import _selected_key_fingerprint
+    from schemas.chat_schema import ByokConfig, ByokJudge, ByokResponder
+
+    byok = ByokConfig(
+        judge=ByokJudge(api_key="judgekey-9999", model_id="my-qwen"),
+        responders=[
+            ByokResponder(slot="groq", api_key="groqkey-1111", model_id="my-llama"),
+            ByokResponder(slot="cerebras", api_key="cerbkey-2222", model_id="my-glm"),
+        ],
+    )
+    # Compare: the winning responder slot → its own key's mask.
+    assert _selected_key_fingerprint(byok, "groq") == "groq••••1111"
+    assert _selected_key_fingerprint(byok, "cerebras") == "cerb••••2222"
+    # Single on the judge slot (NQ6) → the judge key's mask.
+    assert _selected_key_fingerprint(byok, "byok-judge") == "judg••••9999"
+    # A built-in slot (no stored key) or no config → None (app key).
+    assert _selected_key_fingerprint(byok, "sambanova") is None
+    assert _selected_key_fingerprint(None, "groq") is None
+    assert _selected_key_fingerprint(byok, None) is None
+
+
+def _ledger_fingerprints():
+    """Read the persisted (selected_model, key_fingerprint) pairs from the DB."""
+    import sqlite3
+
+    from tests.conftest import _TEST_DB
+
+    con = sqlite3.connect(_TEST_DB)
+    rows = con.execute(
+        "select selected_model, key_fingerprint from usage_events"
+    ).fetchall()
+    con.close()
+    return rows
+
+
+def test_single_turn_records_key_fingerprint(client, monkeypatch):
+    """A Single turn on a stored key persists the masked fingerprint; a built-in
+    turn persists NULL — and the plaintext key never lands in the ledger."""
+    monkeypatch.setattr(ProviderService, "generate_stream", staticmethod(_fake_stream))
+    _ok_validate(monkeypatch)
+    headers = _make_limited_user(client, "fpuser")
+
+    # Built-in turn → NULL fingerprint.
+    client.post(
+        "/chat/stream", json={"message": "hi", "provider": "groq"}, headers=headers
+    )
+    # Store own groq key, then a BYOK turn → masked fingerprint.
+    assert _store(client, headers, [_GROQ_SAVE]).json()["results"][0]["ok"]
+    client.post(
+        "/chat/stream", json={"message": "hi", "provider": "groq"}, headers=headers
+    )
+
+    rows = _ledger_fingerprints()
+    fingerprints = [fp for _model, fp in rows]
+    assert None in fingerprints  # the built-in turn
+    assert "user••••1234" in fingerprints  # the BYOK turn (user-key-1234)
+    # The plaintext key never reaches the ledger column.
+    assert all("user-key-1234" != (fp or "") for fp in fingerprints)

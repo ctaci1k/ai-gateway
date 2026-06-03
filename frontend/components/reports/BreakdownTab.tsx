@@ -10,6 +10,7 @@
 import { useState } from "react";
 
 import { IconChevronRight } from "@/components/icons/Icons";
+import KeyBadge from "@/components/reports/KeyBadge";
 import { RepEmpty, RepError, RepLoading } from "@/components/reports/RepState";
 import { formatInt, modelLabel, useReportData } from "@/components/reports/reportUtils";
 import { getBreakdown, type ReportRange } from "@/services/reportsApi";
@@ -80,7 +81,9 @@ export default function BreakdownTab({ range, readOnly }: BreakdownTabProps) {
             {accOpen && (
               <div className="rep-acc-panel" id={`${accId}-panel`}>
                 {group.models.map((model) => {
-                  const modId = `mod:${group.access_key}:${model.model ?? "—"}`;
+                  const modId = `mod:${group.access_key}:${model.model ?? "—"}:${
+                    model.key_fingerprint ?? "builtin"
+                  }`;
                   const modOpen = open.has(modId);
                   return (
                     <div className="rep-acc rep-acc--lvl1" key={modId}>
@@ -96,6 +99,7 @@ export default function BreakdownTab({ range, readOnly }: BreakdownTabProps) {
                           className={modOpen ? "rep-acc-ic is-open" : "rep-acc-ic"}
                         />
                         <span className="rep-acc-title">{modelLabel(model.model)}</span>
+                        <KeyBadge fingerprint={model.key_fingerprint} />
                         <span className="rep-acc-stat">
                           {formatInt(model.requests)} · {formatInt(model.total_tokens)}
                         </span>

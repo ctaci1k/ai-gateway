@@ -316,6 +316,8 @@
   "reports.col.time": "Час",
   "reports.col.message": "Повідомлення",
   "reports.col.status": "Статус",
+  "reports.col.key": "Ключ",
+  "reports.builtinModel": "Вбудована",
   "reports.chat.deleted": "Видалені / ad-hoc",
   "reports.chat.adhoc": "Ad-hoc",
   "reports.status.ok": "OK",

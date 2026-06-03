@@ -30,6 +30,10 @@ class ReportSummary(BaseModel):
 
 class ModelUsage(BaseModel):
     model: str | None
+    # PH31 (D-21): display-only mask of the BYOK key behind this model
+    # (``first4••••last4``); NULL = the built-in app key. Splits the same model
+    # into separate rows by key source.
+    key_fingerprint: str | None
     requests: int
     total_tokens: int
     successful: int
@@ -76,6 +80,8 @@ class BreakdownChat(BaseModel):
 
 class BreakdownModel(BaseModel):
     model: str | None
+    # PH31 (D-21): masked BYOK key behind this model node; NULL = built-in.
+    key_fingerprint: str | None
     requests: int
     total_tokens: int
     chats: list[BreakdownChat]
@@ -102,6 +108,8 @@ class UsageEventDetail(BaseModel):
     token_estimated: bool
     success: bool
     billable: bool
+    # PH31 (D-21): masked BYOK key used for this turn's model; NULL = built-in.
+    key_fingerprint: str | None
     message: str
     chat_id: int | None
     chat_title: str | None

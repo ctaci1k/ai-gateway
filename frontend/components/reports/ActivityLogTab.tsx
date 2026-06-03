@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 
 import { IconDownload } from "@/components/icons/Icons";
+import KeyBadge from "@/components/reports/KeyBadge";
 import { RepEmpty, RepError, RepLoading } from "@/components/reports/RepState";
 import { formatDateTime, formatTokens, modelLabel } from "@/components/reports/reportUtils";
 import { eventsCsvUrl, getEvents, type ReportRange } from "@/services/reportsApi";
@@ -93,6 +94,7 @@ export default function ActivityLogTab({ range }: ActivityLogTabProps) {
                 <th scope="col">{t("reports.col.time")}</th>
                 <th scope="col">{t("reports.col.mode")}</th>
                 <th scope="col">{t("reports.col.model")}</th>
+                <th scope="col">{t("reports.col.key")}</th>
                 <th scope="col">{t("reports.col.chat")}</th>
                 <th scope="col">{t("reports.col.message")}</th>
                 <th scope="col" className="rep-num">
@@ -107,6 +109,9 @@ export default function ActivityLogTab({ range }: ActivityLogTabProps) {
                   <td className="rep-nowrap">{formatDateTime(e.created_at)}</td>
                   <td>{t(`reports.mode.${e.mode}`)}</td>
                   <td>{modelLabel(e.model)}</td>
+                  <td>
+                    <KeyBadge fingerprint={e.key_fingerprint} />
+                  </td>
                   <td className="rep-cell-clip">{e.chat_title ?? t("reports.chat.adhoc")}</td>
                   <td className="rep-cell-msg">{e.message}</td>
                   <td className="rep-num">

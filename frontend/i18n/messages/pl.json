@@ -316,6 +316,8 @@
   "reports.col.time": "Czas",
   "reports.col.message": "Wiadomość",
   "reports.col.status": "Status",
+  "reports.col.key": "Klucz",
+  "reports.builtinModel": "Wbudowany",
   "reports.chat.deleted": "Usunięte / doraźne",
   "reports.chat.adhoc": "Doraźne",
   "reports.status.ok": "OK",

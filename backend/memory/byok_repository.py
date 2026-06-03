@@ -24,6 +24,32 @@ def _last4(api_key: str) -> str:
     return key[-4:] if len(key) >= 4 else key
 
 
+# Display-only key mask shown in Usage Reports (PH31, D-21). The middle dots are
+# a single code point each (U+2022); ``first4••••last4`` fits VARCHAR(32).
+KEY_MASK = "••••"
+
+
+def key_fingerprint(api_key: str) -> str:
+    """Display-only fingerprint of a BYOK key for reports: ``first4••••last4``.
+
+    NOT a secret: ``first4`` is a public provider prefix (``gsk_``/``sk-``…) and
+    ``last4`` is the same non-secret tail already shown in the write-only key UI
+    mask. Computed from the plaintext key at record time (the plaintext exists in
+    the decrypted ByokConfig only then) and denormalized into
+    ``usage_events.key_fingerprint`` so the report shows which key was used at
+    that moment even if the key is later changed/removed (D-21). The full key is
+    NEVER returned. Short/edge keys (<8 chars) reveal only a masked tail so the
+    whole value can't be reconstructed."""
+    key = (api_key or "").strip()
+    if not key:
+        return ""
+    if len(key) >= 8:
+        return f"{key[:4]}{KEY_MASK}{key[-4:]}"
+    if len(key) <= 2:
+        return KEY_MASK
+    return f"{KEY_MASK}{key[-2:]}"
+
+
 def _metadata(row: ByokCredential) -> dict[str, Any]:
     """Write-only metadata (no secret): what the UI may read back."""
     return {

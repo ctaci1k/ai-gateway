@@ -45,6 +45,7 @@ async def _add(
     estimated=False,
     chat_id=None,
     message="hi",
+    key_fingerprint=None,
 ):
     async with session_scope() as session:
         session.add(
@@ -59,6 +60,7 @@ async def _add(
                 billable=billable,
                 token_estimated=estimated,
                 chat_id=chat_id,
+                key_fingerprint=key_fingerprint,
             )
         )
 
@@ -137,6 +139,87 @@ async def test_by_model(env):
     assert by["cerebras"]["successful"] == 0
     # Busiest first.
     assert models[0]["model"] == "groq"
+
+
+# --- Key-source attribution (PH31, D-21) ------------------------------------
+
+
+async def test_by_model_splits_same_model_by_key_source(env):
+    # Same model "groq" run on the built-in app key (NULL) and on two different
+    # own keys → three distinct rows split by (selected_model, key_fingerprint).
+    await _add(env.alice, created_at=_BASE, model="groq", key_fingerprint=None)
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=1),
+        model="groq",
+        key_fingerprint=None,
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=2),
+        model="groq",
+        key_fingerprint="gsk_••••OTzu",
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=3),
+        model="groq",
+        key_fingerprint="gsk_••••AbCd",
+    )
+
+    models = await UsageReportRepository(env.alice).by_model(None, None)
+    groq_rows = {m["key_fingerprint"]: m for m in models if m["model"] == "groq"}
+    assert set(groq_rows) == {None, "gsk_••••OTzu", "gsk_••••AbCd"}
+    assert groq_rows[None]["requests"] == 2
+    assert groq_rows["gsk_••••OTzu"]["requests"] == 1
+    assert groq_rows["gsk_••••AbCd"]["requests"] == 1
+
+
+async def test_breakdown_splits_model_by_key_source(env):
+    # Built-in groq (app) + own-key groq (own) → separate model nodes under their
+    # respective access-key groups, each carrying its key_fingerprint.
+    await _add(
+        env.alice, created_at=_BASE, model="groq", billable=True, key_fingerprint=None
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=1),
+        model="groq",
+        billable=False,
+        key_fingerprint="gsk_••••OTzu",
+    )
+
+    groups = await UsageReportRepository(env.alice).breakdown(None, None)
+    by_key = {g["access_key"]: g for g in groups}
+    app_groq = by_key["app"]["models"][0]
+    assert app_groq["model"] == "groq" and app_groq["key_fingerprint"] is None
+    own_groq = by_key["own"]["models"][0]
+    assert own_groq["model"] == "groq"
+    assert own_groq["key_fingerprint"] == "gsk_••••OTzu"
+
+
+async def test_events_and_csv_carry_key_fingerprint(env):
+    await _add(
+        env.alice, created_at=_BASE, key_fingerprint="gsk_••••OTzu", message="m0"
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=1),
+        key_fingerprint=None,
+        message="m1",
+    )
+
+    page = await UsageReportRepository(env.alice).events(None, None)
+    by_msg = {e["message"]: e for e in page["events"]}
+    assert by_msg["m0"]["key_fingerprint"] == "gsk_••••OTzu"
+    assert by_msg["m1"]["key_fingerprint"] is None
+
+    rows = [
+        r
+        async for r in UsageReportRepository(env.alice).iter_events_for_csv(None, None)
+    ]
+    fps = {r.message: r.key_fingerprint for r in rows}
+    assert fps["m0"] == "gsk_••••OTzu" and fps["m1"] is None
 
 
 # --- By chat (incl. deleted/ad-hoc bucket) ----------------------------------
@@ -426,5 +509,5 @@ def test_reports_summary_and_csv_http(client, monkeypatch):
     assert csv_resp.status_code == 200
     assert csv_resp.headers["content-type"].startswith("text/csv")
     body = csv_resp.text
-    assert "created_at,mode,model" in body
+    assert "created_at,mode,model,key_fingerprint" in body
     assert "hello world" in body

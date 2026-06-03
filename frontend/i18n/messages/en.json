@@ -316,6 +316,8 @@
   "reports.col.time": "Time",
   "reports.col.message": "Message",
   "reports.col.status": "Status",
+  "reports.col.key": "Key",
+  "reports.builtinModel": "Built-in",
   "reports.chat.deleted": "Deleted / ad-hoc",
   "reports.chat.adhoc": "Ad-hoc",
   "reports.status.ok": "OK",

@@ -189,6 +189,15 @@ class UsageEvent(Base):
         Boolean, default=False, server_default=false(), nullable=False
     )
 
+    # PH31 (D-21): display-only mask of the BYOK key used for the WINNING model
+    # this turn (``first4••••last4``, e.g. ``gsk_••••OTzu``). NULL = the turn ran
+    # on the app's built-in (app-key) model. Denormalized from the decrypted
+    # ByokConfig at record time (memory/byok_repository.key_fingerprint) so the
+    # report attributes the model to its key source even after the key changes;
+    # the plaintext key is NEVER stored here. Splits the same model into separate
+    # report rows by ``(selected_model, key_fingerprint)``.
+    key_fingerprint: Mapped[str] = mapped_column(String(32), nullable=True)
+
     user: Mapped[User] = relationship(back_populates="usage_events")
 
 

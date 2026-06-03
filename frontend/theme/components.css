@@ -3895,6 +3895,28 @@ button.rail-sq:hover {
   color: var(--muted);
 }
 
+/* Key-source attribution badge (PH31, D-21): "Built-in" vs the own-key mask. */
+.rep-keybadge {
+  display: inline-block;
+  width: fit-content;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.rep-keybadge--builtin {
+  background: var(--soft);
+  color: var(--muted);
+}
+.rep-keybadge--own {
+  background: rgba(var(--accent-rgb), 0.14);
+  color: var(--accent);
+  font-family: var(--font-mono), monospace;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 /* Cards (chart + splits) */
 .rep-card {
   margin-top: 14px;

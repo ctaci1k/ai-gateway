@@ -159,30 +159,38 @@ class UsageReportRepository:
         end: datetime | None,
         billable: bool | None = None,
     ) -> list[dict[str, Any]]:
-        """Per-model breakdown, busiest first."""
+        """Per-model breakdown, busiest first.
+
+        PH31 (D-21): rows are split by ``(selected_model, key_fingerprint)`` so the
+        same model appears separately when run on the built-in app key
+        (``key_fingerprint=NULL``) vs the user's own key (masked), and once per
+        distinct own key. ``key_fingerprint`` is returned for the UI badge.
+        """
         scope = self._scope(start, end, billable)
         async with session_scope() as session:
             rows = (
                 await session.execute(
                     select(
                         UsageEvent.selected_model,
+                        UsageEvent.key_fingerprint,
                         func.count(UsageEvent.id),
                         _tokens_sum(),
                         _success_sum(),
                     )
                     .where(*scope)
-                    .group_by(UsageEvent.selected_model)
+                    .group_by(UsageEvent.selected_model, UsageEvent.key_fingerprint)
                     .order_by(func.count(UsageEvent.id).desc())
                 )
             ).all()
         return [
             {
                 "model": model,
+                "key_fingerprint": key_fingerprint,
                 "requests": requests,
                 "total_tokens": int(tokens or 0),
                 "successful": int(successful or 0),
             }
-            for model, requests, tokens, successful in rows
+            for model, key_fingerprint, requests, tokens, successful in rows
         ]
 
     async def by_chat(
@@ -320,6 +328,7 @@ class UsageReportRepository:
                     UsageEvent.token_estimated,
                     UsageEvent.success,
                     UsageEvent.billable,
+                    UsageEvent.key_fingerprint,
                     UsageEvent.message,
                     UsageEvent.chat_id,
                     Chat.title,
@@ -351,6 +360,7 @@ class UsageReportRepository:
                 "token_estimated": r.token_estimated,
                 "success": r.success,
                 "billable": r.billable,
+                "key_fingerprint": r.key_fingerprint,
                 "message": r.message,
                 "chat_id": r.chat_id,
                 "chat_title": r.title,
@@ -375,6 +385,11 @@ class UsageReportRepository:
         at every level. Built in Python from one flat scan (LEFT JOIN chats) so
         the accordion can expand instantly without extra round-trips. When
         ``billable`` is set, only that access-key group is returned.
+
+        PH31 (D-21): the model level is keyed by ``(model, key_fingerprint)`` so
+        the same model splits into separate nodes by key source (built-in vs each
+        own key); ``key_fingerprint`` is carried on each model node for the badge.
+        The top-level access-key grouping (PH28) is unchanged.
         """
         scope = self._scope(start, end, billable)
         async with session_scope() as session:
@@ -383,6 +398,7 @@ class UsageReportRepository:
                     select(
                         UsageEvent.billable,
                         UsageEvent.selected_model,
+                        UsageEvent.key_fingerprint,
                         UsageEvent.chat_id,
                         Chat.title,
                         Chat.mode,
@@ -393,10 +409,11 @@ class UsageReportRepository:
                 )
             ).all()
 
-        # groups[access_key] = {requests, tokens, models[model] = {requests,
-        #   tokens, chats[chat_id] = {chat_id, title, mode, requests, tokens}}}
+        # groups[access_key] = {requests, tokens, models[(model, fp)] = {model,
+        #   key_fingerprint, requests, tokens, chats[chat_id] = {chat_id, title,
+        #   mode, requests, tokens}}}
         groups: dict[str, dict[str, Any]] = {}
-        for is_billable, model, chat_id, title, mode, tokens in rows:
+        for is_billable, model, key_fingerprint, chat_id, title, mode, tokens in rows:
             tok = int(tokens or 0)
             access_key = "app" if is_billable else "own"
             group = groups.setdefault(
@@ -406,7 +423,14 @@ class UsageReportRepository:
             group["tokens"] += tok
 
             model_node = group["models"].setdefault(
-                model, {"requests": 0, "tokens": 0, "chats": {}}
+                (model, key_fingerprint),
+                {
+                    "model": model,
+                    "key_fingerprint": key_fingerprint,
+                    "requests": 0,
+                    "tokens": 0,
+                    "chats": {},
+                },
             )
             model_node["requests"] += 1
             model_node["tokens"] += tok
@@ -433,10 +457,11 @@ class UsageReportRepository:
             if group is None:
                 continue
             models = []
-            for model, mnode in group["models"].items():
+            for mnode in group["models"].values():
                 models.append(
                     {
-                        "model": model,
+                        "model": mnode["model"],
+                        "key_fingerprint": mnode["key_fingerprint"],
                         "requests": mnode["requests"],
                         "total_tokens": mnode["tokens"],
                         "chats": _sorted(list(mnode["chats"].values())),
@@ -479,6 +504,7 @@ class UsageReportRepository:
                             UsageEvent.token_estimated,
                             UsageEvent.success,
                             UsageEvent.billable,
+                            UsageEvent.key_fingerprint,
                             UsageEvent.message,
                             Chat.title,
                         )
