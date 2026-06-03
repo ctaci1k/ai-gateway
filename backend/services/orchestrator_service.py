@@ -1,6 +1,6 @@
 # backend/services/orchestrator_service.py
 
-from core.prompts import render_prompt
+from core.prompts import render_prompt, with_language_directive
 from selector.response_selector import ResponseSelector
 from services.provider_service import ProviderService
 
@@ -19,6 +19,7 @@ class OrchestratorService:
         judge_provider=None,
         judge_label: dict | None = None,
         judge_prompt_override: str | None = None,
+        response_locale: str | None = None,
     ):
 
         if personalization_profile is None:
@@ -32,6 +33,11 @@ class OrchestratorService:
             responder_message = render_prompt(
                 "rag_augmented", context=rag_context, question=message
             )
+
+        # Response language (PH33/B3b, D-23): responders answer in the user's
+        # message language (fallback = UI locale). Applied to the responder
+        # message ONLY — the judge still receives the original `message`.
+        responder_message = with_language_directive(responder_message, response_locale)
 
         # BYOK (PH17): when a providers_map is supplied the responders run on the
         # user's transient keys; otherwise the built-in singletons are used.

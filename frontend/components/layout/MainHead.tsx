@@ -43,6 +43,11 @@ export default function MainHead() {
   // Single mode.
   const inSavedChat = activeChatId !== null && activeChat?.mode === "single";
   const model = inSavedChat ? activeChat?.model : singleProvider;
+  // "Your model" badge only when the chip's model runs on the user's OWN key
+  // (built-in app keys → no badge). byokModelId is non-null only for a stored
+  // own key and covers responder + judge slots. This is an active-model surface
+  // → intentionally reads current keys (D-22), not the saved turn.
+  const ownKey = model != null && byokModelId(model) !== null;
 
   if (!model) {
     // Picker state (a new Single chat, no model chosen yet).
@@ -74,6 +79,7 @@ export default function MainHead() {
             <IconChevron size={14} />
           </span>
         </button>
+        {ownKey && <span className="cc-your-model">{t("single.yourModel")}</span>}
         {hint && inSavedChat && (
           <div className="cc-modelchip-hint" role="status">
             {t("single.modelLocked")}

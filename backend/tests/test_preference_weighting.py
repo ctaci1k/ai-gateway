@@ -89,3 +89,19 @@ def test_margin_boundary_is_inclusive():
     )
     assert final == "cerebras"
     assert info["applied"] is True
+
+
+def test_criteria_override_disables_nudge():
+    # PH33/B5: with explicit user criteria the judge's verdict is authoritative —
+    # the manual-preference nudge is disabled even on a genuine near-tie.
+    scores = {"groq": 80, "cerebras": 78, "sambanova": 60}
+    final, info = apply_preference_weighting(
+        "groq",
+        scores,
+        RESPONSES,
+        _ctx(manual={"cerebras": 4}),
+        criteria_override=True,
+    )
+    assert final == "groq"
+    assert info["applied"] is False
+    assert info["suppressed_by_criteria"] is True

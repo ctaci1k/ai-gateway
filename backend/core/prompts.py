@@ -65,6 +65,33 @@ def render_prompt(name: str, **values) -> str:
     return string.Template(get_prompt(name)).safe_substitute(**values)
 
 
+# Supported UI locales → human language name used as the response-language
+# FALLBACK when the user's message language is ambiguous (PH33/B3b, D-23). The
+# model detects the message language itself; this is only the tiebreaker.
+_LOCALE_LANGUAGE = {
+    "uk": "Ukrainian",
+    "pl": "Polish",
+    "en": "English",
+}
+_DEFAULT_LANGUAGE = "English"
+
+
+def language_directive(locale: str | None) -> str:
+    """A short instruction telling a responder to answer in the language of the
+    user's message, falling back to the UI ``locale`` (PH33/B3b).
+
+    Prepended to the responder's message (responders only — the judge and
+    embeddings are untouched). Unknown/None locales fall back to English.
+    """
+    name = _LOCALE_LANGUAGE.get((locale or "").strip().lower(), _DEFAULT_LANGUAGE)
+    return render_prompt("responder_language", fallback_language=name)
+
+
+def with_language_directive(message: str, locale: str | None) -> str:
+    """Prepend the response-language directive to a responder message (PH33/B3b)."""
+    return f"{language_directive(locale)}\n\n{message}"
+
+
 def render_template_string(template: str, **values) -> str:
     """Render an arbitrary ``$placeholder`` template string (PH24, E2).
 

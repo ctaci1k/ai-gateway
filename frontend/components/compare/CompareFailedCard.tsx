@@ -14,6 +14,7 @@ const REASON_KEY: Record<FailureReason, string> = {
   rate_limited: "compare.fail.rateLimited",
   timeout: "compare.fail.timeout",
   empty_response: "compare.fail.emptyResponse",
+  length_exceeded: "compare.fail.lengthExceeded",
   unavailable: "compare.fail.unavailable",
 };
 

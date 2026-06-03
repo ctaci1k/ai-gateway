@@ -61,6 +61,11 @@ export default function SingleModelPicker() {
                 </span>
                 <div>
                   <b>{nameFor(slot)}</b>
+                  {byokModelId(slot) !== null && (
+                    <span className="cc-your-model cc-your-model--card">
+                      {t("single.yourModel")}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="desc">{descFor(slot)}</div>

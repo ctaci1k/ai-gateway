@@ -3085,6 +3085,27 @@ button.rail-sq:hover {
 }
 .cc-modelchip-wrap {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* "Your model" badge (B2/D-23): shown only on the user's OWN-key model. Mirrors
+   the Compare winner flag (accent fill, accent-contrast text) but WITHOUT a
+   border, per owner. light + dark inherit via tokens. */
+.cc-your-model {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  padding: 3px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.cc-your-model--card {
+  margin-left: 8px;
+  vertical-align: middle;
 }
 .cc-modelchip {
   display: inline-flex;

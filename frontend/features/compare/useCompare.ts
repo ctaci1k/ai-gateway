@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 
 import { compareChat } from "@/services/compareApi";
 import { DEFAULT_RESPONDER_SLOTS, useKeys } from "@/store/KeysContext";
+import { useI18n } from "@/store/LanguageContext";
 import { useRagDocuments } from "@/store/RagContext";
 
 export interface RunCompareOptions {
@@ -29,6 +30,8 @@ export function useCompare(): UseCompareResult {
   // 4–5 columns. Keys are loaded server-side from storage (PH30, D-20) — no
   // longer sent in the request; only the slot list rides along.
   const { activeResponders } = useKeys();
+  // UI locale → response-language fallback (PH33/B3b).
+  const { lang } = useI18n();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +55,7 @@ export function useCompare(): UseCompareResult {
           selectorEnabled: true,
           chatId: options.chatId ?? null,
           ragEnabled,
+          locale: lang,
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
@@ -59,7 +63,7 @@ export function useCompare(): UseCompareResult {
         setLoading(false);
       }
     },
-    [ragEnabled, activeResponders],
+    [ragEnabled, activeResponders, lang],
   );
 
   return { loading, error, runCompare };

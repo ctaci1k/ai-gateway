@@ -90,6 +90,10 @@ def classify_provider_failure(error: str) -> str:
     """Map a provider error string to a stable reason code so the UI can show a
     localized, human reason in the failed model's column (PH13)."""
     text = (error or "").lower()
+    # Output truncated at the length budget before any answer (B3a) — distinct,
+    # actionable reason. Checked before the generic empty case.
+    if "output truncated" in text or "length limit" in text:
+        return "length_exceeded"
     if "empty response" in text or "no visible content" in text:
         return "empty_response"
     if (

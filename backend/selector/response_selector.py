@@ -144,11 +144,15 @@ class ResponseSelector:
             # Bounded, deterministic nudge toward the user's manually-preferred
             # model on comparable answers (PH16/E, D-11). Never overrides a
             # clearly better answer; fully transparent via preference_weighting.
+            # When the user set explicit judging criteria (PH33/B5), those are
+            # authoritative and the nudge is disabled so it cannot override them.
+            criteria_override = bool((judge_prompt_override or "").strip())
             final_model, weighting = apply_preference_weighting(
                 selected_model=selected_model,
                 scores=parsed_response.scores,
                 responses=responses,
                 personalization_context=personalization_context,
+                criteria_override=criteria_override,
             )
 
             reason = parsed_response.reason

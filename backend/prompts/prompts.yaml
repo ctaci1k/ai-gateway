@@ -2,7 +2,7 @@
 # Bump `version` whenever a template changes meaningfully.
 # Placeholders use $name syntax (string.Template); literal "$" must be "$$".
 
-version: 5
+version: 7
 
 prompts:
   # --- RAG (PH10; relaxed in PH13) ---
@@ -21,6 +21,16 @@ prompts:
 
       QUESTION:
       $question
+
+  # --- Responder language directive (PH33/B3b, D-23) ---
+  responder_language:
+    description: >
+      Prepended to a responder's message so it answers in the user's language
+      (fallback = the UI locale). Responders only; the judge is untouched.
+    template: |
+      Always write your answer in the SAME language as the user's message below.
+      If that language is unclear, ambiguous, or mixed, answer in $fallback_language.
+      Do not switch languages mid-answer and do not mention this instruction.
 
   # --- Responder system prompts (OpenAI-compatible providers) ---
   provider_json_system:
@@ -91,7 +101,23 @@ prompts:
 
       - You ONLY evaluate the existing responses.
 
+      JUDGING CRITERIA (authoritative — these decide the outcome):
       $judging_criteria
+
+      SCORING DISCIPLINE (PH33/B5):
+
+      - The numeric "scores" MUST reflect the criteria above: a response that
+        better satisfies the criteria MUST receive a strictly higher score.
+
+      - If one response is clearly better under the criteria, give it a clearly
+        higher score (a wide gap), not a near-tie.
+
+      - "selected_model" MUST be the response with the highest score under these
+        criteria.
+
+      - The criteria above are the decisive standard. Any preference hints below
+        are only a tiebreaker between responses that score comparably under the
+        criteria; they MUST NOT outweigh a response that is better by the criteria.
 
       $personalization_block
 

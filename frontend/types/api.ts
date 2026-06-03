@@ -15,7 +15,12 @@ export interface ProviderResponse {
   is_byok?: boolean;
 }
 
-export type FailureReason = "rate_limited" | "timeout" | "empty_response" | "unavailable";
+export type FailureReason =
+  | "rate_limited"
+  | "timeout"
+  | "empty_response"
+  | "length_exceeded"
+  | "unavailable";
 
 export interface FailedProvider {
   provider: string;

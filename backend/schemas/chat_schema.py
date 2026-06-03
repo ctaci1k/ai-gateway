@@ -76,6 +76,11 @@ class ChatRequest(BaseModel):
     # RAG (PH10): ground responders in the user's uploaded documents.
     rag_enabled: bool = False
 
+    # UI locale (PH33/B3b, D-23): fallback language for the response when the
+    # message language is ambiguous. Responders answer in the message language;
+    # this only breaks ties. None → backend default (English). Judge untouched.
+    locale: str | None = None
+
     # BYOK: DEPRECATED transit field (PH17). Since PH30 (D-20) keys are stored
     # server-side, ENCRYPTED, per-account, and the chat routes load them from the
     # DB by user_id — this body field is IGNORED. Kept optional for backward

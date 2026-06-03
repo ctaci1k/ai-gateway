@@ -9,7 +9,7 @@
 - `POST /chat` — Compare: паралельні запити до `groq`/`cerebras`/`sambanova`, збір `all_responses`, метадані виконання.
 - `POST /chat/stream` — Single: стрімінг NDJSON від обраної моделі (groq/cerebras/sambanova); підтримує `rag_enabled` (термінальна подія `sources`); після стріму пише хід у rolling-історію (PH13) **і — якщо переданий `chat_id` — у збережений Single-чат** (`chat_messages`, PH24/D-17).
 - `POST /chat/structured` — структурований (JSON) вивід.
-- AI Selector: **Groq-суддя**, нейтральна модель `qwen/qwen3-32b` (не збігається з жодним відповідачем → без self-bias) + rule-based fallback. Перенесено з Gemini у PH13 через ліміт Gemini 20/добу (D-9); Gemini лишається для RAG-embeddings. Причина fallback (`fallback_reason`) і ручний перевибір тепер показуються правдиво й оборотні. Провайдер, що впав, показується окремою карткою з причиною (`failed_providers[].reason`: rate_limited/timeout/empty_response/unavailable).
+- AI Selector: **Groq-суддя**, нейтральна модель `qwen/qwen3-32b` (не збігається з жодним відповідачем → без self-bias) + rule-based fallback. Перенесено з Gemini у PH13 через ліміт Gemini 20/добу (D-9); Gemini лишається для RAG-embeddings. Причина fallback (`fallback_reason`) і ручний перевибір тепер показуються правдиво й оборотні. Провайдер, що впав, показується окремою карткою з причиною (`failed_providers[].reason`: rate_limited/timeout/empty_response/length_exceeded/unavailable).
 - Персоналізація: накопичення `user_preferences` + `personalization_profile`, трекінг ручних виборів.
 - Допоміжні ендпоінти: `/providers`, `/providers/info`, `/memory`, `/preferences`, `/memory/json`, `DELETE /memory`, `/preferences/manual-selection`.
 - Паралелізм через `asyncio.gather` з ізоляцією помилок (`_safe_generate`).
@@ -42,6 +42,19 @@
 - **Rate limiting** (per-IP, mutating-методи) + конфігуровані ліміти запиту (`MAX_MESSAGE_LENGTH`).
 - **Структуроване логування** (`core/logging.py`): запити, помилки провайдерів, рішення судді.
 - **Базові тести** (`backend/tests/`, pytest): ChatBuffer, rule-based selector, агрегація провайдерів, ретраї/мін-впевненість селектора, `extract_json`, API-кейси (помилки/rate-limit).
+
+## ✅ PH33 — UX-поліш + баги B1–B6 (+B3b) (D-23)
+
+Партія дрібних, але важливих правок від власника (план 032). Безпеку D-20/D-21/D-22 не чіпано; квоти/`selected_model`/судова логіка вибору переможця — без змін.
+
+- **(B1) Мітки Compare без «3».** `i18n` `compare.modeTag` → «Порівняння · моделі + суддя»; `topbar.compareInfo` без «три/three/trzy». Лише тексти (uk/pl/en паритет); роутинг/моделі Compare не чіпано.
+- **(B6) Дедуп моделей discovery.** `components/keys/ModelCombobox.tsx`: чиста `dedupeModels()` — дедуп за нормалізованим `id` (trim, case-insensitive, лишає перший, відкидає порожні) на рівні **даних** перед кешем/рендером `<select>` → унікальні опції й ключі (без React-warning). Юніт-тест `ModelCombobox.test.ts`.
+- **(B2) Плашка «ваша модель».** Single-чип (`components/layout/MainHead.tsx`) і картка `SingleModelPicker` показують фіолетову плашку `.cc-your-model` (на токенах `--accent`/`--accent-contrast`, як прапор переможця Compare, **без рамки**) лише коли модель на **власному** ключі (`byokModelId(slot) !== null` — покриває responder + judge). Built-in (app-ключ) — без плашки. Це **active-model** поверхня → коректно на поточних ключах (D-22). i18n `single.yourModel` (uk/pl/en).
+- **(B4) Приглушена світла тема + глибина.** `theme/tokens.css` (лише light-гілка): muted off-white canvas `--bg #e9edf4`, panel/card/sidebar чисто білі → поверхні «плавають» над фоном (інверсія шарування темної теми = глибина); крихкіші межі для преміум-країв. Білий-family, не жовтий/не сірий. Темну тему не чіпано.
+- **(B3a) Робастний парс контенту (Mistral).** `providers/openai_compatible.py`: `_message_text()` читає відповідь із запасних полів (`reasoning_content`/`reasoning`) у `generate_full` і стрімі (буфер reasoning, якщо `content` порожній) → Mistral-magistral більше не дає глухого «empty». `_empty_error(finish_reason)` дає чітку причину: `length` → новий код `length_exceeded` (output truncated) проти `empty_response`. FE: `FailureReason += length_exceeded`, `compare.fail.lengthExceeded`, Single `errors.lengthExceeded`/`errors.emptyResponse` (i18n).
+- **(B3b) Мова відповіді = мова повідомлення.** Директива `prompts.yaml::responder_language` (версія→6) інжектиться у промт **відповідача** через `core.prompts.with_language_directive(msg, locale)`: Compare (`orchestrator.process_chat(response_locale=)`) і Single-стрім (`routes/chat.py`). Фолбек-мова — UI-локаль (`ChatRequest.locale`; FE передає `lang` у `streamChat`/`compareChat`). Суддя/ембеддинги/квоти не чіпані (директива лише в `responder_message`).
+- **(B5) Критерії судді авторитетні; нудж не перебиває.** `prompts.yaml::selector_judge` (версія→7) — блок «SCORING DISCIPLINE»: бали МУСЯТЬ відображати критерії, явно кращий → суттєво вищий бал, критерії = вирішальний стандарт, нудж лише тайбрейкер. `preference_weighting.apply_preference_weighting(criteria_override=)` — за наявності `judge_prompt_override` нудж **вимкнено** (`suppressed_by_criteria`); near-tie-обмеження збережено.
+- **Гейти:** BE pytest **207** + ruff/black; FE tsc/eslint/prettier/vitest(**39**)/build зелені; i18n паритет uk/pl/en. Нового env/owner-action нема; міграцій нема.
 
 ## ✅ PH32 — Правдиве ім'я моделі скрізь (BYOK-aware): звіти, адмін, банер Compare, картки (D-22)
 

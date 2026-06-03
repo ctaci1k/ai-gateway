@@ -173,6 +173,36 @@ async def test_manual_preference_shifts_near_tie_selection(monkeypatch):
     assert result["fallback_used"] is False
 
 
+async def test_explicit_criteria_disable_preference_nudge(monkeypatch):
+    # PH33/B5: the same near-tie that would shift to a manually-preferred model
+    # stays on the judge's criteria-based pick when the user set explicit judging
+    # criteria — the criteria are authoritative, the nudge is disabled.
+    monkeypatch.setattr(
+        ProviderService,
+        "execute_selector_ai",
+        staticmethod(
+            _judge_returning(
+                {
+                    "selected_model": "groq",
+                    "confidence": 0.9,
+                    "reason": "best by the user's criteria",
+                    "scores": {"groq": 80, "cerebras": 78},
+                }
+            )
+        ),
+    )
+    result = await ResponseSelector.select_best_response(
+        "q",
+        RESPONSES,
+        personalization_profile={"manual_model_selections": {"cerebras": 4}},
+        judge_prompt_override="Prioritise factual correctness above all else.",
+    )
+    assert result["selected_model"] == "groq"
+    assert result["preference_weighting"]["applied"] is False
+    assert result["preference_weighting"]["suppressed_by_criteria"] is True
+    assert result["fallback_used"] is False
+
+
 async def test_manual_preference_does_not_override_clear_winner(monkeypatch):
     # groq is clearly ahead → preference must not override it.
     monkeypatch.setattr(

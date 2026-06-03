@@ -6,6 +6,7 @@ import time
 import pytest
 
 from providers.base_provider import BaseProvider
+from services.orchestrator_service import OrchestratorService
 from services.provider_service import ProviderService, classify_provider_failure
 
 
@@ -175,6 +176,32 @@ async def test_execute_many_marks_is_byok_and_real_model():
     assert meta["groq"]["is_byok"] is True
     assert meta["sambanova"]["is_byok"] is True
     assert meta["cerebras"]["is_byok"] is False
+
+
+# --- Response language directive (PH33/B3b, D-23) ----------------------------
+
+
+async def test_process_chat_injects_language_directive(patched_providers):
+    """The orchestrator prepends the response-language directive to the responder
+    message (responders only); _OkProvider echoes what it received."""
+    result = await OrchestratorService.process_chat(
+        message="Cześć, co słychać?",
+        provider_names=["groq"],
+        response_locale="pl",
+    )
+    responder_text = result["all_responses"]["groq"]["response"]
+    # The directive (Polish fallback) is present AND the original question is kept.
+    assert "Polish" in responder_text
+    assert "Cześć, co słychać?" in responder_text
+
+
+async def test_process_chat_language_directive_defaults_to_english(patched_providers):
+    result = await OrchestratorService.process_chat(
+        message="Hello there",
+        provider_names=["groq"],
+        response_locale=None,
+    )
+    assert "English" in result["all_responses"]["groq"]["response"]
 
 
 def test_interaction_record_preserves_is_byok():

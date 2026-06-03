@@ -38,6 +38,23 @@ interface ModelComboboxProps {
 
 type Status = "idle" | "loading" | "loaded" | "error";
 
+// Dedupe discovered models at the DATA level (B6/D-23): some providers list the
+// same model id more than once (e.g. trailing whitespace or case variants). We
+// normalize by trimmed, lower-cased id and keep the FIRST occurrence, so both the
+// rendered <select> options and their React keys stay unique (no duplicate-key
+// warning). Exported for unit testing.
+export function dedupeModels(models: ModelInfo[]): ModelInfo[] {
+  const seen = new Set<string>();
+  const out: ModelInfo[] = [];
+  for (const m of models) {
+    const norm = m.id.trim().toLowerCase();
+    if (norm === "" || seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(m);
+  }
+  return out;
+}
+
 // Session cache of discovered models, keyed by endpoint + key identity.
 const cache = new Map<string, ModelInfo[]>();
 function cacheKey(baseUrl: string, apiKey: string, slot: string | undefined): string {
@@ -87,8 +104,9 @@ export default function ModelCombobox({
         setStatus("error");
         return;
       }
-      cache.set(key, result.models);
-      setModels(result.models);
+      const deduped = dedupeModels(result.models);
+      cache.set(key, deduped);
+      setModels(deduped);
       setStatus("loaded");
     } catch {
       setReason("unavailable");

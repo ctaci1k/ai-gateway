@@ -20,6 +20,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { streamChat } from "@/services/chatApi";
 import { useChats } from "@/store/ChatsContext";
 import { useKeys } from "@/store/KeysContext";
+import { useI18n } from "@/store/LanguageContext";
 import { useRagDocuments } from "@/store/RagContext";
 import { deriveChatTitle } from "@/utils/chatTitle";
 import type { FailureReason, RagSource, StreamEvent } from "@/types/api";
@@ -75,6 +76,9 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
   // longer sends them. byokModelId is still used to localize an own-key error.
   const { byokModelId } = useKeys();
   const { activeChatId, createActiveChat, reloadActive } = useChats();
+  // UI locale → response-language fallback when the message language is
+  // ambiguous (PH33/B3b).
+  const { lang } = useI18n();
 
   const [loading, setLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
@@ -124,6 +128,7 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
           provider,
           ragEnabled,
           chatId,
+          locale: lang,
         });
         const reader = res.body?.getReader();
         if (!reader) {
@@ -173,8 +178,13 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
           err instanceof StreamError &&
           err.reason === "rate_limited" &&
           byokModelId(provider) !== null;
+        const reason = err instanceof StreamError ? err.reason : null;
         if (ownKeyRateLimited) {
           setError({ messageKey: "errors.ownKeyRateLimited" });
+        } else if (reason === "length_exceeded") {
+          setError({ messageKey: "errors.lengthExceeded" });
+        } else if (reason === "empty_response") {
+          setError({ messageKey: "errors.emptyResponse" });
         } else {
           setError({ message: err instanceof Error ? err.message : undefined });
         }
@@ -184,7 +194,7 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     },
-    [singleProvider, ragEnabled, byokModelId, activeChatId, createActiveChat, reloadActive],
+    [singleProvider, ragEnabled, byokModelId, activeChatId, createActiveChat, reloadActive, lang],
   );
 
   const value = useMemo<ComposerValue>(

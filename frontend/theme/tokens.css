@@ -52,18 +52,27 @@
 }
 
 [data-theme="light"] {
-  --bg: #f7f8fb;
+  /* Muted, premium light theme (B4/D-23). Depth is built the same way the dark
+     theme builds it — by LAYERING distinct surfaces — only inverted: the canvas
+     is a muted off-white and every panel/card/sidebar is pure white, so surfaces
+     read as elevated and "float" above the canvas. Deliberately white-family and
+     neutral-cool: NOT yellow, NOT a flat gray wash. Crisp hairline borders +
+     soft elevation shadows (tokens below) carry the definition that pure-white-
+     on-near-white was missing. Only this branch changes; dark is untouched. */
+  --bg: #e9edf4;
   --panel: #ffffff;
-  --panel-2: #eef1f6;
+  --panel-2: #f3f6fb;
   --sidebar: #ffffff;
   --card: #ffffff;
 
-  --border: rgba(15, 23, 42, 0.1);
-  --border-strong: rgba(15, 23, 42, 0.18);
+  /* Hairline borders, a touch stronger than before so white surfaces have crisp,
+     premium edges against the muted canvas (depth cue). */
+  --border: rgba(15, 23, 42, 0.11);
+  --border-strong: rgba(15, 23, 42, 0.2);
 
   --fg: #0f172a;
   --muted: #475569;
-  --subtle: #94a3b8;
+  --subtle: #8a97a9;
 
   --accent: #7c3aed;
   --accent-rgb: 124, 58, 237;
@@ -77,7 +86,7 @@
   --scrollbar-thumb: rgba(15, 23, 42, 0.18);
   --scrollbar-thumb-hover: rgba(15, 23, 42, 0.32);
 
-  /* neutral fills (light) */
-  --soft: rgba(20, 28, 46, 0.04);
-  --softer: rgba(20, 28, 46, 0.07);
+  /* neutral fills (light) — cool slate tints for hovers/chips/pills. */
+  --soft: rgba(15, 23, 42, 0.04);
+  --softer: rgba(15, 23, 42, 0.07);
 }

@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from core.auth import current_user, require_csrf
 from core.logging import get_logger, log_event
-from core.prompts import render_prompt
+from core.prompts import render_prompt, with_language_directive
 from core.tokens import estimate_tokens
 from db.models import User
 from memory import preferences_logic
@@ -121,6 +121,7 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
         judge_provider=judge_provider,
         judge_label=judge_label,
         judge_prompt_override=judge_prompt_override,
+        response_locale=request.locale,
     )
 
     selector_metadata = result["selector_metadata"]
@@ -291,6 +292,9 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                 context=RagService.build_context(rag_sources),
                 question=request.message,
             )
+    # Response language (PH33/B3b, D-23): Single streams answer in the message
+    # language (fallback = UI locale). The judge isn't involved in Single mode.
+    responder_message = with_language_directive(responder_message, request.locale)
 
     async def generate():
         parts: list[str] = []

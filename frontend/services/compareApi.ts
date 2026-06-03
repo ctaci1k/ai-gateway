@@ -11,6 +11,9 @@ export interface CompareChatParams {
   chatId?: number | null;
   // Ground all responders in the user's documents (PH13/C1).
   ragEnabled?: boolean;
+  // UI locale (PH33/B3b): fallback language for responses when the message
+  // language is ambiguous.
+  locale?: string;
 }
 
 // BYOK keys are loaded server-side from storage (PH30, D-20) — not sent here.
@@ -20,6 +23,7 @@ export async function compareChat({
   selectorEnabled,
   chatId = null,
   ragEnabled = false,
+  locale,
 }: CompareChatParams): Promise<ChatResponse> {
   const response = await apiFetch("/chat", {
     method: "POST",
@@ -30,6 +34,7 @@ export async function compareChat({
       selector_enabled: selectorEnabled,
       chat_id: chatId,
       rag_enabled: ragEnabled,
+      ...(locale ? { locale } : {}),
     },
   });
   return parseJsonResponse<ChatResponse>(response);

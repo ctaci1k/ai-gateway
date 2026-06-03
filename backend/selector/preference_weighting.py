@@ -50,13 +50,24 @@ def apply_preference_weighting(
     scores: dict,
     responses: dict,
     personalization_context: dict | None,
+    criteria_override: bool = False,
 ) -> tuple[str, dict]:
     """Return ``(final_model, info)``.
 
     ``final_model`` is the judge's pick, possibly shifted to a near-tied model
     the user prefers more. ``info`` documents whether/why a shift happened.
+
+    When ``criteria_override`` is set (the user supplied explicit judging
+    criteria, PH33/B5), the criteria are authoritative and the manual-preference
+    nudge is **disabled** entirely — it must never second-guess a verdict the
+    user explicitly told the judge how to make.
     """
     info: dict = {"applied": False}
+
+    if criteria_override:
+        # Explicit criteria win outright: the nudge never overrides them (D-23).
+        info["suppressed_by_criteria"] = True
+        return selected_model, info
 
     if not personalization_context:
         return selected_model, info

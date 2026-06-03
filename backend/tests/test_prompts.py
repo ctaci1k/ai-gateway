@@ -2,7 +2,14 @@
 
 import pytest
 
-from core.prompts import PromptError, get_prompt, prompt_version, render_prompt
+from core.prompts import (
+    PromptError,
+    get_prompt,
+    language_directive,
+    prompt_version,
+    render_prompt,
+    with_language_directive,
+)
 from selector.selector_prompt import SelectorPromptBuilder
 
 
@@ -94,6 +101,26 @@ def test_remap_verdict_passes_through_unknown_keys():
     remapped = SelectorPromptBuilder.remap_verdict_to_slots(verdict, label_to_slot)
     assert remapped["selected_model"] == "groq"
     assert remapped["scores"] == {"groq": 88}
+
+
+def test_language_directive_maps_locale_to_fallback_language():
+    assert "Ukrainian" in language_directive("uk")
+    assert "Polish" in language_directive("pl")
+    assert "English" in language_directive("en")
+    # Unknown / None locales fall back to English.
+    assert "English" in language_directive(None)
+    assert "English" in language_directive("zz")
+    # Case-insensitive.
+    assert "Polish" in language_directive("PL")
+
+
+def test_with_language_directive_prepends_and_preserves_message():
+    out = with_language_directive("Cześć, co słychać?", "pl")
+    assert "Polish" in out  # the directive
+    assert "same language" in out.lower()
+    assert "Cześć, co słychać?" in out  # original message preserved
+    # The directive comes first, the message after.
+    assert out.index("Polish") < out.index("Cześć")
 
 
 def test_response_ordering_is_deterministic_but_not_position_fixed():

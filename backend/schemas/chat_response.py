@@ -27,7 +27,8 @@ class FailedProvider(BaseModel):
     provider: str
     error: str | None = None
     # Stable reason code (PH13): rate_limited / timeout / empty_response /
-    # unavailable. Lets the UI show a localized reason in the failed column.
+    # length_exceeded / unavailable. Lets the UI show a localized reason in the
+    # failed column.
     reason: str | None = None
     # PH32 (D-22): the failed responder's real model id + key source, so the
     # replayed failed card is self-describing too.

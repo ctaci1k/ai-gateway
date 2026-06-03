@@ -9,6 +9,7 @@ import pytest
 from core.config import get_settings
 from core.errors import ProviderError
 from providers.openai_compatible import OpenAICompatibleProvider
+from services.provider_service import classify_provider_failure
 
 
 def _message(content):
@@ -131,3 +132,106 @@ def test_cerebras_registry_budget_matches_settings():
     spec = get_model_spec("cerebras")
     assert spec.max_tokens == get_settings().cerebras_max_tokens
     assert spec.api_model_id == get_settings().cerebras_model
+
+
+# --- B3a: robust content parse (Mistral-style reasoning side-channel) --------
+
+
+class _ResponseProvider(OpenAICompatibleProvider):
+    """Fake whose non-stream call returns a fully-formed response object (so the
+    test can set finish_reason / reasoning_content), and whose stream returns the
+    given chunks."""
+
+    provider_name = "fake"
+    model_name = "fake-model"
+
+    def __init__(self, response=None, stream_chunks=None):
+        self._response = response
+        self._stream_chunks = stream_chunks or []
+
+    def _create(self, **kwargs):
+        if kwargs.get("stream"):
+            return iter(self._stream_chunks)
+        return self._response
+
+
+def _full_choice(message=None, delta=None, finish_reason=None):
+    ns = types.SimpleNamespace(finish_reason=finish_reason)
+    if message is not None:
+        ns.message = message
+    if delta is not None:
+        ns.delta = delta
+    return ns
+
+
+async def test_generate_reads_reasoning_content_fallback():
+    # Mistral magistral-style: empty content, visible answer in reasoning_content.
+    msg = types.SimpleNamespace(content="", reasoning_content="answer via reasoning")
+    response = types.SimpleNamespace(
+        choices=[_full_choice(message=msg, finish_reason="stop")]
+    )
+    provider = _ResponseProvider(response=response)
+    assert await provider.generate("hi") == "answer via reasoning"
+
+
+async def test_generate_length_truncation_is_classified():
+    msg = types.SimpleNamespace(content="")
+    response = types.SimpleNamespace(
+        choices=[_full_choice(message=msg, finish_reason="length")]
+    )
+    provider = _ResponseProvider(response=response)
+    with pytest.raises(ProviderError) as exc:
+        await provider.generate("hi")
+    assert classify_provider_failure(str(exc.value)) == "length_exceeded"
+
+
+async def test_generate_genuinely_empty_is_classified():
+    msg = types.SimpleNamespace(content=None)
+    response = types.SimpleNamespace(
+        choices=[_full_choice(message=msg, finish_reason="stop")]
+    )
+    provider = _ResponseProvider(response=response)
+    with pytest.raises(ProviderError) as exc:
+        await provider.generate("hi")
+    assert classify_provider_failure(str(exc.value)) == "empty_response"
+
+
+async def test_stream_reasoning_fallback_when_no_content():
+    chunks = [
+        types.SimpleNamespace(
+            choices=[
+                _full_choice(
+                    delta=types.SimpleNamespace(content=None, reasoning_content="part1")
+                )
+            ]
+        ),
+        types.SimpleNamespace(
+            choices=[
+                _full_choice(
+                    delta=types.SimpleNamespace(
+                        content=None, reasoning_content="part2"
+                    ),
+                    finish_reason="stop",
+                )
+            ]
+        ),
+    ]
+    provider = _ResponseProvider(stream_chunks=chunks)
+    out = [c async for c in provider.generate_stream("hi")]
+    assert out == ["part1part2"]
+
+
+async def test_stream_length_truncation_is_classified():
+    chunks = [
+        types.SimpleNamespace(
+            choices=[
+                _full_choice(
+                    delta=types.SimpleNamespace(content=None), finish_reason="length"
+                )
+            ]
+        )
+    ]
+    provider = _ResponseProvider(stream_chunks=chunks)
+    with pytest.raises(ProviderError) as exc:
+        [c async for c in provider.generate_stream("hi")]
+    assert classify_provider_failure(str(exc.value)) == "length_exceeded"

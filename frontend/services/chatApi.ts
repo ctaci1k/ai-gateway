@@ -10,6 +10,9 @@ export interface StreamChatParams {
   ragEnabled?: boolean;
   // PH24 (D-17): when set, the Single turn is persisted into this saved chat.
   chatId?: number | null;
+  // UI locale (PH33/B3b): fallback language for the response when the message
+  // language is ambiguous. The model answers in the message language otherwise.
+  locale?: string;
 }
 
 // Single mode: returns the streaming Response (NDJSON) for the caller to read.
@@ -19,6 +22,7 @@ export async function streamChat({
   provider,
   ragEnabled = false,
   chatId = null,
+  locale,
 }: StreamChatParams): Promise<Response> {
   const response = await apiFetch("/chat/stream", {
     method: "POST",
@@ -27,6 +31,7 @@ export async function streamChat({
       provider,
       rag_enabled: ragEnabled,
       ...(chatId != null ? { chat_id: chatId } : {}),
+      ...(locale ? { locale } : {}),
     },
   });
   return ensureOk(response);

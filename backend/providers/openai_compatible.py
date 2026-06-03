@@ -40,21 +40,55 @@ class OpenAICompatibleProvider(BaseProvider):
         # budget from the registry (PH16); falls back to the global default.
         return self.max_output_tokens or get_settings().responder_max_tokens
 
+    @staticmethod
+    def _message_text(message) -> str | None:
+        """Robustly extract the visible answer from a chat completion message
+        (B3a/D-23).
+
+        The OpenAI-compatible contract puts the answer in ``content``, but some
+        reasoning endpoints (notably Mistral "magistral", and some DeepSeek/Qwen
+        deployments) leave ``content`` empty and place the visible answer in a
+        reasoning side-channel (``reasoning_content`` / ``reasoning``). Read those
+        as fallbacks so a real answer is never dropped as "empty"."""
+        content = getattr(message, "content", None)
+        if content and content.strip():
+            return content
+        for field in ("reasoning_content", "reasoning"):
+            alt = getattr(message, field, None)
+            if alt and alt.strip():
+                return alt
+        return None
+
+    def _empty_error(self, finish_reason) -> ProviderError:
+        """Build a clear, classifiable failure when no visible content came back.
+
+        Distinguishes a length-truncated turn (the model hit the output budget
+        before emitting an answer — actionable, distinct reason) from a genuinely
+        empty response. The wording is matched by ``classify_provider_failure`` to
+        a stable reason code → localized UI text."""
+        if finish_reason == "length":
+            return ProviderError(
+                f"{self.provider_name} hit the output length limit before "
+                "producing an answer (output truncated)"
+            )
+        return ProviderError(
+            f"{self.provider_name} returned an empty response "
+            "(model produced no visible content)"
+        )
+
     async def generate_full(self, message: str) -> dict:
         response = await asyncio.to_thread(
             self._create,
             messages=[{"role": "user", "content": message}],
             max_tokens=self._max_tokens(),
         )
-        content = response.choices[0].message.content
-        # A reasoning model that exhausts its budget on hidden reasoning returns
-        # empty content; treat that as a provider failure so Compare never shows
-        # an empty card (E3).
+        choice = response.choices[0]
+        content = self._message_text(choice.message)
+        # No visible content even after the reasoning-field fallbacks: surface a
+        # clear, classifiable reason (truncated vs empty) so Compare never shows a
+        # dead "empty response" card (E3, B3a).
         if not content or not content.strip():
-            raise ProviderError(
-                f"{self.provider_name} returned an empty response "
-                "(model produced no visible content)"
-            )
+            raise self._empty_error(getattr(choice, "finish_reason", None))
         # OpenAI-style usage (PH15). Defensive: some SDKs may omit it.
         total_tokens = None
         usage = getattr(response, "usage", None)
@@ -118,6 +152,8 @@ class OpenAICompatibleProvider(BaseProvider):
 
         produced = False
         usage_tokens: int | None = None
+        finish_reason = None
+        reasoning_buf: list[str] = []
         async for chunk in aiter_in_thread(make_iter):
             # The include_usage final chunk carries usage with empty choices.
             usage = getattr(chunk, "usage", None)
@@ -125,16 +161,30 @@ class OpenAICompatibleProvider(BaseProvider):
                 usage_tokens = getattr(usage, "total_tokens", None)
             if not chunk.choices:
                 continue
-            delta = chunk.choices[0].delta.content
-            if delta:
+            choice = chunk.choices[0]
+            fr = getattr(choice, "finish_reason", None)
+            if fr:
+                finish_reason = fr
+            delta = choice.delta
+            text = getattr(delta, "content", None)
+            if text:
                 produced = True
-                yield delta
+                yield text
+            elif not produced:
+                # Buffer the reasoning side-channel (B3a): if the content channel
+                # stays empty (e.g. Mistral magistral), we still surface this as
+                # the answer rather than dropping the turn as "empty".
+                alt = getattr(delta, "reasoning_content", None) or getattr(
+                    delta, "reasoning", None
+                )
+                if alt:
+                    reasoning_buf.append(alt)
 
         if not produced:
-            raise ProviderError(
-                f"{self.provider_name} returned an empty response "
-                "(model produced no visible content)"
-            )
+            if reasoning_buf:
+                yield "".join(reasoning_buf)
+            else:
+                raise self._empty_error(finish_reason)
 
         # Terminal usage marker (PH27/B1): only when the server reported it, so
         # text-only consumers (and providers without include_usage) are unaffected.
