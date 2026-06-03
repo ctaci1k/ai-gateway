@@ -9,6 +9,7 @@ import type { ValidateResult } from "@/services/keysApi";
 import {
   JUDGE_SLOT,
   buildPersistedState,
+  findIncompleteSlots,
   sanitizeLoadedState,
   shouldClearKeysOnAuthChange,
   type KeysState,
@@ -178,6 +179,61 @@ describe("sanitizeLoadedState", () => {
       responders: [],
     } as unknown as KeysState;
     expect(sanitizeLoadedState(legacy).judge.baseUrl).toBe("");
+  });
+});
+
+describe("findIncompleteSlots (PH29.2 — block save on partial rows)", () => {
+  function state(over: Partial<KeysState>): KeysState {
+    return {
+      judge: { baseUrl: "", apiKey: "", modelId: "", active: false },
+      responders: [
+        { slot: "groq", baseUrl: "", apiKey: "", modelId: "", custom: false, active: false },
+      ],
+      ...over,
+    };
+  }
+
+  it("treats fully-empty built-in slots as fine (no incomplete)", () => {
+    expect(findIncompleteSlots(state({}))).toEqual([]);
+  });
+
+  it("flags a default slot with an endpoint override but no key+model", () => {
+    const s = state({
+      responders: [
+        {
+          slot: "groq",
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "",
+          modelId: "",
+          custom: false,
+          active: false,
+        },
+      ],
+    });
+    expect(findIncompleteSlots(s)).toEqual(["groq"]);
+  });
+
+  it("flags the judge when only one of key/model is set", () => {
+    const s = state({ judge: { baseUrl: "", apiKey: "k", modelId: "", active: false } });
+    expect(findIncompleteSlots(s)).toEqual([JUDGE_SLOT]);
+  });
+
+  it("does not flag a complete built-in slot (key+model, optional base URL)", () => {
+    const s = state({
+      responders: [
+        { slot: "groq", baseUrl: "", apiKey: "k", modelId: "m", custom: false, active: false },
+      ],
+    });
+    expect(findIncompleteSlots(s)).toEqual([]);
+  });
+
+  it("flags a custom slot missing the endpoint", () => {
+    const s = state({
+      responders: [
+        { slot: "c1", baseUrl: "", apiKey: "k", modelId: "m", custom: true, active: false },
+      ],
+    });
+    expect(findIncompleteSlots(s)).toEqual(["c1"]);
   });
 });
 

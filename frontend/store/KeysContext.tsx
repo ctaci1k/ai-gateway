@@ -156,6 +156,40 @@ export function buildPersistedState(
   };
 }
 
+// A built-in slot (judge / default AI 1/2/3) is half-filled: something is set
+// (incl. a base-URL override) but the key+model aren't both present. Base URL is
+// optional here (empty = built-in endpoint), so it doesn't count toward complete.
+// A fully-empty built-in slot is fine (uses the app's built-in key). Pure.
+export function isBuiltinIncomplete(baseUrl: string, apiKey: string, modelId: string): boolean {
+  const filled = baseUrl.trim() !== "" || apiKey.trim() !== "" || modelId.trim() !== "";
+  const complete = apiKey.trim() !== "" && modelId.trim() !== "";
+  return filled && !complete;
+}
+
+// A custom slot (AI 4/5) is partially filled: something set, but not all of
+// base URL + key + model (a custom slot must point at a concrete endpoint). Pure.
+export function isCustomIncomplete(baseUrl: string, apiKey: string, modelId: string): boolean {
+  const filled = baseUrl.trim() !== "" || apiKey.trim() !== "" || modelId.trim() !== "";
+  const complete = baseUrl.trim() !== "" && apiKey.trim() !== "" && modelId.trim() !== "";
+  return filled && !complete;
+}
+
+// Slot ids of rows that are partially filled and must be rejected on Save (the
+// judge is reported as JUDGE_SLOT). Fully-empty rows are fine and excluded. Pure.
+export function findIncompleteSlots(state: KeysState): string[] {
+  const slots: string[] = [];
+  if (isBuiltinIncomplete(state.judge.baseUrl, state.judge.apiKey, state.judge.modelId)) {
+    slots.push(JUDGE_SLOT);
+  }
+  for (const r of state.responders) {
+    const incomplete = r.custom
+      ? isCustomIncomplete(r.baseUrl, r.apiKey, r.modelId)
+      : isBuiltinIncomplete(r.baseUrl, r.apiKey, r.modelId);
+    if (incomplete) slots.push(r.slot);
+  }
+  return slots;
+}
+
 // Decide whether a logged-in-user change must wipe the BYOK keys (PH23/B1).
 // `prev === undefined` is the first auth resolution after mount: keep the keys
 // for a restored authenticated session (same owner, same tab), but clear when

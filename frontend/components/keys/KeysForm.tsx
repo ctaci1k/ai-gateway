@@ -1,19 +1,19 @@
 // frontend/components/keys/KeysForm.tsx
 //
 // BYOK key editor body (PH17 logic, relocated into Settings in PH24/E3; base-URL
-// UX reworked in PH29 and simplified in PH29.1 per owner feedback).
+// UX reworked in PH29 / PH29.1 / PH29.2 per owner feedback).
 //
-// Built-in slots (the judge + default AI 1/2/3) have NO base-URL field: their
-// endpoint is fixed (built-in). They show API key + model ID + a "Clear" button
-// that resets the slot back to the built-in. Only custom AI 4/5 rows have a base
-// URL — a pick from the curated catalogue (BaseUrlSelect) — and a "Remove"
-// button. Every field has an ⓘ InfoTip (where to get it / what to enter /
-// pairing). A half-filled row (key without model, or vice versa) is flagged and
-// never persisted.
+// Every row has a base-URL <select> (BaseUrlSelect) over the curated catalogue
+// (no built-in providers listed, no free text), the API key (masked) and the
+// model ID, each with an ⓘ InfoTip. Built-in slots (judge + AI 1/2/3): base URL
+// is optional (empty = built-in endpoint) and a "Clear" button resets the slot
+// to the built-in. Custom AI 4/5 rows require a base URL and have "Remove".
 //
-// On Save each filled (key + model [+ base_url for custom]) is validated by a
-// live test call; working keys activate, failing ones stay highlighted red.
-// Keys live only in sessionStorage (NQ5) — never persisted/logged.
+// On Save a row that is partially filled (e.g. an endpoint picked without a
+// key+model) blocks the save: it is flagged red with a message and nothing is
+// validated/persisted (PH29.2). Otherwise each filled (key + model [+ base_url])
+// is validated by a live test call; working keys activate, failing ones stay
+// red. Keys live only in sessionStorage (NQ5) — never persisted/logged.
 
 "use client";
 
@@ -24,7 +24,15 @@ import { IconCheck, IconPlus } from "@/components/icons/Icons";
 import BaseUrlSelect from "@/components/keys/BaseUrlSelect";
 import type { ValidateResult } from "@/services/keysApi";
 import { useI18n } from "@/store/LanguageContext";
-import { JUDGE_SLOT, MAX_RESPONDERS, useKeys, type KeysState } from "@/store/KeysContext";
+import {
+  JUDGE_SLOT,
+  MAX_RESPONDERS,
+  findIncompleteSlots,
+  isBuiltinIncomplete,
+  isCustomIncomplete,
+  useKeys,
+  type KeysState,
+} from "@/store/KeysContext";
 import { JUDGE_MODEL, judgeModelName } from "@/utils/judge";
 import { responderLabel } from "@/utils/models";
 
@@ -33,22 +41,6 @@ function cloneState(state: KeysState): KeysState {
     judge: { ...state.judge },
     responders: state.responders.map((r) => ({ ...r })),
   };
-}
-
-// A built-in slot (judge / default) is half-filled: something is set (incl. a
-// base-URL override) but key+model aren't both present. Base URL is optional
-// here — empty means the built-in endpoint — so it doesn't count toward "complete".
-function builtinIncomplete(baseUrl: string, apiKey: string, modelId: string): boolean {
-  const filled = baseUrl.trim() !== "" || apiKey.trim() !== "" || modelId.trim() !== "";
-  const complete = apiKey.trim() !== "" && modelId.trim() !== "";
-  return filled && !complete;
-}
-
-// A custom slot is partially filled: something set, but not all of base+key+model.
-function customIncomplete(baseUrl: string, apiKey: string, modelId: string): boolean {
-  const filled = baseUrl.trim() !== "" || apiKey.trim() !== "" || modelId.trim() !== "";
-  const complete = baseUrl.trim() !== "" && apiKey.trim() !== "" && modelId.trim() !== "";
-  return filled && !complete;
 }
 
 interface KeyInputProps {
@@ -104,6 +96,9 @@ export default function KeysForm() {
   const [results, setResults] = useState<Record<string, ValidateResult>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // True after a Save attempt that was blocked by incomplete rows: escalates the
+  // soft hint to a red error and flags the empty key/model inputs. Reset on edit.
+  const [submittedIncomplete, setSubmittedIncomplete] = useState(false);
 
   const dropResult = useCallback((slot: string) => {
     setResults((prev) => {
@@ -116,6 +111,7 @@ export default function KeysForm() {
 
   const updateJudge = useCallback((field: "apiKey" | "modelId" | "baseUrl", value: string) => {
     setSaved(false);
+    setSubmittedIncomplete(false);
     setDraft((d) => ({ ...d, judge: { ...d.judge, [field]: value, active: false } }));
   }, []);
 
@@ -128,6 +124,7 @@ export default function KeysForm() {
   const updateResponder = useCallback(
     (index: number, field: "apiKey" | "modelId" | "baseUrl", value: string) => {
       setSaved(false);
+      setSubmittedIncomplete(false);
       setDraft((d) => ({
         ...d,
         responders: d.responders.map((r, i) =>
@@ -177,16 +174,27 @@ export default function KeysForm() {
   }, []);
 
   const save = useCallback(async () => {
+    // Drop fully-empty custom rows first, then reject the save outright if any
+    // row is partially filled (e.g. an endpoint picked on AI 1/2/3 without a
+    // key+model): don't validate, don't persist, don't report "Saved" — flag the
+    // rows and keep them as-is so the user can complete them (PH29.2).
+    const pruned: KeysState = {
+      ...draft,
+      responders: draft.responders.filter(
+        (r) => !(r.custom && !r.apiKey.trim() && !r.modelId.trim() && !r.baseUrl.trim()),
+      ),
+    };
+    setDraft(pruned);
+    if (findIncompleteSlots(pruned).length > 0) {
+      setSubmittedIncomplete(true);
+      setSaved(false);
+      return;
+    }
+    setSubmittedIncomplete(false);
+
     setSaving(true);
     setSaved(false);
     try {
-      const pruned: KeysState = {
-        ...draft,
-        responders: draft.responders.filter(
-          (r) => !(r.custom && !r.apiKey.trim() && !r.modelId.trim() && !r.baseUrl.trim()),
-        ),
-      };
-      setDraft(pruned);
       const bySlot = await saveAndValidate(pruned);
       setResults(bySlot);
       const anyFailed = Object.values(bySlot).some((r) => !r.ok);
@@ -199,6 +207,12 @@ export default function KeysForm() {
   const showLabel = t("keys.show");
   const hideLabel = t("keys.hide");
   const judgeResult = results[JUDGE_SLOT];
+  const judgeIncomplete = isBuiltinIncomplete(
+    draft.judge.baseUrl,
+    draft.judge.apiKey,
+    draft.judge.modelId,
+  );
+  const judgeErr = submittedIncomplete && judgeIncomplete;
 
   const defaultSlots = draft.responders.filter((r) => !r.custom).map((r) => r.slot);
   const customSlots = draft.responders.filter((r) => r.custom).map((r) => r.slot);
@@ -265,7 +279,10 @@ export default function KeysForm() {
                 id="keys-judge-key"
                 value={draft.judge.apiKey}
                 placeholder={t("keys.apiKey")}
-                invalid={judgeResult ? !judgeResult.ok : false}
+                invalid={
+                  (judgeResult ? !judgeResult.ok : false) ||
+                  (judgeErr && !draft.judge.apiKey.trim())
+                }
                 showLabel={showLabel}
                 hideLabel={hideLabel}
                 onChange={(v) => updateJudge("apiKey", v)}
@@ -278,7 +295,11 @@ export default function KeysForm() {
               </span>
               <input
                 id="keys-judge-model"
-                className="keys-input keys-input--model"
+                className={
+                  judgeErr && !draft.judge.modelId.trim()
+                    ? "keys-input keys-input--model keys-input--invalid"
+                    : "keys-input keys-input--model"
+                }
                 value={draft.judge.modelId}
                 placeholder={t("keys.modelId")}
                 autoComplete="off"
@@ -287,8 +308,8 @@ export default function KeysForm() {
               />
             </div>
           </div>
-          {builtinIncomplete(draft.judge.baseUrl, draft.judge.apiKey, draft.judge.modelId) && (
-            <p className="keys-hint">{t("keys.incompleteBuiltin")}</p>
+          {judgeIncomplete && (
+            <p className={judgeErr ? "keys-error" : "keys-hint"}>{t("keys.incompleteBuiltin")}</p>
           )}
           {judgeResult && !judgeResult.ok && <p className="keys-error">{t("keys.keyFailed")}</p>}
         </div>
@@ -302,8 +323,9 @@ export default function KeysForm() {
               })
             : t("keys.responderSlot", { n: defaultSlots.indexOf(r.slot) + 1 });
           const incomplete = r.custom
-            ? customIncomplete(r.baseUrl, r.apiKey, r.modelId)
-            : builtinIncomplete(r.baseUrl, r.apiKey, r.modelId);
+            ? isCustomIncomplete(r.baseUrl, r.apiKey, r.modelId)
+            : isBuiltinIncomplete(r.baseUrl, r.apiKey, r.modelId);
+          const rowErr = submittedIncomplete && incomplete;
           return (
             <div className="keys-row" key={r.slot}>
               <div className="keys-row-head">
@@ -351,7 +373,7 @@ export default function KeysForm() {
                     id={`keys-${r.slot}-key`}
                     value={r.apiKey}
                     placeholder={t("keys.apiKey")}
-                    invalid={result ? !result.ok : false}
+                    invalid={(result ? !result.ok : false) || (rowErr && !r.apiKey.trim())}
                     showLabel={showLabel}
                     hideLabel={hideLabel}
                     onChange={(v) => updateResponder(index, "apiKey", v)}
@@ -364,7 +386,11 @@ export default function KeysForm() {
                   </span>
                   <input
                     id={`keys-${r.slot}-model`}
-                    className="keys-input keys-input--model"
+                    className={
+                      rowErr && !r.modelId.trim()
+                        ? "keys-input keys-input--model keys-input--invalid"
+                        : "keys-input keys-input--model"
+                    }
                     value={r.modelId}
                     placeholder={t("keys.modelId")}
                     autoComplete="off"
@@ -374,7 +400,7 @@ export default function KeysForm() {
                 </div>
               </div>
               {incomplete && (
-                <p className="keys-hint">
+                <p className={rowErr ? "keys-error" : "keys-hint"}>
                   {r.custom ? t("keys.incompleteCustom") : t("keys.incompleteBuiltin")}
                 </p>
               )}
