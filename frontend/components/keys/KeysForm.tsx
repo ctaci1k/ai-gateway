@@ -1,19 +1,17 @@
 // frontend/components/keys/KeysForm.tsx
 //
-// BYOK key editor body (PH17 logic, relocated into Settings in PH24/E3; base-URL
-// UX reworked in PH29 / PH29.1 / PH29.2 per owner feedback).
+// BYOK key editor (PH17 logic; base-URL UX from PH29.x; WRITE-ONLY server-side
+// storage from PH30 / D-20).
 //
-// Every row has a base-URL <select> (BaseUrlSelect) over the curated catalogue
-// (no built-in providers listed, no free text), the API key (masked) and the
-// model ID, each with an ⓘ InfoTip. Built-in slots (judge + AI 1/2/3): base URL
-// is optional (empty = built-in endpoint) and a "Clear" button resets the slot
-// to the built-in. Custom AI 4/5 rows require a base URL and have "Remove".
+// Keys are stored server-side, ENCRYPTED, per-account. The form is therefore
+// WRITE-ONLY: model_id / base_url are prefilled from metadata, and the key field
+// is empty with a "••••last4 — enter to replace" placeholder for a stored slot.
+// Saving sends only changed rows (a stored key is reused when only model/base_url
+// change). "Clear" (built-in) / "Remove" (custom) delete the slot server-side.
 //
-// On Save a row that is partially filled (e.g. an endpoint picked without a
-// key+model) blocks the save: it is flagged red with a message and nothing is
-// validated/persisted (PH29.2). Otherwise each filled (key + model [+ base_url])
-// is validated by a live test call; working keys activate, failing ones stay
-// red. Keys live only in sessionStorage (NQ5) — never persisted/logged.
+// Every row keeps the PH29.x affordances: a base-URL <select> (BaseUrlSelect)
+// over the curated catalogue, an ⓘ InfoTip per field, and the PH29.2 block on
+// partially-filled rows (Save flags them red and persists nothing).
 
 "use client";
 
@@ -22,7 +20,9 @@ import { useCallback, useState } from "react";
 import InfoTip from "@/components/common/InfoTip";
 import { IconCheck, IconPlus } from "@/components/icons/Icons";
 import BaseUrlSelect from "@/components/keys/BaseUrlSelect";
-import type { ValidateResult } from "@/services/keysApi";
+import ModelCombobox from "@/components/keys/ModelCombobox";
+import ProviderGuide from "@/components/keys/ProviderGuide";
+import type { SaveEntry, SaveResult } from "@/services/keysApi";
 import { useI18n } from "@/store/LanguageContext";
 import {
   JUDGE_SLOT,
@@ -31,15 +31,42 @@ import {
   isBuiltinIncomplete,
   isCustomIncomplete,
   useKeys,
+  type DraftState,
   type KeysState,
 } from "@/store/KeysContext";
+import { providerLinksForSlot, providerLinksForUrl } from "@/utils/byokEndpoints";
 import { JUDGE_MODEL, judgeModelName } from "@/utils/judge";
 import { responderLabel } from "@/utils/models";
 
-function cloneState(state: KeysState): KeysState {
+// Seed an editable draft from the server-metadata state (key fields start empty).
+function draftFromState(state: KeysState): DraftState {
   return {
-    judge: { ...state.judge },
-    responders: state.responders.map((r) => ({ ...r })),
+    judge: { ...state.judge, apiKey: "" },
+    responders: state.responders.map((r) => ({ ...r, apiKey: "" })),
+  };
+}
+
+// Build the SaveEntry for a row, or null when there's nothing to persist:
+// nothing typed and either empty or already-stored-and-unchanged. Incomplete
+// rows are blocked before this runs, so a returned entry is always complete.
+function entryForRow(
+  row: { slot: string; baseUrl: string; apiKey: string; modelId: string; stored: boolean },
+  original: { baseUrl: string; modelId: string } | undefined,
+  custom: boolean,
+): SaveEntry | null {
+  const apiKey = row.apiKey.trim();
+  const modelId = row.modelId.trim();
+  const baseUrl = row.baseUrl.trim();
+  const hasNewKey = apiKey !== "";
+  const changed = modelId !== (original?.modelId ?? "") || baseUrl !== (original?.baseUrl ?? "");
+  if (!hasNewKey && !row.stored) return null; // empty, nothing to store
+  if (!hasNewKey && row.stored && !changed) return null; // unchanged stored slot
+  return {
+    slot: row.slot,
+    model_id: modelId,
+    base_url: baseUrl || undefined,
+    ...(hasNewKey ? { api_key: apiKey } : {}),
+    custom,
   };
 }
 
@@ -90,15 +117,27 @@ function KeyInput({
 
 export default function KeysForm() {
   const { t } = useI18n();
-  const { state, saveAndValidate } = useKeys();
+  const { state, saveKeys, removeKey } = useKeys();
 
-  const [draft, setDraft] = useState<KeysState>(() => cloneState(state));
-  const [results, setResults] = useState<Record<string, ValidateResult>>({});
+  const [draft, setDraft] = useState<DraftState>(() => draftFromState(state));
+  const [results, setResults] = useState<Record<string, SaveResult>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  // True after a Save attempt that was blocked by incomplete rows: escalates the
-  // soft hint to a red error and flags the empty key/model inputs. Reset on edit.
+  // True after a Save attempt blocked by incomplete rows: escalates the soft hint
+  // to a red error and flags the empty key/model inputs. Reset on edit.
   const [submittedIncomplete, setSubmittedIncomplete] = useState(false);
+
+  // Re-seed the draft whenever the server metadata changes (hydration / save /
+  // delete) using the "adjust state during render" pattern (no effect): typing
+  // doesn't change `state`, so in-progress edits are preserved; a save clears the
+  // key fields and reflects the new last4.
+  const [seededFrom, setSeededFrom] = useState(state);
+  if (seededFrom !== state) {
+    setSeededFrom(state);
+    setDraft(draftFromState(state));
+    setResults({});
+    setSubmittedIncomplete(false);
+  }
 
   const dropResult = useCallback((slot: string) => {
     setResults((prev) => {
@@ -112,14 +151,21 @@ export default function KeysForm() {
   const updateJudge = useCallback((field: "apiKey" | "modelId" | "baseUrl", value: string) => {
     setSaved(false);
     setSubmittedIncomplete(false);
-    setDraft((d) => ({ ...d, judge: { ...d.judge, [field]: value, active: false } }));
+    setDraft((d) => ({ ...d, judge: { ...d.judge, [field]: value } }));
   }, []);
 
   const clearJudge = useCallback(() => {
     setSaved(false);
     dropResult(JUDGE_SLOT);
-    setDraft((d) => ({ ...d, judge: { baseUrl: "", apiKey: "", modelId: "", active: false } }));
-  }, [dropResult]);
+    if (draft.judge.stored) {
+      void removeKey(JUDGE_SLOT); // reseed effect clears the row after delete
+    } else {
+      setDraft((d) => ({
+        ...d,
+        judge: { baseUrl: "", apiKey: "", modelId: "", last4: "", stored: false },
+      }));
+    }
+  }, [draft.judge.stored, dropResult, removeKey]);
 
   const updateResponder = useCallback(
     (index: number, field: "apiKey" | "modelId" | "baseUrl", value: string) => {
@@ -127,32 +173,33 @@ export default function KeysForm() {
       setSubmittedIncomplete(false);
       setDraft((d) => ({
         ...d,
-        responders: d.responders.map((r, i) =>
-          i === index ? { ...r, [field]: value, active: false } : r,
-        ),
+        responders: d.responders.map((r, i) => (i === index ? { ...r, [field]: value } : r)),
       }));
     },
     [],
   );
 
-  // Built-in default slot: reset it back to the built-in (clear key/model).
+  // Built-in default slot: reset it back to the built-in (delete if stored).
   const clearResponder = useCallback(
     (index: number) => {
       setSaved(false);
-      setDraft((d) => {
-        const target = d.responders[index];
-        if (target) dropResult(target.slot);
-        return {
+      const target = draft.responders[index];
+      if (!target) return;
+      dropResult(target.slot);
+      if (target.stored) {
+        void removeKey(target.slot);
+      } else {
+        setDraft((d) => ({
           ...d,
           responders: d.responders.map((r, i) =>
             i === index
-              ? { slot: r.slot, baseUrl: "", apiKey: "", modelId: "", custom: false, active: false }
+              ? { ...r, baseUrl: "", apiKey: "", modelId: "", last4: "", stored: false }
               : r,
           ),
-        };
-      });
+        }));
+      }
     },
-    [dropResult],
+    [draft.responders, dropResult, removeKey],
   );
 
   const addResponder = useCallback(() => {
@@ -163,46 +210,61 @@ export default function KeysForm() {
         ...d,
         responders: [
           ...d.responders,
-          { slot, baseUrl: "", apiKey: "", modelId: "", custom: true, active: false },
+          { slot, baseUrl: "", apiKey: "", modelId: "", last4: "", custom: true, stored: false },
         ],
       };
     });
   }, []);
 
-  const removeResponder = useCallback((index: number) => {
-    setDraft((d) => ({ ...d, responders: d.responders.filter((_, i) => i !== index) }));
-  }, []);
+  const removeResponder = useCallback(
+    (index: number) => {
+      const target = draft.responders[index];
+      if (target?.stored) {
+        void removeKey(target.slot); // reseed effect drops it after delete
+      } else {
+        setDraft((d) => ({ ...d, responders: d.responders.filter((_, i) => i !== index) }));
+      }
+    },
+    [draft.responders, removeKey],
+  );
 
   const save = useCallback(async () => {
-    // Drop fully-empty custom rows first, then reject the save outright if any
-    // row is partially filled (e.g. an endpoint picked on AI 1/2/3 without a
-    // key+model): don't validate, don't persist, don't report "Saved" — flag the
-    // rows and keep them as-is so the user can complete them (PH29.2).
-    const pruned: KeysState = {
-      ...draft,
-      responders: draft.responders.filter(
-        (r) => !(r.custom && !r.apiKey.trim() && !r.modelId.trim() && !r.baseUrl.trim()),
-      ),
-    };
-    setDraft(pruned);
-    if (findIncompleteSlots(pruned).length > 0) {
+    // Reject the save outright if any row is partially filled (PH29.2): don't
+    // validate, don't persist, don't report "Saved" — flag the rows instead.
+    if (findIncompleteSlots(draft).length > 0) {
       setSubmittedIncomplete(true);
       setSaved(false);
       return;
     }
     setSubmittedIncomplete(false);
 
+    // Collect only the rows that actually need persisting.
+    const entries: SaveEntry[] = [];
+    const judgeEntry = entryForRow({ ...draft.judge, slot: JUDGE_SLOT }, state.judge, false);
+    if (judgeEntry) entries.push(judgeEntry);
+    for (const r of draft.responders) {
+      const original = state.responders.find((s) => s.slot === r.slot);
+      const entry = entryForRow(r, original, r.custom);
+      if (entry) entries.push(entry);
+    }
+
+    if (entries.length === 0) {
+      setSaved(true); // nothing changed — already in sync with the server
+      return;
+    }
+
     setSaving(true);
     setSaved(false);
     try {
-      const bySlot = await saveAndValidate(pruned);
+      const resultList = await saveKeys(entries);
+      const bySlot: Record<string, SaveResult> = {};
+      for (const r of resultList) bySlot[r.slot] = r;
       setResults(bySlot);
-      const anyFailed = Object.values(bySlot).some((r) => !r.ok);
-      setSaved(!anyFailed);
+      setSaved(resultList.every((r) => r.ok));
     } finally {
       setSaving(false);
     }
-  }, [draft, saveAndValidate]);
+  }, [draft, state, saveKeys]);
 
   const showLabel = t("keys.show");
   const hideLabel = t("keys.hide");
@@ -211,19 +273,40 @@ export default function KeysForm() {
     draft.judge.baseUrl,
     draft.judge.apiKey,
     draft.judge.modelId,
+    draft.judge.stored,
   );
   const judgeErr = submittedIncomplete && judgeIncomplete;
 
   const defaultSlots = draft.responders.filter((r) => !r.custom).map((r) => r.slot);
   const customSlots = draft.responders.filter((r) => r.custom).map((r) => r.slot);
 
-  // Shared ⓘ tip for each field type (where to get it / what to enter / pairing).
-  const apiKeyInfo = (
-    <InfoTip
-      label={t("keys.infoLabel", { field: t("keys.apiKey") })}
-      text={t("keys.info.apiKey")}
-    />
-  );
+  // Placeholder for a key field: a stored slot shows the masked "replace" hint.
+  const keyPlaceholder = (last4: string, stored: boolean) =>
+    stored && last4 ? t("keys.replaceMask", { last4 }) : t("keys.apiKey");
+
+  // Per-row ⓘ tip for the API key, with a contextual "Get API key ↗" link for
+  // the row's provider (built-in → by slot; custom → by chosen base URL, PH30/E3).
+  const apiKeyInfo = (slot: string, baseUrl: string, custom: boolean) => {
+    const links = custom ? providerLinksForUrl(baseUrl) : providerLinksForSlot(slot);
+    return (
+      <InfoTip
+        label={t("keys.infoLabel", { field: t("keys.apiKey") })}
+        text={t("keys.info.apiKey")}
+        links={
+          links && links.needsKey ? (
+            <a
+              className="keys-info-link"
+              href={links.keysUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t("keys.getKey")} ↗
+            </a>
+          ) : undefined
+        }
+      />
+    );
+  };
   const modelIdInfo = (
     <InfoTip
       label={t("keys.infoLabel", { field: t("keys.modelId") })}
@@ -239,7 +322,10 @@ export default function KeysForm() {
 
   return (
     <div className="keys-form">
-      <p className="keys-intro">{t("keys.intro")}</p>
+      <div className="keys-intro-row">
+        <p className="keys-intro">{t("keys.intro")}</p>
+        <ProviderGuide />
+      </div>
       <ul className="keys-notes">
         <li>{t("keys.noteSecurity")}</li>
         <li>{t("keys.noteFree")}</li>
@@ -273,15 +359,15 @@ export default function KeysForm() {
             <div className="keys-field">
               <span className="keys-field-label">
                 <label htmlFor="keys-judge-key">{t("keys.apiKey")}</label>
-                {apiKeyInfo}
+                {apiKeyInfo(JUDGE_SLOT, draft.judge.baseUrl, false)}
               </span>
               <KeyInput
                 id="keys-judge-key"
                 value={draft.judge.apiKey}
-                placeholder={t("keys.apiKey")}
+                placeholder={keyPlaceholder(draft.judge.last4, draft.judge.stored)}
                 invalid={
                   (judgeResult ? !judgeResult.ok : false) ||
-                  (judgeErr && !draft.judge.apiKey.trim())
+                  (judgeErr && !draft.judge.apiKey.trim() && !draft.judge.stored)
                 }
                 showLabel={showLabel}
                 hideLabel={hideLabel}
@@ -293,18 +379,16 @@ export default function KeysForm() {
                 <label htmlFor="keys-judge-model">{t("keys.modelId")}</label>
                 {modelIdInfo}
               </span>
-              <input
+              <ModelCombobox
                 id="keys-judge-model"
-                className={
-                  judgeErr && !draft.judge.modelId.trim()
-                    ? "keys-input keys-input--model keys-input--invalid"
-                    : "keys-input keys-input--model"
-                }
                 value={draft.judge.modelId}
+                onChange={(v) => updateJudge("modelId", v)}
+                invalid={judgeErr && !draft.judge.modelId.trim()}
                 placeholder={t("keys.modelId")}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => updateJudge("modelId", e.target.value)}
+                slot={JUDGE_SLOT}
+                baseUrl={draft.judge.baseUrl}
+                apiKey={draft.judge.apiKey}
+                stored={draft.judge.stored}
               />
             </div>
           </div>
@@ -323,8 +407,8 @@ export default function KeysForm() {
               })
             : t("keys.responderSlot", { n: defaultSlots.indexOf(r.slot) + 1 });
           const incomplete = r.custom
-            ? isCustomIncomplete(r.baseUrl, r.apiKey, r.modelId)
-            : isBuiltinIncomplete(r.baseUrl, r.apiKey, r.modelId);
+            ? isCustomIncomplete(r.baseUrl, r.apiKey, r.modelId, r.stored)
+            : isBuiltinIncomplete(r.baseUrl, r.apiKey, r.modelId, r.stored);
           const rowErr = submittedIncomplete && incomplete;
           return (
             <div className="keys-row" key={r.slot}>
@@ -367,13 +451,15 @@ export default function KeysForm() {
                 <div className="keys-field">
                   <span className="keys-field-label">
                     <label htmlFor={`keys-${r.slot}-key`}>{t("keys.apiKey")}</label>
-                    {apiKeyInfo}
+                    {apiKeyInfo(r.slot, r.baseUrl, r.custom)}
                   </span>
                   <KeyInput
                     id={`keys-${r.slot}-key`}
                     value={r.apiKey}
-                    placeholder={t("keys.apiKey")}
-                    invalid={(result ? !result.ok : false) || (rowErr && !r.apiKey.trim())}
+                    placeholder={keyPlaceholder(r.last4, r.stored)}
+                    invalid={
+                      (result ? !result.ok : false) || (rowErr && !r.apiKey.trim() && !r.stored)
+                    }
                     showLabel={showLabel}
                     hideLabel={hideLabel}
                     onChange={(v) => updateResponder(index, "apiKey", v)}
@@ -384,18 +470,16 @@ export default function KeysForm() {
                     <label htmlFor={`keys-${r.slot}-model`}>{t("keys.modelId")}</label>
                     {modelIdInfo}
                   </span>
-                  <input
+                  <ModelCombobox
                     id={`keys-${r.slot}-model`}
-                    className={
-                      rowErr && !r.modelId.trim()
-                        ? "keys-input keys-input--model keys-input--invalid"
-                        : "keys-input keys-input--model"
-                    }
                     value={r.modelId}
+                    onChange={(v) => updateResponder(index, "modelId", v)}
+                    invalid={rowErr && !r.modelId.trim()}
                     placeholder={t("keys.modelId")}
-                    autoComplete="off"
-                    spellCheck={false}
-                    onChange={(e) => updateResponder(index, "modelId", e.target.value)}
+                    slot={r.slot}
+                    baseUrl={r.baseUrl}
+                    apiKey={r.apiKey}
+                    stored={r.stored}
                   />
                 </div>
               </div>

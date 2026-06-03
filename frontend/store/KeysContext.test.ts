@@ -1,264 +1,176 @@
 // frontend/store/KeysContext.test.ts
 //
-// Unit tests for the pure BYOK state helpers (PH20, D-15): only valid+working
-// custom (added) models survive into storage; empty/invalid ones are dropped.
+// Unit tests for the pure BYOK state helpers under the PH30 (D-20) server-side,
+// write-only model: metadata → editor state, and the incomplete-row guards that
+// block Save (PH29.2 preserved, now "stored"-aware).
 
 import { describe, expect, it } from "vitest";
 
-import type { ValidateResult } from "@/services/keysApi";
+import type { KeyMeta } from "@/services/keysApi";
 import {
   JUDGE_SLOT,
-  buildPersistedState,
   findIncompleteSlots,
-  sanitizeLoadedState,
-  shouldClearKeysOnAuthChange,
-  type KeysState,
+  isBuiltinIncomplete,
+  isCustomIncomplete,
+  stateFromMetadata,
+  type DraftState,
 } from "@/store/KeysContext";
 
-function baseDraft(): KeysState {
-  return {
-    judge: {
-      baseUrl: " https://api.groq.com/openai/v1 ",
-      apiKey: " jk ",
-      modelId: " jm ",
-      active: false,
-    },
-    responders: [
-      { slot: "groq", baseUrl: "", apiKey: "gk", modelId: "gm", custom: false, active: false },
-      { slot: "cerebras", baseUrl: "", apiKey: "", modelId: "", custom: false, active: false },
-      { slot: "sambanova", baseUrl: "", apiKey: "", modelId: "", custom: false, active: false },
-      {
-        slot: "custom-ok",
-        baseUrl: " https://x/v1 ",
-        apiKey: "ck",
-        modelId: "cm",
-        custom: true,
-        active: false,
-      },
-      {
-        slot: "custom-bad",
-        baseUrl: "https://y/v1",
-        apiKey: "bad",
-        modelId: "bad",
-        custom: true,
-        active: false,
-      },
-      {
-        slot: "custom-empty",
-        baseUrl: "",
-        apiKey: "",
-        modelId: "",
-        custom: true,
-        active: false,
-      },
-    ],
-  };
-}
-
-const okResults: Record<string, ValidateResult> = {
-  groq: { slot: "groq", ok: true },
-  [JUDGE_SLOT]: { slot: JUDGE_SLOT, ok: true },
-  "custom-ok": { slot: "custom-ok", ok: true },
-  "custom-bad": { slot: "custom-bad", ok: false, error: "nope" },
-};
-
-describe("buildPersistedState", () => {
-  it("keeps default slots + valid custom, drops invalid/empty custom (D-15)", () => {
-    const next = buildPersistedState(baseDraft(), okResults);
-    const slots = next.responders.map((r) => r.slot);
-
-    // Three default slots always kept; only the valid custom survives.
-    expect(slots).toEqual(["groq", "cerebras", "sambanova", "custom-ok"]);
-    expect(slots).not.toContain("custom-bad");
-    expect(slots).not.toContain("custom-empty");
+describe("stateFromMetadata", () => {
+  it("always yields the 3 built-in slots (unstored when absent) + judge", () => {
+    const state = stateFromMetadata([]);
+    expect(state.responders.map((r) => r.slot)).toEqual(["groq", "cerebras", "sambanova"]);
+    expect(state.responders.every((r) => !r.stored && !r.custom)).toBe(true);
+    expect(state.judge.stored).toBe(false);
   });
 
-  it("sets active flags from validation and trims fields", () => {
-    const next = buildPersistedState(baseDraft(), okResults);
-    expect(next.judge).toEqual({
-      baseUrl: "https://api.groq.com/openai/v1",
-      apiKey: "jk",
-      modelId: "jm",
-      active: true,
-    });
+  it("maps stored metadata (model/base/last4) and marks slots stored", () => {
+    const keys: KeyMeta[] = [
+      { slot: "groq", base_url: "", model_id: "my-llama", last4: "1234", custom: false },
+      {
+        slot: JUDGE_SLOT,
+        base_url: "https://api.openai.com/v1",
+        model_id: "gpt-4o",
+        last4: "9999",
+        custom: false,
+      },
+      {
+        slot: "custom-x",
+        base_url: "https://x/v1",
+        model_id: "m",
+        last4: "abcd",
+        custom: true,
+      },
+    ];
+    const state = stateFromMetadata(keys);
 
-    const groq = next.responders.find((r) => r.slot === "groq")!;
-    expect(groq.active).toBe(true);
-    const cerebras = next.responders.find((r) => r.slot === "cerebras")!;
-    expect(cerebras.active).toBe(false);
-    const custom = next.responders.find((r) => r.slot === "custom-ok")!;
-    expect(custom.active).toBe(true);
-    expect(custom.baseUrl).toBe("https://x/v1");
+    const groq = state.responders.find((r) => r.slot === "groq")!;
+    expect(groq.stored).toBe(true);
+    expect(groq.modelId).toBe("my-llama");
+    expect(groq.last4).toBe("1234");
+
+    expect(state.judge.stored).toBe(true);
+    expect(state.judge.baseUrl).toBe("https://api.openai.com/v1");
+    expect(state.judge.modelId).toBe("gpt-4o");
+
+    const custom = state.responders.find((r) => r.slot === "custom-x")!;
+    expect(custom).toBeDefined();
+    expect(custom.custom).toBe(true);
+    expect(custom.stored).toBe(true);
+  });
+});
+
+describe("isBuiltinIncomplete (stored-aware)", () => {
+  it("a fully-empty, unstored slot is fine", () => {
+    expect(isBuiltinIncomplete("", "", "", false)).toBe(false);
   });
 
-  it("drops every custom row when none validate", () => {
-    const next = buildPersistedState(baseDraft(), {});
-    expect(next.responders.map((r) => r.slot)).toEqual(["groq", "cerebras", "sambanova"]);
-    expect(next.judge.active).toBe(false);
+  it("a stored slot with a prefilled model (no typed key) is complete", () => {
+    expect(isBuiltinIncomplete("", "", "my-llama", true)).toBe(false);
   });
 
-  it("keeps a base-URL override on a complete built-in slot (PH29.1)", () => {
-    const draft: KeysState = {
-      judge: { baseUrl: "", apiKey: "", modelId: "", active: false },
+  it("an endpoint override with no key+model is incomplete", () => {
+    expect(isBuiltinIncomplete("https://api.openai.com/v1", "", "", false)).toBe(true);
+  });
+
+  it("a typed key without a model is incomplete", () => {
+    expect(isBuiltinIncomplete("", "sk-x", "", false)).toBe(true);
+  });
+
+  it("a model without a key (and not stored) is incomplete", () => {
+    expect(isBuiltinIncomplete("", "", "m", false)).toBe(true);
+  });
+});
+
+describe("isCustomIncomplete (stored-aware)", () => {
+  it("requires endpoint + model + (key or stored)", () => {
+    expect(isCustomIncomplete("https://x/v1", "k", "m", false)).toBe(false);
+    expect(isCustomIncomplete("https://x/v1", "", "m", true)).toBe(false);
+    // missing endpoint
+    expect(isCustomIncomplete("", "k", "m", false)).toBe(true);
+    // missing key and not stored
+    expect(isCustomIncomplete("https://x/v1", "", "m", false)).toBe(true);
+  });
+});
+
+describe("findIncompleteSlots", () => {
+  function draft(over: Partial<DraftState>): DraftState {
+    return {
+      judge: { baseUrl: "", apiKey: "", modelId: "", last4: "", stored: false },
       responders: [
         {
           slot: "groq",
-          baseUrl: " https://api.openai.com/v1 ",
-          apiKey: "k",
-          modelId: "m",
+          baseUrl: "",
+          apiKey: "",
+          modelId: "",
+          last4: "",
           custom: false,
-          active: false,
+          stored: false,
         },
-      ],
-    };
-    const next = buildPersistedState(draft, { groq: { slot: "groq", ok: true } });
-    const groq = next.responders.find((r) => r.slot === "groq")!;
-    expect(groq.baseUrl).toBe("https://api.openai.com/v1");
-    expect(groq.active).toBe(true);
-  });
-
-  it("blanks a half-filled built-in slot back to built-in (PH29.1)", () => {
-    const draft: KeysState = {
-      judge: { baseUrl: "", apiKey: "only-key", modelId: "", active: false },
-      responders: [
-        // key without model → incomplete → blanked
-        { slot: "groq", baseUrl: "", apiKey: "k", modelId: "", custom: false, active: false },
-        // model without key → incomplete → blanked
-        { slot: "cerebras", baseUrl: "", apiKey: "", modelId: "m", custom: false, active: false },
-      ],
-    };
-    const next = buildPersistedState(draft, {});
-    expect(next.judge).toEqual({ baseUrl: "", apiKey: "", modelId: "", active: false });
-    const groq = next.responders.find((r) => r.slot === "groq")!;
-    const cerebras = next.responders.find((r) => r.slot === "cerebras")!;
-    expect(groq).toEqual({
-      slot: "groq",
-      baseUrl: "",
-      apiKey: "",
-      modelId: "",
-      custom: false,
-      active: false,
-    });
-    expect(cerebras.apiKey).toBe("");
-    expect(cerebras.modelId).toBe("");
-  });
-});
-
-describe("sanitizeLoadedState", () => {
-  it("drops legacy custom rows that aren't active, keeps defaults + active custom", () => {
-    const stored: KeysState = {
-      judge: { baseUrl: "", apiKey: "jk", modelId: "jm", active: true },
-      responders: [
-        { slot: "groq", baseUrl: "", apiKey: "", modelId: "", custom: false, active: false },
-        {
-          slot: "custom-live",
-          baseUrl: "https://x/v1",
-          apiKey: "k",
-          modelId: "m",
-          custom: true,
-          active: true,
-        },
-        {
-          slot: "custom-stale",
-          baseUrl: "https://y/v1",
-          apiKey: "k",
-          modelId: "m",
-          custom: true,
-          active: false,
-        },
-      ],
-    };
-    const clean = sanitizeLoadedState(stored);
-    expect(clean.responders.map((r) => r.slot)).toEqual(["groq", "custom-live"]);
-    expect(clean.judge.active).toBe(true);
-  });
-
-  it("normalises a legacy judge with no baseUrl field to empty string (PH29)", () => {
-    const legacy = {
-      judge: { apiKey: "jk", modelId: "jm", active: true },
-      responders: [],
-    } as unknown as KeysState;
-    expect(sanitizeLoadedState(legacy).judge.baseUrl).toBe("");
-  });
-});
-
-describe("findIncompleteSlots (PH29.2 — block save on partial rows)", () => {
-  function state(over: Partial<KeysState>): KeysState {
-    return {
-      judge: { baseUrl: "", apiKey: "", modelId: "", active: false },
-      responders: [
-        { slot: "groq", baseUrl: "", apiKey: "", modelId: "", custom: false, active: false },
       ],
       ...over,
     };
   }
 
-  it("treats fully-empty built-in slots as fine (no incomplete)", () => {
-    expect(findIncompleteSlots(state({}))).toEqual([]);
+  it("treats fully-empty rows as fine", () => {
+    expect(findIncompleteSlots(draft({}))).toEqual([]);
   });
 
   it("flags a default slot with an endpoint override but no key+model", () => {
-    const s = state({
+    const d = draft({
       responders: [
         {
           slot: "groq",
           baseUrl: "https://api.openai.com/v1",
           apiKey: "",
           modelId: "",
+          last4: "",
           custom: false,
-          active: false,
+          stored: false,
         },
       ],
     });
-    expect(findIncompleteSlots(s)).toEqual(["groq"]);
+    expect(findIncompleteSlots(d)).toEqual(["groq"]);
   });
 
   it("flags the judge when only one of key/model is set", () => {
-    const s = state({ judge: { baseUrl: "", apiKey: "k", modelId: "", active: false } });
-    expect(findIncompleteSlots(s)).toEqual([JUDGE_SLOT]);
+    const d = draft({
+      judge: { baseUrl: "", apiKey: "k", modelId: "", last4: "", stored: false },
+    });
+    expect(findIncompleteSlots(d)).toEqual([JUDGE_SLOT]);
   });
 
-  it("does not flag a complete built-in slot (key+model, optional base URL)", () => {
-    const s = state({
+  it("does not flag a stored slot being edited only on its model", () => {
+    const d = draft({
       responders: [
-        { slot: "groq", baseUrl: "", apiKey: "k", modelId: "m", custom: false, active: false },
+        {
+          slot: "groq",
+          baseUrl: "",
+          apiKey: "",
+          modelId: "new-model",
+          last4: "1234",
+          custom: false,
+          stored: true,
+        },
       ],
     });
-    expect(findIncompleteSlots(s)).toEqual([]);
+    expect(findIncompleteSlots(d)).toEqual([]);
   });
 
   it("flags a custom slot missing the endpoint", () => {
-    const s = state({
+    const d = draft({
       responders: [
-        { slot: "c1", baseUrl: "", apiKey: "k", modelId: "m", custom: true, active: false },
+        {
+          slot: "c1",
+          baseUrl: "",
+          apiKey: "k",
+          modelId: "m",
+          last4: "",
+          custom: true,
+          stored: false,
+        },
       ],
     });
-    expect(findIncompleteSlots(s)).toEqual(["c1"]);
-  });
-});
-
-describe("shouldClearKeysOnAuthChange (PH23/B1 security)", () => {
-  it("keeps keys on a restored authenticated session (first resolution → user)", () => {
-    expect(shouldClearKeysOnAuthChange(undefined, 7)).toBe(false);
-  });
-
-  it("clears keys when the first resolution is anonymous (no owner)", () => {
-    expect(shouldClearKeysOnAuthChange(undefined, null)).toBe(true);
-  });
-
-  it("clears keys on logout (user → anonymous)", () => {
-    expect(shouldClearKeysOnAuthChange(7, null)).toBe(true);
-  });
-
-  it("clears keys when switching to a different account", () => {
-    expect(shouldClearKeysOnAuthChange(7, 9)).toBe(true);
-  });
-
-  it("keeps keys while the same user stays logged in", () => {
-    expect(shouldClearKeysOnAuthChange(7, 7)).toBe(false);
-  });
-
-  it("keeps state stable while staying anonymous", () => {
-    expect(shouldClearKeysOnAuthChange(null, null)).toBe(false);
+    expect(findIncompleteSlots(d)).toEqual(["c1"]);
   });
 });

@@ -11,7 +11,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { IconInfo } from "@/components/icons/Icons";
 
@@ -20,9 +20,12 @@ interface InfoTipProps {
   label: string;
   // The explanatory text shown in the popover.
   text: string;
+  // Optional extra content (e.g. a "Get API key ↗" provider link, PH30/E3)
+  // rendered below the text inside the popover.
+  links?: ReactNode;
 }
 
-export default function InfoTip({ label, text }: InfoTipProps) {
+export default function InfoTip({ label, text, links }: InfoTipProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -70,6 +73,7 @@ export default function InfoTip({ label, text }: InfoTipProps) {
       {open && (
         <span id={popoverId} className="keys-info-popover" role="note">
           {text}
+          {links && <span className="keys-info-links">{links}</span>}
         </span>
       )}
     </span>

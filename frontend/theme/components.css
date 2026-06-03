@@ -1770,6 +1770,127 @@ button.rail-sq:hover {
   line-height: 1.5;
   color: var(--muted);
 }
+/* Intro row: blurb + the "Where to get keys & models?" directory (PH30/E). */
+.keys-intro-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.keys-intro-row .keys-intro {
+  flex: 1;
+  min-width: 220px;
+}
+.keys-guide {
+  position: relative;
+}
+.keys-guide-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.keys-guide-trigger:hover {
+  background: var(--soft);
+}
+.keys-guide-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.keys-guide-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: max-content;
+  max-width: 320px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+}
+.keys-guide-title {
+  margin: 0 0 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.keys-guide-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.keys-guide-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.keys-guide-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.keys-guide-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.keys-guide-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.keys-guide-link:hover {
+  text-decoration: underline;
+}
+.keys-guide-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.keys-guide-nokey {
+  font-size: 11.5px;
+  color: var(--subtle);
+  white-space: nowrap;
+}
+/* Contextual "Get API key ↗" link inside an InfoTip popover (PH30/E3). */
+.keys-info-links {
+  display: block;
+  margin-top: 7px;
+}
+.keys-info-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.keys-info-link:hover {
+  text-decoration: underline;
+}
+.keys-info-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 .keys-notes {
   margin: 0 0 16px;
   padding-left: 18px;
@@ -1967,6 +2088,61 @@ button.rail-sq:hover {
   font-size: 12px;
   line-height: 1.4;
   color: var(--subtle);
+}
+/* Model-id combobox: input + "Load models" + datalist (PH30/D discovery). */
+.keys-model {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.keys-model-row {
+  display: flex;
+  gap: 7px;
+  align-items: stretch;
+}
+.keys-model-row .keys-input--model {
+  flex: 1;
+  min-width: 0;
+}
+.keys-model-load {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.keys-model-load:hover:not(:disabled) {
+  background: var(--soft);
+}
+.keys-model-load:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.keys-model-load:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* Inline text button (e.g. "show all", PH30/D). */
+.keys-link-btn {
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.keys-link-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 .keys-add {
   display: flex;

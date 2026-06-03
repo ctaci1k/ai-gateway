@@ -148,11 +148,187 @@ def test_validate_requires_auth_and_csrf(client):
     assert client.post("/keys/validate", json={"entries": []}).status_code == 403
 
 
-# --- Quota semantics with BYOK ---------------------------------------------
+# --- Server-side storage (PH30, D-20) --------------------------------------
+
+# Save entries carry a ``slot`` (the judge slot id is "byok-judge").
+_GROQ_SAVE = {"slot": "groq", "api_key": "user-key-1234", "model_id": "my-llama"}
+_CEREBRAS_SAVE = {"slot": "cerebras", "api_key": "user-key-5678", "model_id": "my-glm"}
+_SAMBANOVA_SAVE = {"slot": "sambanova", "api_key": "user-key-9012", "model_id": "my-ds"}
+_JUDGE_SAVE = {"slot": "byok-judge", "api_key": "user-key-3456", "model_id": "my-qwen"}
+
+
+def _ok_validate(monkeypatch):
+    """Make every transient validation succeed (no network)."""
+
+    async def ok(self):
+        return None
+
+    monkeypatch.setattr(TransientProvider, "validate_credentials", ok)
+
+
+def _store(client, headers, entries):
+    return client.put("/keys", json={"entries": entries}, headers=headers)
+
+
+def test_put_stores_encrypted_and_get_returns_write_only_metadata(client, monkeypatch):
+    _ok_validate(monkeypatch)
+    headers = _csrf(_register(client, "store"))
+
+    resp = _store(client, headers, [_GROQ_SAVE, _JUDGE_SAVE])
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert all(r["ok"] for r in body["results"])
+
+    # GET returns metadata only — never the key, only last4.
+    keys = {k["slot"]: k for k in client.get("/keys").json()["keys"]}
+    assert keys["groq"]["model_id"] == "my-llama"
+    assert keys["groq"]["last4"] == "1234"
+    assert "api_key" not in keys["groq"]
+    assert keys["byok-judge"]["last4"] == "3456"
+
+    # The plaintext key is never in any response body.
+    assert "user-key-1234" not in resp.text
+    assert "user-key-1234" not in client.get("/keys").text
+
+    # Stored ciphertext in the DB is NOT the plaintext key.
+    import sqlite3
+
+    from tests.conftest import _TEST_DB
+
+    con = sqlite3.connect(_TEST_DB)
+    rows = con.execute("select slot, key_ciphertext from byok_credentials").fetchall()
+    con.close()
+    assert rows
+    for _slot, ciphertext in rows:
+        assert b"user-key" not in bytes(ciphertext)
+
+
+def test_put_failing_key_is_not_stored(client, monkeypatch):
+    async def fail(self):
+        raise RuntimeError("Error 401 invalid api key")
+
+    monkeypatch.setattr(TransientProvider, "validate_credentials", fail)
+    headers = _csrf(_register(client, "failsave"))
+
+    resp = _store(client, headers, [_GROQ_SAVE])
+    assert resp.json()["results"][0]["ok"] is False
+    assert client.get("/keys").json()["keys"] == []
+
+
+def test_delete_removes_slot(client, monkeypatch):
+    _ok_validate(monkeypatch)
+    headers = _csrf(_register(client, "del"))
+    _store(client, headers, [_GROQ_SAVE, _CEREBRAS_SAVE])
+
+    resp = client.delete("/keys/groq", headers=headers)
+    assert resp.status_code == 200, resp.text
+    slots = {k["slot"] for k in resp.json()["keys"]}
+    assert slots == {"cerebras"}
+
+
+def test_keys_are_isolated_per_account(client, monkeypatch):
+    _ok_validate(monkeypatch)
+    a_headers = _csrf(_register(client, "alice"))
+    _store(client, a_headers, [_GROQ_SAVE])
+
+    # Switch to a different account: it must see none of alice's keys.
+    b_headers = _csrf(_register(client, "bob"))
+    assert client.get("/keys").json()["keys"] == []
+    # Bob storing his own slot doesn't leak alice's.
+    _store(client, b_headers, [_CEREBRAS_SAVE])
+    assert {k["slot"] for k in client.get("/keys").json()["keys"]} == {"cerebras"}
+
+
+def test_put_reuses_stored_key_when_changing_model(client, monkeypatch):
+    _ok_validate(monkeypatch)
+    headers = _csrf(_register(client, "reuse"))
+    _store(client, headers, [_GROQ_SAVE])
+
+    # Change only the model_id (no api_key sent) → stored key is reused.
+    resp = _store(
+        client,
+        headers,
+        [{"slot": "groq", "model_id": "my-llama-v2"}],
+    )
+    assert resp.json()["results"][0]["ok"] is True
+    keys = {k["slot"]: k for k in client.get("/keys").json()["keys"]}
+    assert keys["groq"]["model_id"] == "my-llama-v2"
+    assert keys["groq"]["last4"] == "1234"  # original key's last4 preserved
+
+
+def test_keys_endpoints_require_auth_and_csrf(client):
+    # Unauthenticated → 401.
+    assert client.get("/keys").status_code == 401
+    assert client.put("/keys", json={"entries": []}).status_code == 401
+    # Authenticated but no CSRF header on a mutation → 403.
+    _register(client, "noco2")
+    assert client.put("/keys", json={"entries": []}).status_code == 403
+    assert client.delete("/keys/groq").status_code == 403
+
+
+# --- Model discovery (PH30, D) ---------------------------------------------
+
+
+def test_models_discovery_tags_chat_models(client, monkeypatch):
+    async def fake_list(self):
+        return ["gpt-4o", "text-embedding-3-small", "whisper-1", "llama-3.3-70b"]
+
+    monkeypatch.setattr(TransientProvider, "list_models", fake_list)
+    headers = _csrf(_register(client, "disc"))
+
+    resp = client.post(
+        "/keys/models",
+        json={"slot": "groq", "api_key": "k", "base_url": ""},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["error_reason"] is None
+    chat = {m["id"]: m["is_chat"] for m in body["models"]}
+    assert chat["gpt-4o"] is True
+    assert chat["llama-3.3-70b"] is True
+    assert chat["text-embedding-3-small"] is False
+    assert chat["whisper-1"] is False
+
+
+def test_models_discovery_falls_back_on_error(client, monkeypatch):
+    async def boom(self):
+        raise RuntimeError("404 not found /models")
+
+    monkeypatch.setattr(TransientProvider, "list_models", boom)
+    headers = _csrf(_register(client, "disc2"))
+
+    resp = client.post(
+        "/keys/models", json={"slot": "groq", "api_key": "k"}, headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["models"] == []
+    assert body["error_reason"] is not None
+
+
+def test_models_discovery_reuses_stored_key(client, monkeypatch):
+    _ok_validate(monkeypatch)
+
+    async def fake_list(self):
+        return ["model-a", "model-b"]
+
+    monkeypatch.setattr(TransientProvider, "list_models", fake_list)
+    headers = _csrf(_register(client, "disc3"))
+    _store(client, headers, [_GROQ_SAVE])
+
+    # No api_key in the body → the stored key is reused (decrypted server-side).
+    resp = client.post("/keys/models", json={"slot": "groq"}, headers=headers)
+    assert resp.status_code == 200, resp.text
+    assert [m["id"] for m in resp.json()["models"]] == ["model-a", "model-b"]
+
+
+# --- Quota semantics with BYOK (keys loaded from server storage) ------------
 
 
 def test_single_on_own_key_is_not_charged(client, monkeypatch):
     monkeypatch.setattr(ProviderService, "generate_stream", staticmethod(_fake_stream))
+    _ok_validate(monkeypatch)
     headers = _make_limited_user(client, "single")
 
     # Default key → charged.
@@ -161,15 +337,10 @@ def test_single_on_own_key_is_not_charged(client, monkeypatch):
     )
     assert client.get("/auth/me").json()["used_today"] == 1
 
-    # Own key → free.
+    # Store own groq key; Single on it now loads from the DB → free.
+    assert _store(client, headers, [_GROQ_SAVE]).json()["results"][0]["ok"]
     client.post(
-        "/chat/stream",
-        json={
-            "message": "hi",
-            "provider": "groq",
-            "byok": {"responders": [_GROQ_BYOK]},
-        },
-        headers=headers,
+        "/chat/stream", json={"message": "hi", "provider": "groq"}, headers=headers
     )
     assert client.get("/auth/me").json()["used_today"] == 1
 
@@ -178,6 +349,7 @@ def test_compare_free_only_when_all_participants_byok(client, monkeypatch):
     monkeypatch.setattr(
         OrchestratorService, "process_chat", staticmethod(_fake_process_chat)
     )
+    _ok_validate(monkeypatch)
     headers = _make_limited_user(client, "cmp")
 
     base = {
@@ -192,23 +364,29 @@ def test_compare_free_only_when_all_participants_byok(client, monkeypatch):
     assert client.get("/auth/me").json()["used_today"] == 1
 
     # Partial (only one responder BYOK, no judge) → still charged.
-    client.post(
-        "/chat",
-        json={**base, "byok": {"responders": [_GROQ_BYOK]}},
-        headers=headers,
-    )
+    _store(client, headers, [_GROQ_SAVE])
+    client.post("/chat", json=base, headers=headers)
     assert client.get("/auth/me").json()["used_today"] == 2
 
     # All participants BYOK (3 responders + judge) → free.
+    _store(client, headers, [_CEREBRAS_SAVE, _SAMBANOVA_SAVE, _JUDGE_SAVE])
+    client.post("/chat", json=base, headers=headers)
+    assert client.get("/auth/me").json()["used_today"] == 2
+
+
+def test_body_byok_is_ignored(client, monkeypatch):
+    """A client can no longer inject keys via the request body (PH30 security)."""
+    monkeypatch.setattr(ProviderService, "generate_stream", staticmethod(_fake_stream))
+    headers = _make_limited_user(client, "ignorebody")
+
+    # Body byok is ignored → the turn is charged like a built-in request.
     client.post(
-        "/chat",
+        "/chat/stream",
         json={
-            **base,
-            "byok": {
-                "responders": [_GROQ_BYOK, _CEREBRAS_BYOK, _SAMBANOVA_BYOK],
-                "judge": _JUDGE_BYOK,
-            },
+            "message": "hi",
+            "provider": "groq",
+            "byok": {"responders": [_GROQ_BYOK]},
         },
         headers=headers,
     )
-    assert client.get("/auth/me").json()["used_today"] == 2
+    assert client.get("/auth/me").json()["used_today"] == 1

@@ -23,8 +23,12 @@ os.environ.setdefault("CHROMA_PATH", ":memory:")
 # limits on their user explicitly.
 TEST_REGISTRATION_CODE = "test-reg-code"
 os.environ.setdefault("REGISTRATION_CODE", TEST_REGISTRATION_CODE)
-os.environ.setdefault("DEFAULT_MAX_REQUESTS_PER_MINUTE", "1000")
 os.environ.setdefault("DEFAULT_MAX_REQUESTS_PER_DAY", "100000")
+# BYOK envelope KEK (PH30, D-20): a fixed base64 of 32 bytes so BYOK storage
+# tests can encrypt/decrypt without a real secret.
+os.environ.setdefault(
+    "BYOK_ENCRYPTION_KEY", "dGVzdC1ieW9rLWtlay0zMi1ieXRlcy1leGFjdGx5ISE="
+)
 
 import pytest  # noqa: E402
 

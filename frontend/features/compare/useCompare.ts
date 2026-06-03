@@ -26,8 +26,9 @@ export function useCompare(): UseCompareResult {
   const { documents } = useRagDocuments();
   const ragEnabled = documents.length > 0;
   // BYOK: extra (custom) responders the user added expand the Compare roster to
-  // 4–5 columns; their keys ride along as transit overrides (PH17).
-  const { activeResponders, byokPayload } = useKeys();
+  // 4–5 columns. Keys are loaded server-side from storage (PH30, D-20) — no
+  // longer sent in the request; only the slot list rides along.
+  const { activeResponders } = useKeys();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +52,6 @@ export function useCompare(): UseCompareResult {
           selectorEnabled: true,
           chatId: options.chatId ?? null,
           ragEnabled,
-          byok: byokPayload(),
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
@@ -59,7 +59,7 @@ export function useCompare(): UseCompareResult {
         setLoading(false);
       }
     },
-    [ragEnabled, activeResponders, byokPayload],
+    [ragEnabled, activeResponders],
   );
 
   return { loading, error, runCompare };

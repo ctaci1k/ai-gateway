@@ -85,6 +85,18 @@ class OpenAICompatibleProvider(BaseProvider):
             )
         )
 
+    async def list_models(self) -> list[str]:
+        """List the model ids the endpoint exposes (BYOK discovery, PH30/D).
+
+        Calls the OpenAI-compatible ``GET /models`` with a short, no-retry
+        timeout (PH21) so a slow/unsupported endpoint fails fast. Returns the
+        sorted ids; raises on any API error so the route can fall back to manual
+        entry. Nothing is stored; the key is never logged."""
+        client = self.client.with_options(timeout=VALIDATE_TIMEOUT_SECONDS)
+        page = await asyncio.to_thread(client.models.list)
+        ids = [getattr(m, "id", None) for m in page.data]
+        return sorted(i for i in ids if i)
+
     async def generate_stream(
         self, message: str
     ) -> AsyncGenerator[str | StreamUsage, None]:

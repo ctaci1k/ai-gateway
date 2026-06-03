@@ -19,7 +19,9 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
+    UniqueConstraint,
     false,
     true,
 )
@@ -82,6 +84,57 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    byok_credentials: Mapped[list["ByokCredential"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class ByokCredential(Base):
+    """A user's BYOK key for one slot, stored ENCRYPTED at rest (PH30, D-20).
+
+    Reverses the D-12 "keys never touch the DB" stance: keys are now persisted
+    per-account so they survive across devices and sessions. The plaintext key
+    is NEVER stored — only the AES-256-GCM ciphertext + nonce (envelope in
+    core/secret_box.py; AAD binds the record to user_id+slot). ``key_last4`` is
+    the non-secret last 4 chars shown in the write-only UI mask; ``key_version``
+    records the envelope version for future KEK rotation.
+
+    One row per (user, slot): ``slot`` is a built-in responder ("groq"/...),
+    "byok-judge", or a custom slot id. Per-user isolation via the user_id FK.
+    """
+
+    __tablename__ = "byok_credentials"
+    __table_args__ = (UniqueConstraint("user_id", "slot", name="uq_byok_user_slot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # Built-in responder slot, "byok-judge", or a custom slot id.
+    slot: Mapped[str] = mapped_column(String(64))
+    # Optional OpenAI-compatible endpoint override (NULL = built-in default).
+    base_url: Mapped[str] = mapped_column(String, nullable=True)
+    model_id: Mapped[str] = mapped_column(String(256))
+    # AES-256-GCM ciphertext + per-record nonce (the key plaintext is never here).
+    key_ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    key_nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    # Non-secret last 4 chars of the key, for the masked write-only UI.
+    key_last4: Mapped[str] = mapped_column(String(8), default="")
+    # Envelope version (prepares KEK rotation, D-20).
+    key_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
+    # Whether this is a user-added custom slot (vs a built-in override).
+    custom: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow
+    )
+
+    user: Mapped[User] = relationship(back_populates="byok_credentials")
 
 
 class UsageEvent(Base):

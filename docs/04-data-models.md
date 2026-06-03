@@ -20,11 +20,11 @@
 | `manually_selected_model` | str \| None | `null` | — |
 | `chat_id` | int \| None | `null` | PH9: персист у збережений чат |
 | `rag_enabled` | bool | `false` | PH10 |
-| `byok` | ByokConfig \| None | `null` | PH17: транзитні ключі (нижче) |
+| `byok` | ByokConfig \| None | `null` | PH17 → **DEPRECATED (PH30, D-20)**: приймається, але **ігнорується** (ключі — зі сховища `byok_credentials`, нижче) |
 
-### ByokConfig (PH17, D-12) — транзитна модель ключів
+### ByokConfig (PH17 → PH30) — модель ключів
 
-**Ніколи не персиститься** — ні в БД, ні в логах. Живе лише в `sessionStorage` браузера й передається в кожному запиті; бекенд будує провайдерів транзитно (in-memory на час запиту) і відкидає (NQ5).
+**PH30 (D-20):** джерело ключів — **зашифроване серверне сховище** `byok_credentials` (нижче), **не** тіло запиту. Поле `ChatRequest.byok` лишається опційним, але **ігнорується**. Бекенд розшифровує ключі в `memory/byok_repository.py::load_config()` і будує той самий `ByokConfig` транзитно (in-memory на час запиту). Структура `ByokConfig` (judge + responders) незмінна:
 
 ```jsonc
 {
@@ -35,7 +35,27 @@
 }
 ```
 - Дефолтні слоти беруть фіксований endpoint провайдера (`base_url` опційний); кастомні (4–5-й) **потребують** `base_url` (OpenAI-сумісний).
-- FE-дзеркало — `store/KeysContext.tsx` (`ByokPayload`). Валідація — `POST /keys/validate` ([03](03-api-contracts.md)).
+- FE-дзеркало — `store/KeysContext.tsx` (метадані, write-only). Сховище/валідація — `/keys` CRUD + `POST /keys/models` ([03](03-api-contracts.md)).
+
+### byok_credentials (PH30, D-20) — зашифроване сховище ключів
+
+`db/models.py::ByokCredential`, Alembic `0008_byok_credentials`. Один рядок = один слот юзера; **UNIQUE(`user_id`,`slot`)**; per-user ізоляція через FK `user_id` (ondelete CASCADE, index).
+
+| Колонка | Тип | Нотатка |
+|---|---|---|
+| `id` | int PK | |
+| `user_id` | FK→users CASCADE, index | власник |
+| `slot` | String(64) | `groq`/`cerebras`/`sambanova` / `byok-judge` / `custom-*` |
+| `base_url` | String, nullable | override ендпоінта (NULL = вбудований) |
+| `model_id` | String(256) | |
+| `key_ciphertext` | LargeBinary | AES-256-GCM шифротекст ключа |
+| `key_nonce` | LargeBinary | 96-біт nonce запису |
+| `key_last4` | String(8) | останні 4 символи ключа (для write-only маски; **не секрет**) |
+| `key_version` | int, default 1 | версія envelope (під ротацію KEK) |
+| `custom` | bool | доданий слот (vs override вбудованого) |
+| `created_at`/`updated_at` | DateTime | |
+
+**Envelope (`core/secret_box.py`):** AES-256-GCM, KEK з env `BYOK_ENCRYPTION_KEY` (base64, 32 байти), випадковий nonce на запис, **AAD = `f"{user_id}:{slot}"`** (підміна рядка в БД провалює GCM-тег). **Плейнтекст ключа й KEK ніколи не в БД/логах.** `GET /keys` віддає лише метадані (`last4`) — повний ключ не повертається.
 
 ### Семантика квотних вікон (PH17, D-12) — `services/quota_service.py`
 
@@ -153,6 +173,7 @@ Async SQLAlchemy 2.x; dev — SQLite (`sqlite+aiosqlite`), prod — Postgres (`p
 - `chats` (PH9; **PH24/D-17**) — `id` (PK), `user_id` (FK→users, CASCADE, index), `title`, **`mode`** (`"single"`/`"compare"`, default `"compare"`, NOT NULL), **`model`** (str, nullable — слот моделі для Single; NULL для Compare), `created_at`, `updated_at`. Ліміт **25** на користувача (`SAVED_CHATS_LIMIT`), **спільний** на Single+Compare. Міграція Alembic `0006_chat_mode_model` (додає `mode`+`model`).
 - `chat_messages` (PH9) — `id` (PK), `chat_id` (FK→chats, CASCADE, index), `created_at` (index), `payload` (JSON: запис ходу — та сама форма, що `interactions.payload`). Зберігає **і Compare-, і Single-ходи** (PH24/D-17); для Single `payload.compare_mode=false`, `all_responses` має один слот.
 - `documents` (PH10) — `id` (PK), `user_id` (FK→users, CASCADE, index), `filename`, `content_type`, `chunk_count`, `created_at`. Метадані завантажених RAG-документів; **chunks+embeddings** живуть у ChromaDB (поза SQL), тегнуті `user_id`+`document_id` для ізоляції. Ліміт `RAG_MAX_DOCUMENTS`.
+- `byok_credentials` (**PH30, D-20**) — зашифроване per-account сховище BYOK-ключів (детальна таблиця вище). `id` (PK), `user_id` (FK→users, CASCADE, index), `slot`, `base_url?`, `model_id`, `key_ciphertext`/`key_nonce` (LargeBinary), `key_last4`, `key_version`, `custom`, `created_at`/`updated_at`; **UNIQUE(`user_id`,`slot`)**. AES-256-GCM envelope (`core/secret_box.py`, KEK з `BYOK_ENCRYPTION_KEY`); плейнтекст ніколи не зберігається. Міграція Alembic `0008_byok_credentials`.
 - `usage_events` (PH15, D-10; **PH27/D-18**) — `id` (PK), `user_id` (FK→users, CASCADE, index), `created_at` (index), `mode` (`"compare"`/`"single"`), `message`, `selected_model` (nullable), `total_tokens` (int, nullable), `success` (bool), **`chat_id`** (FK→chats, **ondelete SET NULL**, nullable, index), **`billable`** (bool, NOT NULL, server_default `true`), **`token_estimated`** (bool, NOT NULL, server_default `false`). **Append-only канонічний per-turn ledger** (на відміну від rolling `interactions`, **не обрізається**): джерело правди для enforcement квоти (лічба за вікна хвилина/доба), admin-перегляду і **Звітів (PH27)**. Один рядок = один хід (Compare-хід = 1 подія). **PH27 (D-18):** пишуться **ВСІ** ходи, у т.ч. BYOK; `billable=false` → хід на власному ключі (квота не списувалась). **Квотні вікна рахують лише `billable=true`** — повнота ledger не змінює поведінки лімітів. `chat_id` зв'язує подію зі збереженим чатом (видалення чату лишає аудит, відв'язує → група «видалені/ad-hoc»). `total_tokens` — реальні (provider `usage`) або **оцінка** (`token_estimated=true`, евристика `ceil(chars/4)`, `core/tokens.py`). Міграції Alembic `0005_quotas_usage` (поля `users` + таблиця) та `0007_usage_ledger` (3 колонки ledger).
 
 > 🔮 Майбутні таблиці поза поточним обсягом — немає (PH0–PH15 покривають дані). Рішення про БД/персист — [10-open-decisions.md](10-open-decisions.md) (D-1, D-2, D-3, D-8, D-10).

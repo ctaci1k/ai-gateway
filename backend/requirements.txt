@@ -26,8 +26,9 @@ aiosqlite==0.20.0           # dev driver (sqlite+aiosqlite)
 asyncpg==0.30.0             # prod async driver (postgresql+asyncpg)
 psycopg2-binary==2.9.10     # prod sync driver for Alembic migrations (psycopg2)
 
-# Auth
+# Auth / crypto
 argon2-cffi==23.1.0         # password hashing
+cryptography==48.0.0        # AES-256-GCM envelope for BYOK keys at rest (PH30, D-20)
 
 # RAG (PH10): document store + parsing. Embeddings reuse google-generativeai.
 chromadb==1.5.9             # persistent vector store

@@ -98,6 +98,15 @@ class Settings(BaseSettings):
         default=30, alias="DEFAULT_MAX_REQUESTS_PER_DAY"
     )
 
+    # --- BYOK encryption (PH30, D-20) ---
+    # Key Encryption Key (KEK) for the AES-256-GCM envelope that protects stored
+    # BYOK keys at rest. base64 of 32 random bytes. Generate with:
+    #   python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
+    # Empty disables BYOK storage entirely (server can't decrypt → explicit error
+    # at use). MUST be the SAME value in every environment that reads the same DB:
+    # changing/losing it invalidates all stored keys (users re-enter them).
+    byok_encryption_key: str = Field(default="", alias="BYOK_ENCRYPTION_KEY")
+
     # --- RAG (PH10) ---
     # Persistent ChromaDB directory.
     chroma_path: str = Field(default="./chroma_data", alias="CHROMA_PATH")

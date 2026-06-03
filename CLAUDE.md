@@ -13,7 +13,7 @@
 
 ## Стек (реальний)
 
-- **Backend:** Python 3.12+, FastAPI, Pydantic, asyncio; прямі SDK провайдерів (`groq`, `google-generativeai`, Cerebras, SambaNova). **Стан — у PostgreSQL** (SQLAlchemy async + Alembic-міграції); RAG-вектори — у вбудованому ChromaDB (PersistentClient). Є accounts/auth, квоти, BYOK.
+- **Backend:** Python 3.12+, FastAPI, Pydantic, asyncio; прямі SDK провайдерів (`groq`, `google-generativeai`, Cerebras, SambaNova). **Стан — у PostgreSQL** (SQLAlchemy async + Alembic-міграції); RAG-вектори — у вбудованому ChromaDB (PersistentClient). Є accounts/auth, квоти, BYOK (ключі — серверно, зашифровано AES-256-GCM envelope, per-account; PH30/D-20).
 - **Frontend:** Next.js (App Router) + React + Tailwind; design tokens, i18n (uk/pl/en); частково TypeScript.
 
 ## Структура

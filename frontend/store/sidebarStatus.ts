@@ -32,15 +32,17 @@ export interface SidebarStatus {
 export function useSidebarStatus(): SidebarStatus {
   const { mode } = useChatMode();
   const { singleProvider } = useComposer();
-  const { isOwnKey, judgeActive, byokModelId, byokPayload, activeResponders, allParticipantsOwn } =
-    useKeys();
+  const { isOwnKey, judgeActive, byokModelId, activeResponders, allParticipantsOwn } = useKeys();
   const { user } = useAuth();
+
+  // Any own key active? (derived from server metadata, PH30 — no transit payload).
+  const hasActiveKey = activeResponders.length > 0 || judgeActive;
 
   let byok: ByokStatus = null;
   if (mode === "single" && singleProvider) {
     const onOwnKey = singleProvider === JUDGE_SLOT ? judgeActive : isOwnKey(singleProvider);
     if (onOwnKey) byok = { tone: "ok", kind: "single", model: byokModelId(singleProvider) ?? "" };
-  } else if (mode === "compare" && byokPayload() !== null) {
+  } else if (mode === "compare" && hasActiveKey) {
     // Compare: green only when every participant (responders + judge) is own-key.
     const customSlots = activeResponders.filter((r) => r.custom).map((r) => r.slot);
     const slots = [...DEFAULT_RESPONDER_SLOTS, ...customSlots];

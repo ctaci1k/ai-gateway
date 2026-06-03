@@ -1,7 +1,6 @@
 // frontend/services/chatApi.ts
 
 import { apiFetch, ensureOk } from "@/services/apiClient";
-import type { ByokPayload } from "@/store/KeysContext";
 
 export interface StreamChatParams {
   message: string;
@@ -9,18 +8,16 @@ export interface StreamChatParams {
   // When true, the backend grounds the answer in the user's documents and
   // appends a terminal `sources` event to the stream (PH13/C3).
   ragEnabled?: boolean;
-  // Transit-only BYOK overrides (PH17); omitted when the user has no own keys.
-  byok?: ByokPayload | null;
   // PH24 (D-17): when set, the Single turn is persisted into this saved chat.
   chatId?: number | null;
 }
 
 // Single mode: returns the streaming Response (NDJSON) for the caller to read.
+// BYOK keys are loaded server-side from storage (PH30, D-20) — not sent here.
 export async function streamChat({
   message,
   provider,
   ragEnabled = false,
-  byok = null,
   chatId = null,
 }: StreamChatParams): Promise<Response> {
   const response = await apiFetch("/chat/stream", {
@@ -30,7 +27,6 @@ export async function streamChat({
       provider,
       rag_enabled: ragEnabled,
       ...(chatId != null ? { chat_id: chatId } : {}),
-      ...(byok ? { byok } : {}),
     },
   });
   return ensureOk(response);

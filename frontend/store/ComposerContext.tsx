@@ -71,7 +71,9 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
   const { documents } = useRagDocuments();
   const ragEnabled = documents.length > 0;
 
-  const { byokPayload, byokModelId } = useKeys();
+  // BYOK keys are loaded server-side from storage (PH30, D-20); the client no
+  // longer sends them. byokModelId is still used to localize an own-key error.
+  const { byokModelId } = useKeys();
   const { activeChatId, createActiveChat, reloadActive } = useChats();
 
   const [loading, setLoading] = useState(false);
@@ -121,7 +123,6 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
           message,
           provider,
           ragEnabled,
-          byok: byokPayload(),
           chatId,
         });
         const reader = res.body?.getReader();
@@ -183,15 +184,7 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     },
-    [
-      singleProvider,
-      ragEnabled,
-      byokPayload,
-      byokModelId,
-      activeChatId,
-      createActiveChat,
-      reloadActive,
-    ],
+    [singleProvider, ragEnabled, byokModelId, activeChatId, createActiveChat, reloadActive],
   );
 
   const value = useMemo<ComposerValue>(

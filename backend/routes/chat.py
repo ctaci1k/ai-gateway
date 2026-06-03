@@ -11,11 +11,12 @@ from core.prompts import render_prompt
 from core.tokens import estimate_tokens
 from db.models import User
 from memory import preferences_logic
+from memory.byok_repository import ByokRepository
 from memory.chats_repository import SavedChatRepository
 from memory.repository import get_chat_repository
 from memory.usage_repository import UsageRepository
 from schemas.chat_response import ChatResponse, RagSource, StructuredChatResponse
-from schemas.chat_schema import ChatRequest
+from schemas.chat_schema import ByokConfig, ChatRequest
 from services.orchestrator_service import OrchestratorService
 from services.provider_service import (
     JUDGE_BYOK_SLOT,
@@ -31,11 +32,11 @@ router = APIRouter(tags=["chat"])
 logger = get_logger("chat")
 
 
-def _build_byok_judge(request: ChatRequest):
-    """Build a transient judge provider + its UI label from the request's BYOK
-    config, or (None, None) when no judge key was supplied (PH17)."""
-    if request.byok and request.byok.judge:
-        judge = request.byok.judge
+def _build_byok_judge(byok: ByokConfig | None):
+    """Build a transient judge provider + its UI label from the user's stored
+    BYOK config (PH30, D-20), or (None, None) when no judge key is stored."""
+    if byok and byok.judge:
+        judge = byok.judge
         return (
             ProviderService.build_transient_judge(judge.model_dump()),
             {"provider": "byok", "model": judge.model_id},
@@ -53,13 +54,13 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
 
     provider_names = request.providers or [request.provider]
 
-    # BYOK (PH17): resolve responders + judge on the user's transient keys.
-    # Built-in slots without a key fall back to the app's singletons.
-    byok_responders = (
-        [r.model_dump() for r in request.byok.responders] if request.byok else None
-    )
+    # BYOK (PH30, D-20): keys now come from server-side ENCRYPTED storage, not
+    # the request body (which is ignored — see ChatRequest.byok). Built-in slots
+    # without a stored key fall back to the app's singletons.
+    byok = await ByokRepository(user.id).load_config()
+    byok_responders = [r.model_dump() for r in byok.responders] if byok else None
     providers_map = ProviderService.resolve_responders(provider_names, byok_responders)
-    judge_provider, judge_label = _build_byok_judge(request)
+    judge_provider, judge_label = _build_byok_judge(byok)
 
     # Quota (PH17): a Compare turn is free only when every participant — all
     # responders and the judge — runs on the user's own key. Otherwise it counts
@@ -205,15 +206,14 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
     )
 
 
-def _resolve_single_provider(request: ChatRequest):
-    """Resolve the Single-mode provider for the chosen slot (PH17).
+def _resolve_single_provider(slot: str, byok: ByokConfig | None):
+    """Resolve the Single-mode provider for the chosen slot (PH17; PH30 source =
+    stored config).
 
     Returns ``(provider_or_None, is_byok)``. The judge's model is selectable in
     Single too (NQ6): a request for the judge slot builds the judge as a
     responder. ``None`` means use the built-in singleton (charged); a transient
     provider means the user's own key (free)."""
-    byok = request.byok
-    slot = request.provider
     if byok:
         if slot == JUDGE_BYOK_SLOT and byok.judge:
             return ProviderService.build_transient_judge(byok.judge.model_dump()), True
@@ -233,10 +233,11 @@ def _resolve_single_provider(request: ChatRequest):
 async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
     repository = get_chat_repository(user.id)
 
-    # BYOK (PH17): resolve the chosen model. Single is free only when it runs on
-    # the user's own key; otherwise it counts as one request (enforced now,
-    # recorded after the stream).
-    byok_provider, is_byok = _resolve_single_provider(request)
+    # BYOK (PH30, D-20): keys come from server-side ENCRYPTED storage. Single is
+    # free only when it runs on the user's own key; otherwise it counts as one
+    # request (enforced now, recorded after the stream).
+    byok = await ByokRepository(user.id).load_config()
+    byok_provider, is_byok = _resolve_single_provider(request.provider, byok)
     should_charge = not is_byok
     if should_charge:
         await QuotaService.check(user)

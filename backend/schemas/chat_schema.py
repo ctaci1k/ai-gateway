@@ -76,8 +76,8 @@ class ChatRequest(BaseModel):
     # RAG (PH10): ground responders in the user's uploaded documents.
     rag_enabled: bool = False
 
-    # BYOK (PH17): optional per-request keys for responders / judge. When a
-    # participant runs on the user's own key the turn isn't charged against the
-    # account quota (Single: free if the chosen model is BYOK; Compare: free
-    # only if every participant is BYOK).
+    # BYOK: DEPRECATED transit field (PH17). Since PH30 (D-20) keys are stored
+    # server-side, ENCRYPTED, per-account, and the chat routes load them from the
+    # DB by user_id — this body field is IGNORED. Kept optional for backward
+    # compatibility; clients can no longer inject keys (a security plus too).
     byok: ByokConfig | None = None
