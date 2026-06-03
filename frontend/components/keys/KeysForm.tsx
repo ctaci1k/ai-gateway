@@ -80,43 +80,24 @@ interface KeyInputProps {
   value: string;
   placeholder: string;
   invalid: boolean;
-  showLabel: string;
-  hideLabel: string;
   onChange: (value: string) => void;
 }
 
-function KeyInput({
-  id,
-  value,
-  placeholder,
-  invalid,
-  showLabel,
-  hideLabel,
-  onChange,
-}: KeyInputProps) {
-  const [shown, setShown] = useState(false);
+// Keys are write-only: a stored key is never sent back to the client, so there's
+// nothing to "reveal". The field is a plain text input — the user sees what they
+// paste (catching typos), and a stored slot shows a masked replace placeholder.
+function KeyInput({ id, value, placeholder, invalid, onChange }: KeyInputProps) {
   return (
-    <div className="keys-input-wrap">
-      <input
-        id={id}
-        type={shown ? "text" : "password"}
-        className={invalid ? "keys-input keys-input--invalid" : "keys-input"}
-        value={value}
-        placeholder={placeholder}
-        autoComplete="off"
-        spellCheck={false}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <button
-        type="button"
-        className="keys-eye"
-        aria-pressed={shown}
-        aria-label={shown ? hideLabel : showLabel}
-        onClick={() => setShown((s) => !s)}
-      >
-        {shown ? hideLabel : showLabel}
-      </button>
-    </div>
+    <input
+      id={id}
+      type="text"
+      className={invalid ? "keys-input keys-input--invalid" : "keys-input"}
+      value={value}
+      placeholder={placeholder}
+      autoComplete="off"
+      spellCheck={false}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }
 
@@ -271,8 +252,6 @@ export default function KeysForm() {
     }
   }, [draft, state, saveKeys]);
 
-  const showLabel = t("keys.show");
-  const hideLabel = t("keys.hide");
   const judgeResult = results[JUDGE_SLOT];
   const judgeIncomplete = isBuiltinIncomplete(
     draft.judge.baseUrl,
@@ -377,8 +356,6 @@ export default function KeysForm() {
                   (judgeResult ? !judgeResult.ok : false) ||
                   (judgeErr && !draft.judge.apiKey.trim() && !draft.judge.stored)
                 }
-                showLabel={showLabel}
-                hideLabel={hideLabel}
                 onChange={(v) => updateJudge("apiKey", v)}
               />
             </div>
@@ -480,8 +457,6 @@ export default function KeysForm() {
                     invalid={
                       (result ? !result.ok : false) || (rowErr && !r.apiKey.trim() && !r.stored)
                     }
-                    showLabel={showLabel}
-                    hideLabel={hideLabel}
                     onChange={(v) => updateResponder(index, "apiKey", v)}
                   />
                 </div>

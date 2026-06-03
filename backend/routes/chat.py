@@ -192,6 +192,15 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
     # winning slot's entry in ``all_responses`` (NULL when it has none).
     winner = result["all_responses"].get(result["selected_model"]) or {}
     model_name = winner.get("model")
+    # Added (BYOK) judge attribution (PH34, D-24, B9b): when the user's OWN judge
+    # key actually judged this turn (the selector ran over real responses),
+    # denormalize the judge's real model + masked key so reports surface it even
+    # though the judge is never the winning row. A built-in (app-key) judge → both
+    # NULL so it never clutters the stats. The plaintext key is NEVER stored.
+    judge_used = request.selector_enabled and bool(result["all_responses"])
+    judge_byok = byok.judge if (byok and judge_used) else None
+    judge_model_name = judge_byok.model_id if judge_byok else None
+    judge_key_fp = key_fingerprint(judge_byok.api_key) if judge_byok else None
     await UsageRepository(user.id).record(
         mode="compare" if result["compare_mode"] else "single",
         message=request.message,
@@ -203,6 +212,8 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
         billable=should_charge,
         key_fingerprint=key_fp,
         model_name=model_name,
+        judge_model_name=judge_model_name,
+        judge_key_fingerprint=judge_key_fp,
     )
 
     return ChatResponse(

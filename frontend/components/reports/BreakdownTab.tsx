@@ -83,7 +83,7 @@ export default function BreakdownTab({ range, readOnly }: BreakdownTabProps) {
                 {group.models.map((model) => {
                   const modId = `mod:${group.access_key}:${model.model ?? "—"}:${
                     model.key_fingerprint ?? "builtin"
-                  }`;
+                  }:${model.role}:${model.model_name ?? ""}`;
                   const modOpen = open.has(modId);
                   return (
                     <div className="rep-acc rep-acc--lvl1" key={modId}>
@@ -99,6 +99,9 @@ export default function BreakdownTab({ range, readOnly }: BreakdownTabProps) {
                           className={modOpen ? "rep-acc-ic is-open" : "rep-acc-ic"}
                         />
                         <span className="rep-acc-title">{reportModel(model)}</span>
+                        {model.role === "judge" && (
+                          <span className="rep-roletag">{t("reports.judgeTag")}</span>
+                        )}
                         <KeyBadge fingerprint={model.key_fingerprint} />
                         <span className="rep-acc-stat">
                           {formatInt(model.requests)} · {formatInt(model.total_tokens)}

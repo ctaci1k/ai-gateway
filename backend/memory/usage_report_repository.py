@@ -20,6 +20,7 @@ from sqlalchemy import case, func, select
 
 from core.db import session_scope
 from db.models import Chat, UsageEvent
+from services.provider_service import JUDGE_BYOK_SLOT
 
 # Bucket the activity timeseries either per day or per hour.
 BUCKET_DAY = "day"
@@ -170,6 +171,13 @@ class UsageReportRepository:
         so an own key pointed at different real models on the same slot splits
         into separate rows; ``model_name`` is returned for the truthful label
         (built-in → the slot label; BYOK → the real model id).
+
+        PH34 (D-24, B9b): a DERIVED row per added (BYOK) judge is appended (the
+        judge is never a winning ledger row, so it would otherwise be invisible).
+        Judge rows are tagged ``role="judge"`` and carry the judge's real model +
+        masked key; their tokens are 0 (the turn's tokens belong to the winning
+        row — never doubled). The judge is own-key by definition, so judge rows
+        are omitted under the app-key (``billable=True``) filter.
         """
         scope = self._scope(start, end, billable)
         async with session_scope() as session:
@@ -192,11 +200,12 @@ class UsageReportRepository:
                     .order_by(func.count(UsageEvent.id).desc())
                 )
             ).all()
-        return [
+        result = [
             {
                 "model": model,
                 "key_fingerprint": key_fingerprint,
                 "model_name": model_name,
+                "role": "responder",
                 "requests": requests,
                 "total_tokens": int(tokens or 0),
                 "successful": int(successful or 0),
@@ -209,6 +218,59 @@ class UsageReportRepository:
                 tokens,
                 successful,
             ) in rows
+        ]
+        # Append derived own-key judge rows (B9b): not under the app-key filter.
+        if billable is not True:
+            result.extend(await self._judge_model_rows(start, end))
+        return result
+
+    async def _judge_model_rows(
+        self, start: datetime | None, end: datetime | None
+    ) -> list[dict[str, Any]]:
+        """Derived per-judge rows for ``by_model`` (PH34, D-24, B9b).
+
+        Grouped by ``(judge_model_name, judge_key_fingerprint)`` over turns where
+        an own-key judge participated (``judge_key_fingerprint`` not NULL), within
+        the time window only — NOT filtered by the turn's ``billable``, because
+        the judge is own-key regardless of whether the turn itself was charged.
+        ``model`` is the judge slot id (the FE shows the real model via
+        ``model_name``); tokens are 0 (never double the winning row's tokens)."""
+        clauses = [
+            UsageEvent.user_id == self._user_id,
+            UsageEvent.judge_key_fingerprint.is_not(None),
+        ]
+        if start is not None:
+            clauses.append(UsageEvent.created_at >= start)
+        if end is not None:
+            clauses.append(UsageEvent.created_at < end)
+        async with session_scope() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        UsageEvent.judge_model_name,
+                        UsageEvent.judge_key_fingerprint,
+                        func.count(UsageEvent.id),
+                        _success_sum(),
+                    )
+                    .where(*clauses)
+                    .group_by(
+                        UsageEvent.judge_model_name,
+                        UsageEvent.judge_key_fingerprint,
+                    )
+                    .order_by(func.count(UsageEvent.id).desc())
+                )
+            ).all()
+        return [
+            {
+                "model": JUDGE_BYOK_SLOT,
+                "key_fingerprint": judge_fp,
+                "model_name": judge_model,
+                "role": "judge",
+                "requests": requests,
+                "total_tokens": 0,
+                "successful": int(successful or 0),
+            }
+            for (judge_model, judge_fp, requests, successful) in rows
         ]
 
     async def by_chat(
@@ -362,6 +424,8 @@ class UsageReportRepository:
                     UsageEvent.success,
                     UsageEvent.billable,
                     UsageEvent.key_fingerprint,
+                    UsageEvent.judge_model_name,
+                    UsageEvent.judge_key_fingerprint,
                     UsageEvent.message,
                     UsageEvent.chat_id,
                     Chat.title,
@@ -395,6 +459,11 @@ class UsageReportRepository:
                 "success": r.success,
                 "billable": r.billable,
                 "key_fingerprint": r.key_fingerprint,
+                # B9b: the added (BYOK) judge for this turn, inline (NULL = a
+                # built-in / no judge) — shown as a small secondary badge so the
+                # activity log stays one row per turn (the ledger invariant).
+                "judge_model_name": r.judge_model_name,
+                "judge_key_fingerprint": r.judge_key_fingerprint,
                 "message": r.message,
                 "chat_id": r.chat_id,
                 "chat_title": r.title,
@@ -497,6 +566,29 @@ class UsageReportRepository:
             chat_node["requests"] += 1
             chat_node["total_tokens"] += tok
 
+        # Derived own-key judge nodes (B9b): appended under the "own" group so the
+        # added judge is visible. Omitted under the app-key filter. They do NOT
+        # change the group's top-level requests/tokens (PH28 access-key totals
+        # stay turn-based, D-21); they're additional model nodes (role="judge").
+        if billable is not True:
+            judge_nodes = await self._judge_breakdown_nodes(start, end)
+            if judge_nodes:
+                own = groups.setdefault(
+                    "own", {"requests": 0, "tokens": 0, "models": {}}
+                )
+                for jn in judge_nodes:
+                    own["models"][
+                        ("__judge__", jn["key_fingerprint"], jn["model_name"])
+                    ] = {
+                        "model": jn["model"],
+                        "key_fingerprint": jn["key_fingerprint"],
+                        "model_name": jn["model_name"],
+                        "role": "judge",
+                        "requests": jn["requests"],
+                        "tokens": 0,
+                        "chats": jn["chats"],
+                    }
+
         def _sorted(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
             return sorted(nodes, key=lambda n: n["requests"], reverse=True)
 
@@ -512,6 +604,8 @@ class UsageReportRepository:
                         "model": mnode["model"],
                         "key_fingerprint": mnode["key_fingerprint"],
                         "model_name": mnode["model_name"],
+                        # responder nodes (built before B9b) have no role key.
+                        "role": mnode.get("role", "responder"),
                         "requests": mnode["requests"],
                         "total_tokens": mnode["tokens"],
                         "chats": _sorted(list(mnode["chats"].values())),
@@ -526,6 +620,65 @@ class UsageReportRepository:
                 }
             )
         return result
+
+    async def _judge_breakdown_nodes(
+        self, start: datetime | None, end: datetime | None
+    ) -> list[dict[str, Any]]:
+        """Derived own-key judge model-nodes (with per-chat children) for the
+        Breakdown accordion (PH34, D-24, B9b). Scoped to the time window over
+        turns where an own-key judge participated (NOT filtered by ``billable``);
+        node tokens are 0 (never double the winning row's tokens)."""
+        clauses = [
+            UsageEvent.user_id == self._user_id,
+            UsageEvent.judge_key_fingerprint.is_not(None),
+        ]
+        if start is not None:
+            clauses.append(UsageEvent.created_at >= start)
+        if end is not None:
+            clauses.append(UsageEvent.created_at < end)
+        async with session_scope() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        UsageEvent.judge_model_name,
+                        UsageEvent.judge_key_fingerprint,
+                        UsageEvent.chat_id,
+                        Chat.title,
+                        Chat.mode,
+                    )
+                    .outerjoin(Chat, Chat.id == UsageEvent.chat_id)
+                    .where(*clauses)
+                )
+            ).all()
+
+        nodes: dict[tuple, dict[str, Any]] = {}
+        for judge_model, judge_fp, chat_id, title, mode in rows:
+            node = nodes.setdefault(
+                (judge_fp, judge_model),
+                {
+                    "model": JUDGE_BYOK_SLOT,
+                    "key_fingerprint": judge_fp,
+                    "model_name": judge_model,
+                    "requests": 0,
+                    "chats": {},
+                },
+            )
+            node["requests"] += 1
+            chat_node = node["chats"].setdefault(
+                chat_id,
+                {
+                    "chat_id": chat_id,
+                    "title": title,
+                    "mode": mode,
+                    "requests": 0,
+                    "total_tokens": 0,
+                },
+            )
+            chat_node["requests"] += 1
+        # ``chats`` stays a dict (chat_id → node) so the breakdown integration can
+        # treat a judge node exactly like a responder node (it does
+        # ``list(mnode["chats"].values())``).
+        return list(nodes.values())
 
     async def iter_events_for_csv(
         self,
@@ -556,6 +709,8 @@ class UsageReportRepository:
                             UsageEvent.success,
                             UsageEvent.billable,
                             UsageEvent.key_fingerprint,
+                            UsageEvent.judge_model_name,
+                            UsageEvent.judge_key_fingerprint,
                             UsageEvent.message,
                             Chat.title,
                         )

@@ -201,6 +201,9 @@ _CSV_HEADER = [
     # built-in slot id pointed at a different own-key model).
     "model_name",
     "key_fingerprint",
+    # PH34 (D-24, B9b): the added (BYOK) judge for the turn (blank = built-in).
+    "judge_model_name",
+    "judge_key_fingerprint",
     "chat_title",
     "billable",
     "total_tokens",
@@ -247,6 +250,8 @@ async def reports_events_csv(
                     r.selected_model or "",
                     r.model_name or "",
                     r.key_fingerprint or "",
+                    r.judge_model_name or "",
+                    r.judge_key_fingerprint or "",
                     r.title or "",
                     "true" if r.billable else "false",
                     "" if r.total_tokens is None else r.total_tokens,

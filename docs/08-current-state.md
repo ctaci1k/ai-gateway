@@ -43,6 +43,61 @@
 - **Структуроване логування** (`core/logging.py`): запити, помилки провайдерів, рішення судді.
 - **Базові тести** (`backend/tests/`, pytest): ChatBuffer, rule-based selector, агрегація провайдерів, ретраї/мін-впевненість селектора, `extract_json`, API-кейси (помилки/rate-limit).
 
+## ✅ PH34 — UX-поліш 2 + атрибуція ключа B7–B11 (D-24)
+
+Партія від власника (план 033). B12 скасовано власником. Безпеку D-20/D-21/D-22 не
+чіпано; квоти/`billable`/`selected_model`/winner-логіка/one-row-per-turn — без змін.
+
+- **(B7) Прибрано show/hide API-ключа.** `components/keys/KeysForm.tsx`: `KeyInput` —
+  звичайний `<input type="text">` (ключі write-only, серверне сховище → нема що
+  «показувати»); прибрано стан `shown`/пропси/мертві i18n `keys.show`/`keys.hide` і CSS
+  `.keys-eye*`/`.keys-input-wrap`.
+- **(B8) Читабельний hover/active CTA у попапах.** `theme/components.css`: єдине згруповане
+  правило інверсії filled→outline для `.dialog-btn--primary`/`.admin-btn--primary`/
+  `.auth-submit` (hover/active → поверхня `--panel` + акцентний текст/рамка `--accent`),
+  обидві теми; прибрано старі `filter:brightness` (текст «зникав»); guard `:not(:disabled)`,
+  `.auth-submit` отримав прозору рамку (без зсуву). Покриває KeysForm/ComingSoon/Settings/
+  Admin/Auth.
+- **(B9a) Атрибуція own-key — перевірено, фікс не потрібен.** Емпіричне відтворення
+  (TestClient з реальним AES-шифруванням, мокнуті лише мережеві виклики) показало: write-path
+  **дата-керований і коректний** для ВСІХ випадків (Single custom AI4/5, Single суддя-слот,
+  Compare-переможець built-in-слот own-key, Compare custom-переможець) — `key_fingerprint`
+  завжди маска, `null` лише для built-in. Залишкове «Вбудована» на own-key можливе **лише на
+  історичних рядках до Alembic 0009** (NULL, плейнтексту для backfill нема — межа D-21). +3
+  постійні тести в `test_byok.py`.
+- **(B9c) Аудит хардкоду built-in/own (BE+FE).** **0 багів.** Усі звітні/історичні поверхні
+  дата-керовані (за збереженим ходом: `key_fingerprint`/`is_byok`/`model_name`):
+  `usage_report_repository`, `routes/reports.py`, `schemas/reports.py`, FE
+  `reportUtils.{reportModel,keySource}`/`KeyBadge`/`modelDisplay`, таби By-model/Breakdown/
+  Activity/By-chat, replay `SelectorBanner`/`CompareColumn`/`CompareFailedCard`. Active-model
+  поверхні (`MainHead`/`SingleModelPicker`/`sidebarStatus`) свідомо на поточних ключах
+  (`byokModelId`, D-22). Константи `DEFAULT_RESPONDER_SLOTS`/`SINGLE_PROVIDERS`/`RESPONDER_LABELS`
+  — лише слот-id/мітки в active-model, не «ознака built-in» у звітах.
+- **(B9b) Доданий (BYOK) суддя у статистиці навіть у Compare.** Дві денормколонки
+  `usage_events.judge_model_name` (String(128)) + `judge_key_fingerprint` (String(32)),
+  nullable; Alembic `0011_usage_judge_byok` (патерн 0009/0010). `routes/chat.py` пише їх лише
+  коли суддя на власному ключі (`selector_enabled` + `byok.judge`); вбудований суддя → обидва
+  NULL (не показуємо). `usage_report_repository` синтезує **похідний** judge-рядок у `by_model`
+  (`role="judge"`, реальна модель + маска ключа, `tokens=0` — не подвоює токени переможця;
+  прихований під app-фільтром, бо суддя own-key) і judge-вузол під групою «own» у `breakdown`
+  (top-level access-лічильники — без змін, D-21); журнал/CSV несуть judge-колонки **inline**
+  (one-row-per-turn збережено). Квоти/`billable`/winner-рядок — не зламано. FE: judge-тег у
+  By-model/Breakdown, inline judge-бейдж у журналі (`ByModelTab`/`BreakdownTab`/`ActivityLogTab`),
+  `KeyBadge`-маска, i18n `reports.judgeTag` (uk/pl/en), CSS `.rep-roletag`/`.rep-judge-inline`.
+- **(B10) Тематичний тонкий скрол скрізь.** `theme/components.css`: per-class allowlist
+  (`.thin-scroll/.msgs/…`) замінено на **глобальне** правило на токенах — Firefox
+  `scrollbar-width/-color` на `html` (успадковується), WebKit `*::-webkit-scrollbar*`
+  універсально. Покриває всі контейнери (головна/секції/попапи/Звіти/Admin).
+- **(B11) Текст автора.** `components/sidebar/CreatorCard.tsx` рендерить `author.tagline`
+  (замість мертвого `author.rights` — ключа не було → текст «зник»); копія оновлена
+  (Full-Stack Developer, зроблено повністю самотужки end-to-end; без «Junior»/«AI
+  orchestration»). Паритет uk/pl/en.
+- **Гейти:** BE pytest **216** + ruff/black; FE tsc/eslint/prettier/vitest(**39**)/build;
+  i18n паритет. **Owner-action:** нема нового env; **є Alembic-міграція `0011`** (авто на
+  деплої). Контракти — [03](03-api-contracts.md) (`role`/judge-поля у `/reports/*`+CSV); дані
+  — [04](04-data-models.md) (`judge_model_name`/`judge_key_fingerprint`); рішення —
+  [10](10-open-decisions.md) (D-24).
+
 ## ✅ PH33 — UX-поліш + баги B1–B6 (+B3b) (D-23)
 
 Партія дрібних, але важливих правок від власника (план 032). Безпеку D-20/D-21/D-22 не чіпано; квоти/`selected_model`/судова логіка вибору переможця — без змін.

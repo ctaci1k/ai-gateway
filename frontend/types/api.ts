@@ -257,6 +257,9 @@ export interface ModelUsage {
   key_fingerprint: string | null;
   // PH32 (D-22): the REAL model that answered; null → fall back to the slot label.
   model_name: string | null;
+  // PH34 (D-24, B9b): "responder" (a winning row) or "judge" (a derived own-key
+  // judge row, shown so the added judge is visible even in Compare).
+  role: "responder" | "judge";
   requests: number;
   total_tokens: number;
   successful: number;
@@ -303,6 +306,8 @@ export interface BreakdownModel {
   key_fingerprint: string | null;
   // PH32 (D-22): the REAL model for this node; null → fall back to the slot label.
   model_name: string | null;
+  // PH34 (D-24, B9b): "responder" or "judge" (a derived own-key judge node).
+  role: "responder" | "judge";
   requests: number;
   total_tokens: number;
   chats: BreakdownChat[];
@@ -333,6 +338,10 @@ export interface ReportEvent {
   billable: boolean;
   // PH31 (D-21): masked BYOK key used for this turn's model; null = built-in.
   key_fingerprint: string | null;
+  // PH34 (D-24, B9b): the added (BYOK) judge for this turn, inline; null = a
+  // built-in / no judge. Shown as a small secondary badge in the activity log.
+  judge_model_name: string | null;
+  judge_key_fingerprint: string | null;
   message: string;
   chat_id: number | null;
   chat_title: string | null;

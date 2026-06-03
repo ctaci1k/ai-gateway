@@ -19,7 +19,7 @@ export default function CreatorCard() {
       <div className="cc-creator-tx">
         <small>{t("author.cap")}</small>
         <b>{t("author.name")}</b>
-        <span>{t("author.rights")}</span>
+        <span>{t("author.tagline")}</span>
       </div>
     </div>
   );

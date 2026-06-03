@@ -47,6 +47,8 @@ async def _add(
     message="hi",
     key_fingerprint=None,
     model_name=None,
+    judge_model_name=None,
+    judge_key_fingerprint=None,
 ):
     async with session_scope() as session:
         session.add(
@@ -63,6 +65,8 @@ async def _add(
                 chat_id=chat_id,
                 key_fingerprint=key_fingerprint,
                 model_name=model_name,
+                judge_model_name=judge_model_name,
+                judge_key_fingerprint=judge_key_fingerprint,
             )
         )
 
@@ -587,3 +591,165 @@ def test_reports_summary_and_csv_http(client, monkeypatch):
     # PH32 (D-22): the real-model column sits right after the slot column.
     assert "created_at,mode,model,model_name,key_fingerprint" in body
     assert "hello world" in body
+
+
+# --- Added (BYOK) judge in stats even in Compare (PH34, D-24, B9b) -----------
+
+
+async def test_by_model_synthesizes_byok_judge_row(env):
+    """A Compare turn whose ADDED (BYOK) judge judged it yields a derived judge
+    row in by_model (role='judge', the judge's real model + masked key), separate
+    from the winning responder row — visible even though the judge never wins."""
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        mode="compare",
+        model="groq",
+        key_fingerprint=None,  # winner ran on the app key (built-in)
+        model_name=None,
+        judge_model_name="my-qwen",
+        judge_key_fingerprint="gsk_••••JUDG",
+    )
+    models = await UsageReportRepository(env.alice).by_model(None, None)
+    judge_rows = [m for m in models if m["role"] == "judge"]
+    assert len(judge_rows) == 1
+    jr = judge_rows[0]
+    assert jr["model"] == "byok-judge"
+    assert jr["model_name"] == "my-qwen"
+    assert jr["key_fingerprint"] == "gsk_••••JUDG"
+    assert jr["requests"] == 1
+    assert jr["total_tokens"] == 0  # judge tokens never double the winner's
+    # The winning responder row is still present and canonical.
+    assert any(m["role"] == "responder" and m["model"] == "groq" for m in models)
+
+
+async def test_builtin_judge_does_not_appear_in_by_model(env):
+    """A Compare turn judged by the built-in (app-key) judge leaves the judge
+    columns NULL → no derived judge row clutters the stats."""
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        mode="compare",
+        model="groq",
+        judge_model_name=None,
+        judge_key_fingerprint=None,
+    )
+    models = await UsageReportRepository(env.alice).by_model(None, None)
+    assert all(m["role"] != "judge" for m in models)
+
+
+async def test_byok_judge_row_hidden_under_app_access_filter(env):
+    """The judge is own-key by definition, so the derived judge row is omitted
+    under the app-key (billable=True) access filter and present under own/all."""
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        mode="compare",
+        model="groq",
+        billable=True,  # mixed turn: charged, but judged by an own-key judge
+        judge_model_name="my-qwen",
+        judge_key_fingerprint="gsk_••••JUDG",
+    )
+    app_models = await UsageReportRepository(env.alice).by_model(
+        None, None, billable=True
+    )
+    assert all(m["role"] != "judge" for m in app_models)
+    own_models = await UsageReportRepository(env.alice).by_model(
+        None, None, billable=False
+    )
+    assert any(m["role"] == "judge" for m in own_models)
+    all_models = await UsageReportRepository(env.alice).by_model(None, None)
+    assert any(m["role"] == "judge" for m in all_models)
+
+
+async def test_breakdown_adds_byok_judge_node_under_own(env):
+    """The Breakdown accordion gets a derived judge node under the 'own' group."""
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        mode="compare",
+        model="groq",
+        billable=False,
+        key_fingerprint="gsk_••••OWNK",
+        judge_model_name="my-qwen",
+        judge_key_fingerprint="gsk_••••JUDG",
+    )
+    groups = {
+        g["access_key"]: g
+        for g in await UsageReportRepository(env.alice).breakdown(None, None)
+    }
+    own_models = groups["own"]["models"]
+    judge_nodes = [m for m in own_models if m["role"] == "judge"]
+    assert len(judge_nodes) == 1
+    assert judge_nodes[0]["model_name"] == "my-qwen"
+    assert judge_nodes[0]["key_fingerprint"] == "gsk_••••JUDG"
+
+
+async def test_activity_log_carries_judge_inline(env):
+    """The activity log keeps ONE row per turn and carries the judge inline."""
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        mode="compare",
+        model="groq",
+        judge_model_name="my-qwen",
+        judge_key_fingerprint="gsk_••••JUDG",
+    )
+    page = await UsageReportRepository(env.alice).events(None, None)
+    assert len(page["events"]) == 1
+    ev = page["events"][0]
+    assert ev["judge_model_name"] == "my-qwen"
+    assert ev["judge_key_fingerprint"] == "gsk_••••JUDG"
+
+
+def test_compare_byok_judge_recorded_and_in_csv(client, monkeypatch):
+    """End-to-end: a Compare turn with a stored BYOK judge records the judge
+    columns and the CSV header/row carry them."""
+    from services.provider_service import TransientProvider
+
+    async def ok(self):
+        return None
+
+    monkeypatch.setattr(TransientProvider, "validate_credentials", ok)
+    monkeypatch.setattr(
+        OrchestratorService, "process_chat", staticmethod(_fake_process_chat)
+    )
+    resp = client.post(
+        "/auth/register",
+        json={
+            "username": "judgeowner",
+            "password": "password123",
+            "registration_code": TEST_REGISTRATION_CODE,
+        },
+    )
+    csrf = {"X-CSRF-Token": resp.json()["csrf_token"]}
+    # Store a BYOK judge key.
+    client.put(
+        "/keys",
+        json={
+            "entries": [
+                {
+                    "slot": "byok-judge",
+                    "api_key": "user-key-9999",
+                    "model_id": "my-qwen",
+                }
+            ]
+        },
+        headers=csrf,
+    )
+    client.post(
+        "/chat",
+        json={
+            "message": "hi",
+            "providers": ["groq", "cerebras", "sambanova"],
+            "compare_mode": True,
+            "selector_enabled": True,
+        },
+        headers=csrf,
+    )
+    by = client.get("/reports/by-model").json()["models"]
+    judge_rows = [m for m in by if m["role"] == "judge"]
+    assert judge_rows and judge_rows[0]["key_fingerprint"] == "user••••9999"
+    body = client.get("/reports/events.csv").text
+    assert "judge_model_name,judge_key_fingerprint" in body
+    assert "user••••9999" in body

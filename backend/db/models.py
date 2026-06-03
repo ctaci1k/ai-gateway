@@ -208,6 +208,18 @@ class UsageEvent(Base):
     # key is NEVER stored here; this is only a model identifier.
     model_name: Mapped[str] = mapped_column(String(128), nullable=True)
 
+    # PH34 (D-24, B9b): the added (BYOK) judge for a Compare turn, denormalized so
+    # the user's OWN judge model is visible in Usage Reports even though the judge
+    # is not the winning row. Populated ONLY when the judge ran on the user's own
+    # key (selector enabled + a stored judge key); a built-in (app-key) judge
+    # leaves both NULL so it never clutters the stats. ``judge_model_name`` is the
+    # real judge model id; ``judge_key_fingerprint`` is the display-only mask
+    # (``first4••••last4``) of the judge key — the plaintext is NEVER stored here.
+    # Reports synthesize a DERIVED own-key judge row from these (the winning row
+    # stays the canonical one-per-turn ledger entry; quotas/billable unaffected).
+    judge_model_name: Mapped[str] = mapped_column(String(128), nullable=True)
+    judge_key_fingerprint: Mapped[str] = mapped_column(String(32), nullable=True)
+
     user: Mapped[User] = relationship(back_populates="usage_events")
 
 

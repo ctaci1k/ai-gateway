@@ -575,45 +575,28 @@ button.rail-sq:hover {
   outline-offset: 2px;
 }
 
-/* Thin, rounded, themed scrollbar (PH16/6) for the app's scroll containers —
- * the chat/compare feed (.msgs is the single feed container) and the in-composer
- * document popover. Tokens keep it consistent across dark/light. */
-.thin-scroll,
-.msgs,
-.composer-popover,
-.keys-dialog,
-.sidebar {
+/* Thin, rounded, themed scrollbar (B10/PH34) — applied to EVERY scroll container
+ * app-wide (main area, sections, popups, reports, admin, sidebar, feed), not an
+ * allowlist of class names. Firefox: `scrollbar-color`/`-width` set on the root
+ * and inherited by all descendants. WebKit: the pseudo-elements are set
+ * universally (they don't inherit). Tokens keep it consistent across dark/light.
+ * `.thin-scroll`/`.msgs` etc. keep working — they now share this single source. */
+html {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
-.thin-scroll::-webkit-scrollbar,
-.msgs::-webkit-scrollbar,
-.composer-popover::-webkit-scrollbar,
-.keys-dialog::-webkit-scrollbar,
-.sidebar::-webkit-scrollbar {
+*::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-.thin-scroll::-webkit-scrollbar-track,
-.msgs::-webkit-scrollbar-track,
-.composer-popover::-webkit-scrollbar-track,
-.keys-dialog::-webkit-scrollbar-track,
-.sidebar::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
-.thin-scroll::-webkit-scrollbar-thumb,
-.msgs::-webkit-scrollbar-thumb,
-.composer-popover::-webkit-scrollbar-thumb,
-.keys-dialog::-webkit-scrollbar-thumb,
-.sidebar::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: 999px;
 }
-.thin-scroll::-webkit-scrollbar-thumb:hover,
-.msgs::-webkit-scrollbar-thumb:hover,
-.composer-popover::-webkit-scrollbar-thumb:hover,
-.keys-dialog::-webkit-scrollbar-thumb:hover,
-.sidebar::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
 .msgs-empty {
@@ -975,11 +958,12 @@ button.rail-sq:hover {
   font-weight: 600;
   color: var(--accent-contrast);
   background: var(--accent);
+  border: 1px solid transparent;
   box-shadow: 0 8px 20px -8px rgba(var(--accent-rgb), 0.7);
-  transition: filter 0.15s;
-}
-.auth-submit:hover {
-  filter: brightness(1.1);
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 .auth-submit:disabled {
   opacity: 0.55;
@@ -1553,10 +1537,6 @@ button.rail-sq:hover {
   background: var(--accent);
   border-color: transparent;
 }
-.admin-btn--primary:hover {
-  filter: brightness(1.1);
-  background: var(--accent);
-}
 .admin-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);
@@ -1712,12 +1692,27 @@ button.rail-sq:hover {
   border-color: var(--accent);
   color: var(--accent-contrast);
 }
-.dialog-btn--primary:hover {
-  filter: brightness(1.05);
-}
 .dialog-btn--primary:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* B8 (PH34): filled-accent CTAs in popups (Save / Validate / Create …) invert to
+   an outline on hover/active — light surface + ACCENT (purple) label + accent
+   border — so the text stays readable in both themes (the old brightness shift
+   washed the fill toward white while the label stayed white = invisible).
+   focus-visible/disabled are unaffected. Shared across the three popup CTA
+   families to avoid duplication. */
+.dialog-btn--primary:not(:disabled):hover,
+.dialog-btn--primary:not(:disabled):active,
+.admin-btn--primary:not(:disabled):hover,
+.admin-btn--primary:not(:disabled):active,
+.auth-submit:not(:disabled):hover,
+.auth-submit:not(:disabled):active {
+  background: var(--panel);
+  border-color: var(--accent);
+  color: var(--accent);
+  filter: none;
 }
 
 /* ── BYOK (bring-your-own-key) ─────────────────────────────────────────── */
@@ -1961,11 +1956,6 @@ button.rail-sq:hover {
 .keys-field-label label {
   cursor: default;
 }
-.keys-input-wrap {
-  position: relative;
-  display: flex;
-  width: 100%;
-}
 .keys-input {
   flex: 1 1 auto;
   width: 100%;
@@ -1977,9 +1967,6 @@ button.rail-sq:hover {
   background: var(--panel-2);
   border: 1px solid var(--border-strong);
   border-radius: 9px;
-}
-.keys-input-wrap .keys-input {
-  padding-right: 58px;
 }
 .keys-input:focus-visible {
   outline: 2px solid var(--accent);
@@ -2061,20 +2048,6 @@ button.rail-sq:hover {
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-}
-.keys-eye {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-  border-radius: 6px;
-}
-.keys-eye:hover {
-  background: rgba(var(--accent-rgb), 0.12);
 }
 .keys-error {
   margin: 0;
@@ -3936,6 +3909,30 @@ button.rail-sq:hover {
   font-family: var(--font-mono), monospace;
   font-weight: 600;
   letter-spacing: 0.01em;
+}
+/* B9b (PH34): small "Judge" tag marking a derived own-key judge row/node, and the
+   inline judge cluster (tag + masked key) in the activity log's key column. */
+.rep-roletag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--soft);
+  color: var(--subtle);
+  vertical-align: middle;
+}
+.rep-judge-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+.rep-judge-inline .rep-roletag {
+  margin-left: 0;
 }
 
 /* Cards (chart + splits) */

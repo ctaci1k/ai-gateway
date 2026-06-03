@@ -51,9 +51,14 @@ export default function ByModelTab({ range }: ByModelTabProps) {
             const successPct = m.requests > 0 ? Math.round((m.successful / m.requests) * 100) : 0;
             const share = (m.total_tokens / maxTokens) * 100;
             return (
-              <tr key={`${m.model ?? "unknown"}|${m.key_fingerprint ?? "builtin"}`}>
+              <tr
+                key={`${m.model ?? "unknown"}|${m.key_fingerprint ?? "builtin"}|${m.role}|${m.model_name ?? ""}`}
+              >
                 <th scope="row" className="rep-cell-strong">
                   {reportModel(m)}
+                  {m.role === "judge" && (
+                    <span className="rep-roletag">{t("reports.judgeTag")}</span>
+                  )}
                 </th>
                 <td>
                   <KeyBadge fingerprint={m.key_fingerprint} />

@@ -111,6 +111,12 @@ export default function ActivityLogTab({ range }: ActivityLogTabProps) {
                   <td>{reportModel(e)}</td>
                   <td>
                     <KeyBadge fingerprint={e.key_fingerprint} />
+                    {e.judge_key_fingerprint && (
+                      <span className="rep-judge-inline">
+                        <span className="rep-roletag">{t("reports.judgeTag")}</span>
+                        <KeyBadge fingerprint={e.judge_key_fingerprint} />
+                      </span>
+                    )}
                   </td>
                   <td className="rep-cell-clip">{e.chat_title ?? t("reports.chat.adhoc")}</td>
                   <td className="rep-cell-msg">{e.message}</td>

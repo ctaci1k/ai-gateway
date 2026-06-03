@@ -38,6 +38,9 @@ class ModelUsage(BaseModel):
     # own key on a built-in slot). NULL for legacy rows → the FE falls back to the
     # slot label.
     model_name: str | None = None
+    # PH34 (D-24, B9b): "responder" (a winning ledger row) or "judge" (a DERIVED
+    # own-key judge row, shown so the added judge is visible even in Compare).
+    role: str = "responder"
     requests: int
     total_tokens: int
     successful: int
@@ -91,6 +94,8 @@ class BreakdownModel(BaseModel):
     key_fingerprint: str | None
     # PH32 (D-22): the REAL model for this node; NULL → FE falls back to the slot.
     model_name: str | None = None
+    # PH34 (D-24, B9b): "responder" or "judge" (a derived own-key judge node).
+    role: str = "responder"
     requests: int
     total_tokens: int
     chats: list[BreakdownChat]
@@ -122,6 +127,10 @@ class UsageEventDetail(BaseModel):
     billable: bool
     # PH31 (D-21): masked BYOK key used for this turn's model; NULL = built-in.
     key_fingerprint: str | None
+    # PH34 (D-24, B9b): the added (BYOK) judge for this turn, inline (NULL = a
+    # built-in / no judge) — shown as a secondary badge in the activity log.
+    judge_model_name: str | None = None
+    judge_key_fingerprint: str | None = None
     message: str
     chat_id: int | None
     chat_title: str | None

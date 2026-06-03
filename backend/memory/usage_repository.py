@@ -84,6 +84,8 @@ class UsageRepository:
         token_estimated: bool = False,
         key_fingerprint: str | None = None,
         model_name: str | None = None,
+        judge_model_name: str | None = None,
+        judge_key_fingerprint: str | None = None,
     ) -> None:
         """Append one usage event for the turn (one row per request; a Compare
         request is a single event — D-10).
@@ -94,8 +96,11 @@ class UsageRepository:
         ``key_fingerprint`` is the display-only mask of the BYOK key used for the
         winning model (NULL = built-in app key). PH32 (D-22): ``model_name`` is
         the REAL model that answered/won the turn (``selected_model`` stays the
-        slot); NULL for legacy rows. Defaults keep backward compatibility with
-        pre-PH27/PH31/PH32 callers."""
+        slot); NULL for legacy rows. PH34 (D-24, B9b): ``judge_model_name`` /
+        ``judge_key_fingerprint`` denormalize the added (BYOK) judge so it shows
+        in reports even in Compare — set only when the judge ran on the user's own
+        key (built-in judge → both NULL). Defaults keep backward compatibility
+        with pre-PH27/PH31/PH32/PH34 callers."""
         async with session_scope() as session:
             session.add(
                 UsageEvent(
@@ -110,5 +115,7 @@ class UsageRepository:
                     token_estimated=token_estimated,
                     key_fingerprint=key_fingerprint,
                     model_name=model_name,
+                    judge_model_name=judge_model_name,
+                    judge_key_fingerprint=judge_key_fingerprint,
                 )
             )

@@ -155,6 +155,14 @@ _GROQ_SAVE = {"slot": "groq", "api_key": "user-key-1234", "model_id": "my-llama"
 _CEREBRAS_SAVE = {"slot": "cerebras", "api_key": "user-key-5678", "model_id": "my-glm"}
 _SAMBANOVA_SAVE = {"slot": "sambanova", "api_key": "user-key-9012", "model_id": "my-ds"}
 _JUDGE_SAVE = {"slot": "byok-judge", "api_key": "user-key-3456", "model_id": "my-qwen"}
+# A user-added (custom) responder — AI 4/5 in the UI — needs a base_url (D-19).
+_CUSTOM_SAVE = {
+    "slot": "custom-ai4",
+    "api_key": "user-key-7777",
+    "model_id": "my-custom",
+    "base_url": "https://api.example.com/v1",
+    "custom": True,
+}
 
 
 def _ok_validate(monkeypatch):
@@ -512,6 +520,64 @@ def test_single_turn_records_key_fingerprint(client, monkeypatch):
     assert "user••••1234" in fingerprints  # the BYOK turn (user-key-1234)
     # The plaintext key never reaches the ledger column.
     assert all("user-key-1234" != (fp or "") for fp in fingerprints)
+
+
+def test_single_turn_on_custom_model_records_fingerprint(client, monkeypatch):
+    """B9a (PH34): a Single turn on a user-added model (AI 4/5 — a ``custom-*``
+    slot) attributes the own-key mask, NOT a NULL ('built-in'). Closes the owner
+    case where added models showed 'Built-in' in Reports."""
+    monkeypatch.setattr(ProviderService, "generate_stream", staticmethod(_fake_stream))
+    _ok_validate(monkeypatch)
+    headers = _make_limited_user(client, "customfp")
+    assert _store(client, headers, [_CUSTOM_SAVE]).json()["results"][0]["ok"]
+    client.post(
+        "/chat/stream",
+        json={"message": "hi", "provider": "custom-ai4"},
+        headers=headers,
+    )
+    fps = [fp for model, fp in _ledger_fingerprints() if model == "custom-ai4"]
+    assert fps == ["user••••7777"]
+
+
+def test_single_turn_on_judge_slot_records_fingerprint(client, monkeypatch):
+    """B9a (PH34): a Single turn on the judge slot (NQ6) attributes the judge
+    own-key mask, not NULL — the owner's 'judge in Single' case."""
+    monkeypatch.setattr(ProviderService, "generate_stream", staticmethod(_fake_stream))
+    _ok_validate(monkeypatch)
+    headers = _make_limited_user(client, "judgefp")
+    assert _store(client, headers, [_JUDGE_SAVE]).json()["results"][0]["ok"]
+    client.post(
+        "/chat/stream",
+        json={"message": "hi", "provider": "byok-judge"},
+        headers=headers,
+    )
+    fps = [fp for model, fp in _ledger_fingerprints() if model == "byok-judge"]
+    assert fps == ["user••••3456"]
+
+
+def test_compare_own_key_winner_records_fingerprint(client, monkeypatch):
+    """B9a (PH34): a Compare turn whose WINNER ran on the user's own key (here the
+    built-in ``groq`` slot overridden with a stored key) attributes the mask, not
+    NULL. The built-in 'cerebras'/'sambanova' losers are not recorded (one row per
+    turn = the winner, D-18)."""
+    monkeypatch.setattr(
+        OrchestratorService, "process_chat", staticmethod(_fake_process_chat)
+    )
+    _ok_validate(monkeypatch)
+    headers = _make_limited_user(client, "cmpgroqfp")
+    assert _store(client, headers, [_GROQ_SAVE]).json()["results"][0]["ok"]
+    client.post(
+        "/chat",
+        json={
+            "message": "hi",
+            "providers": ["groq", "cerebras", "sambanova"],
+            "compare_mode": True,
+            "selector_enabled": True,
+        },
+        headers=headers,
+    )
+    fps = [fp for model, fp in _ledger_fingerprints() if model == "groq"]
+    assert fps == ["user••••1234"]
 
 
 # --- True model name in the ledger (PH32, D-22) -----------------------------
