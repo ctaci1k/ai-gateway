@@ -2346,6 +2346,23 @@ html {
     width: 44px;
     height: 44px;
   }
+
+  /* PH39/M1: stop iOS Safari / mobile Chrome from auto-zooming the page when a
+     text field gains focus. Both engines zoom to any focused input/textarea
+     whose font-size < 16px; all our text fields are smaller (14/13/12.5px), so
+     we bump them to exactly 16px on phones. Targeted by the SAME field classes
+     (not a bare input/textarea rule) so we win specificity — there is no base
+     input{} rule, each field carries its size via its class. Viewport/pinch-zoom
+     are left untouched (PH23/E3). Selects (.keys-select) open a native picker,
+     not an inline caret, so they don't need this. */
+  .auth-input,
+  .composer-input,
+  .settings-textarea,
+  .cc-hrow-edit,
+  .keys-input,
+  .admin-input {
+    font-size: 16px;
+  }
 }
 
 /* Very narrow phones (360–430px): tighten spacing, no horizontal overflow. */
@@ -3121,6 +3138,25 @@ html {
 }
 .cc-mmbar .cc-acc--headless .cc-acc-body {
   padding: 0;
+}
+/* PH39/M2: full mode name at the top of the headless popover (above "+ New
+   Chat"), since the compact topbar trigger ellipsises and the head row is
+   skipped. Mirrors .cc-acc-head .lab typography (label 13.5/700/--fg, sub
+   10.5/600/--subtle). */
+.cc-mmpop-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 2px 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--fg);
+}
+.cc-mmpop-head small {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--subtle);
 }
 .cc-mmbar-col .cc-menu {
   max-height: calc(100vh - 84px);

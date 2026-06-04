@@ -184,6 +184,16 @@ export default function AccordionSection({
 
       {bodyOpen && (
         <div className="cc-acc-body">
+          {/* PH39/M2: in the headless mobile popover the compact topbar trigger
+              ellipsises to "Sin…"/"Com…" and the skipped head row hides the name
+              entirely, so the full mode name lives here, above "+ New Chat". The
+              desktop sidebar keeps its own cc-acc-head and never sees this. */}
+          {headless && (
+            <div className="cc-mmpop-head">
+              <span>{label}</span>
+              {sub && <small>{sub}</small>}
+            </div>
+          )}
           <button type="button" className="cc-newchat" onClick={onNewChat}>
             <IconPlus size={15} />
             {newChatLabel}
