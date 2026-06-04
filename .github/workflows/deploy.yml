@@ -109,12 +109,18 @@ jobs:
         # them the same way.
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          # KEK for BYOK at-rest encryption (D-20). Without it the API refuses to
+          # store any user key ("Key storage is not configured"). Kept as a GitHub
+          # Secret and synced into .env.production, same as MISTRAL_API_KEY.
+          # IMPORTANT: never rotate this value — changing it invalidates every
+          # already-stored key (users would have to re-enter them).
+          BYOK_ENCRYPTION_KEY: ${{ secrets.BYOK_ENCRYPTION_KEY }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
-          envs: MISTRAL_API_KEY
+          envs: MISTRAL_API_KEY,BYOK_ENCRYPTION_KEY
           script: |
             set -e
             cd /opt/ai-gateway
@@ -132,6 +138,7 @@ jobs:
               fi
             }
             sync_env MISTRAL_API_KEY "${MISTRAL_API_KEY}"
+            sync_env BYOK_ENCRYPTION_KEY "${BYOK_ENCRYPTION_KEY}"
             export IMAGE_TAG=${{ needs.build-push.outputs.sha }}
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
