@@ -31,6 +31,21 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class NoStoreMiddleware(BaseHTTPMiddleware):
+    """Mark every API response ``Cache-Control: no-store``.
+
+    The whole backend is dynamic, per-user JSON/stream — it must never be cached.
+    A caching reverse proxy in front of the app (the production aaPanel nginx) was
+    caching GET responses (e.g. ``/admin/users``), so newly created accounts were
+    missing and deleted ones lingered in the admin list. Sending ``no-store`` tells
+    any standards-compliant cache not to store these responses."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Fixed-window-ish sliding rate limit per client IP for mutating requests."""
 

@@ -11,7 +11,11 @@ from core.config import get_settings
 from core.db import dispose_engine, init_models
 from core.errors import register_error_handlers
 from core.logging import configure_logging, get_logger
-from core.middleware import RateLimitMiddleware, RequestLoggingMiddleware
+from core.middleware import (
+    NoStoreMiddleware,
+    RateLimitMiddleware,
+    RequestLoggingMiddleware,
+)
 from memory.chats_repository import purge_orphan_chat_messages
 from routes.admin import router as admin_router
 from routes.auth import router as auth_router
@@ -60,6 +64,9 @@ def create_app() -> FastAPI:
         window_seconds=settings.rate_limit_window_seconds,
     )
     app.add_middleware(RequestLoggingMiddleware)
+    # Dynamic, per-user API → never cacheable. Prevents a fronting proxy from
+    # serving stale GETs (e.g. a stale admin user list after create/delete).
+    app.add_middleware(NoStoreMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,

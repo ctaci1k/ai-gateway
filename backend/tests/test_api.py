@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from core.middleware import RateLimitMiddleware
+from core.middleware import NoStoreMiddleware, RateLimitMiddleware
 from services.orchestrator_service import OrchestratorService
 
 PROVIDER_RESPONSE = {
@@ -114,3 +114,19 @@ def test_rate_limit_returns_429():
     blocked = test_client.post("/ping")
     assert blocked.status_code == 429
     assert blocked.json()["error"]["code"] == "rate_limited"
+
+
+def test_no_store_header_on_responses():
+    """Every API response is marked no-store so a fronting proxy can't cache it
+    (a stale admin list after create/delete was the symptom)."""
+    app = FastAPI()
+    app.add_middleware(NoStoreMiddleware)
+
+    @app.get("/thing")
+    def thing():
+        return {"ok": True}
+
+    test_client = TestClient(app)
+    resp = test_client.get("/thing")
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "no-store"
