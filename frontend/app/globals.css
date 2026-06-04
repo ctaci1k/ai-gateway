@@ -30,6 +30,13 @@
   --font-mono: var(--font-jetbrains);
 }
 
+/* Stop mobile browsers from auto-inflating text ("font boosting"), which made
+   the whole UI look zoomed-in on phones; the design is already responsive. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
@@ -38,4 +45,7 @@ body {
     system-ui,
     -apple-system,
     sans-serif;
+  /* Belt-and-suspenders: never let a stray wide element scroll the page
+     sideways on mobile (the app manages its own scroll inside .cc-root). */
+  overflow-x: hidden;
 }
