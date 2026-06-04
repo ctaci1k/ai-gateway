@@ -20,6 +20,14 @@ import { SettingsProvider } from "@/store/SettingsContext";
 import { SidebarProvider } from "@/store/SidebarContext";
 import { ThemeProvider } from "@/store/ThemeContext";
 
+// The app shell is a client-side SPA: the real content is decided in the browser
+// (auth, mode). Render it per-request so Next emits a clean `Cache-Control:
+// no-store` instead of the static-prerender `s-maxage=31536000`. Without this a
+// shared cache (the aaPanel proxy) held a year-old HTML after each deploy that
+// pointed at now-missing /_next chunks → the page froze on the static "loading"
+// shell because the JS never loaded. Hashed /_next/static assets stay immutable.
+export const dynamic = "force-dynamic";
+
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
   subsets: ["latin"],
