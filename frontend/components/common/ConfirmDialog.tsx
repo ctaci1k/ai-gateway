@@ -3,10 +3,15 @@
 // Accessible confirmation dialog (PH16/A1): role="dialog" + aria-modal, focus
 // trap, Esc to cancel, backdrop click to cancel, focus returned to the trigger
 // on close. Styling is token-based (theme/components.css).
+//
+// Rendered through a portal into document.body so the fixed-position overlay is
+// valid wherever it's used (e.g. inside a <tbody>, where a bare <div> would be
+// invalid HTML and break hydration) and never clipped by an ancestor's overflow.
 
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -63,9 +68,10 @@ export default function ConfirmDialog({
     [onCancel],
   );
 
-  if (!open) return null;
+  // Closed, or no DOM yet (SSR) → render nothing. The portal target is body.
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div className="dialog-backdrop" onMouseDown={onCancel}>
       <div
         className="dialog"
@@ -96,6 +102,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
