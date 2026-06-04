@@ -90,8 +90,10 @@
   універсально. Покриває всі контейнери (головна/секції/попапи/Звіти/Admin).
 - **(B11) Текст автора.** `components/sidebar/CreatorCard.tsx` рендерить `author.tagline`
   (замість мертвого `author.rights` — ключа не було → текст «зник»); копія оновлена
-  (Full-Stack Developer, зроблено повністю самотужки end-to-end; без «Junior»/«AI
-  orchestration»). Паритет uk/pl/en.
+  (Full-Stack Developer, зроблено самотужки end-to-end **з використанням AI**; без
+  «Junior»). Ревізія власника 2026-06-04: «з використанням AI» — про процес розробки
+  (інструменти), не як продуктовий клейм «AI orchestration» (той лишається прибраним).
+  Паритет uk/pl/en.
 - **Гейти:** BE pytest **216** + ruff/black; FE tsc/eslint/prettier/vitest(**39**)/build;
   i18n паритет. **Owner-action:** нема нового env; **є Alembic-міграція `0011`** (авто на
   деплої). Контракти — [03](03-api-contracts.md) (`role`/judge-поля у `/reports/*`+CSV); дані

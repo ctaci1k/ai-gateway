@@ -99,13 +99,16 @@ updated: 2026-06-03
   короткий рядок: ім'я **Stanislav Byndas** + підпис «Full-Stack Developer» + одне
   речення, що застосунок зроблено **повністю самотужки, від початку до кінця**.
   Прибрати/замінити мертвий `author.rights` (відсутній ключ і дав «зниклий» текст);
-  рендерити `author.tagline` (оновити копію під вимогу — БЕЗ «Junior», БЕЗ «AI
-  orchestration»). i18n uk/pl/en паритет; верстка/токени; a11y. Драфти копії:
-  - en: «Full-Stack Developer — designed and built entirely solo, end to end.»
-  - uk: «Full-Stack розробник — спроєктовано й зроблено повністю самостійно, від
-    початку до кінця.»
-  - pl: «Full-Stack Developer — zaprojektowane i zbudowane w całości samodzielnie,
-    od początku do końca.»
+  рендерити `author.tagline`. i18n uk/pl/en паритет; верстка/токени; a11y.
+  **Ревізія власника (2026-06-04):** додати, що зроблено **з використанням AI** (про
+  ПРОЦЕС розробки — інструменти AI; це ≠ старе «AI orchestration» як опис продукту,
+  яке лишається прибраним). Прибрано «повністю/entirely», щоб не суперечило «самостійно».
+  БЕЗ «Junior». Фінальна копія:
+  - en: «Full-Stack Developer — designed and built solo, end to end, with the help of AI.»
+  - uk: «Full-Stack розробник — спроєктовано й зроблено самостійно, від початку до
+    кінця, з використанням AI.»
+  - pl: «Full-Stack Developer — zaprojektowane i zbudowane samodzielnie, od początku
+    do końca, z wykorzystaniem AI.»
 
 ## Кроки (атомарні; гейт після кожного)
 
