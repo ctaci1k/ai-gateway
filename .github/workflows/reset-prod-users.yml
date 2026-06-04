@@ -1,0 +1,47 @@
+name: Reset prod users
+
+# DESTRUCTIVE, manual-only. Wipes ALL users on the production database and creates
+# a single admin. Triggered by hand from the Actions tab (never on push). SSHes to
+# the VPS with the same secrets the deploy uses and runs the guarded maintenance
+# script inside the backend container. The new admin password is read from the
+# RESET_ADMIN_PASS repo secret (masked in logs — never typed into an input, so it
+# can't leak in this public repo).
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type WIPE to confirm deleting ALL production users"
+        required: true
+        default: ""
+      username:
+        description: "Username for the new admin"
+        required: true
+        default: "Stanislav"
+
+concurrency:
+  group: reset-prod-users
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    name: Wipe users + create one admin
+    runs-on: ubuntu-latest
+    # Hard guard: nothing runs unless the operator typed exactly WIPE.
+    if: ${{ github.event.inputs.confirm == 'WIPE' }}
+    steps:
+      - name: Run reset script on the VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            cd /opt/ai-gateway
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              python scripts/reset_to_single_admin.py \
+              --confirm WIPE \
+              --username "${{ github.event.inputs.username }}" \
+              --password "${{ secrets.RESET_ADMIN_PASS }}"
