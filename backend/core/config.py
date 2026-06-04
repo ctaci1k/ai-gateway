@@ -21,8 +21,11 @@ class Settings(BaseSettings):
 
     # --- Provider API keys ---
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
-    cerebras_api_key: str = Field(default="", alias="CEREBRAS_API_KEY")
-    sambanova_api_key: str = Field(default="", alias="SAMBANOVA_API_KEY")
+    mistral_api_key: str = Field(default="", alias="MISTRAL_API_KEY")
+    # Gemini powers RAG embeddings only (genai SDK). It is NO LONGER a responder:
+    # the Gemini Flash free tier is geo-blocked in the EEA (returns RESOURCE_EXHAUSTED
+    # with free-tier limit 0), so slot 3 moved to a second Groq model (Llama 4 Scout,
+    # PH36/D-26). Embeddings keep their own, much larger quota on this key.
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
 
     # --- CORS ---
@@ -41,25 +44,33 @@ class Settings(BaseSettings):
     # --- Logging ---
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
-    # --- Responders (PH13/PH16) ---
+    # --- Responders (PH13/PH16/PH35) ---
     # Global output budget for responder models. Reasoning models spend tokens
     # on hidden reasoning and may return an empty `content` if max_tokens is too
     # small / unset; a sufficient default keeps Compare at a stable 3 answers and
-    # full (non-truncated) replies. Per-provider overrides below.
+    # full (non-truncated) replies. The current roster (Mistral Small / Llama 4
+    # Scout) are not reasoning models with a mandatory headroom like the retired
+    # GLM-4.7, so no per-provider override is needed — they use
+    # responder_max_tokens.
     responder_max_tokens: int = Field(default=2048, alias="RESPONDER_MAX_TOKENS")
-    # Cerebras runs GLM-4.7, a reasoning model: it needs extra headroom so the
-    # hidden reasoning never crowds out the visible answer (PH16, OD-1).
-    cerebras_max_tokens: int = Field(default=4096, alias="CEREBRAS_MAX_TOKENS")
 
-    # --- Responder model roster (PH16, D-11) ---
-    # Each responder runs a *distinct*, truthfully-named model so Compare shows
-    # three genuinely different answers (Llama / GLM / DeepSeek) and the judge
-    # (Qwen) shares no family with any of them. IDs are env-overridable (swap a
-    # model without code changes); defaults are the live-verified lineup.
-    # Display names live in config/models_config.py (the single registry).
+    # --- Responder model roster (PH16/PH35/PH36, D-11/D-25/D-26) ---
+    # Each responder runs a truthfully-named model; the judge (Qwen) shares no
+    # family with any of them, so there is no self-bias. IDs are env-overridable
+    # (swap a model without code changes); defaults are the live-verified lineup.
+    # History: Cerebras (5 req/min) and SambaNova (20 req/day) were too
+    # rate-limited; NVIDIA NIM was unreliable; Gemini Flash free tier is geo-blocked
+    # in the EEA (limit 0). Slot 3 is now a SECOND Groq model — Llama 4 Scout — for
+    # its high free-tier throughput (~30k tokens/min ≈ 10-15 req/min, 1000 req/day)
+    # that works in Poland (PH36/D-26). It reuses GROQ_API_KEY (no new key). The
+    # judge stays Qwen, distinct from both Llama responders. Display names live in
+    # config/models_config.py.
     groq_model: str = Field(default="llama-3.3-70b-versatile", alias="GROQ_MODEL")
-    cerebras_model: str = Field(default="zai-glm-4.7", alias="CEREBRAS_MODEL")
-    sambanova_model: str = Field(default="DeepSeek-V3.1", alias="SAMBANOVA_MODEL")
+    mistral_model: str = Field(default="mistral-small-latest", alias="MISTRAL_MODEL")
+    # Slot-3 responder: a second Groq model (distinct from the slot-1 Groq model).
+    scout_model: str = Field(
+        default="meta-llama/llama-4-scout-17b-16e-instruct", alias="SCOUT_MODEL"
+    )
 
     # --- Database ---
     # Async SQLAlchemy URL. Dev default: SQLite. Prod: postgresql+asyncpg://...

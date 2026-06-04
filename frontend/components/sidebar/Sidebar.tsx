@@ -13,12 +13,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { IconGrid, IconModels } from "@/components/icons/Icons";
-import { useChatMode } from "@/store/ChatModeContext";
-import { useChats } from "@/store/ChatsContext";
-import { useComposer } from "@/store/ComposerContext";
 import { useI18n } from "@/store/LanguageContext";
 import { useSidebar } from "@/store/SidebarContext";
-import type { ChatSummary } from "@/types/api";
+import { useChatNav } from "@/store/useChatNav";
 
 import AccordionSection from "./AccordionSection";
 import CreatorCard from "./CreatorCard";
@@ -26,26 +23,27 @@ import CreatorCard from "./CreatorCard";
 const FOCUSABLE =
   'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// Refresh relative timestamps roughly every 30s without re-rendering on every
-// frame; cheap and keeps "N min ago" honest.
-const TICK_MS = 30_000;
-
 export default function Sidebar() {
   const { t } = useI18n();
-  const { mode, setMode } = useChatMode();
   const {
+    mode,
     singleChats,
     compareChats,
     activeChatId,
-    selectChat,
-    newChat,
+    singleActiveId,
+    compareActiveId,
     loading,
     error,
+    nowMs,
+    singleNotice,
+    compareNotice,
+    newSingle,
+    newCompare,
+    pickSingle,
+    pickCompare,
     rename,
     remove,
-    notice,
-  } = useChats();
-  const { openSingle } = useComposer();
+  } = useChatNav();
   const { mobileOpen, closeMobile } = useSidebar();
 
   // Independent accordions (cc default: Single open, Compare collapsed); either
@@ -54,12 +52,6 @@ export default function Sidebar() {
   const [compareOpen, setCompareOpen] = useState(false);
   const [histSingleOpen, setHistSingleOpen] = useState(true);
   const [histCompareOpen, setHistCompareOpen] = useState(true);
-
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), TICK_MS);
-    return () => clearInterval(id);
-  }, []);
 
   const asideRef = useRef<HTMLElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
@@ -114,36 +106,17 @@ export default function Sidebar() {
     closeMobile();
   }, [mode, activeChatId, closeMobile]);
 
-  // --- handlers ---
-  function newSingle() {
-    setMode("single");
+  // Open the matching accordion when starting a new chat, then defer to the
+  // shared nav handler (mode + draft + composer).
+  function onNewSingle() {
     setSingleOpen(true);
-    void newChat(); // clears active chat → draft
-    openSingle(null); // → model picker
+    newSingle();
   }
 
-  function newCompare() {
-    setMode("compare");
+  function onNewCompare() {
     setCompareOpen(true);
-    void newChat();
+    newCompare();
   }
-
-  function pickSingle(chat: ChatSummary) {
-    setMode("single");
-    void selectChat(chat.id);
-    openSingle(chat.model); // bind composer to this chat's fixed model
-  }
-
-  function pickCompare(chat: ChatSummary) {
-    setMode("compare");
-    void selectChat(chat.id);
-  }
-
-  const limitNotice = notice ? (
-    <div className="cc-newchat-notice" role="status">
-      {t(notice, { limit: 25 })}
-    </div>
-  ) : null;
 
   const className = ["cc-side", mobileOpen ? "cc-side--mobile-open" : ""].filter(Boolean).join(" ");
 
@@ -157,15 +130,15 @@ export default function Sidebar() {
           open={singleOpen}
           onToggle={() => setSingleOpen((o) => !o)}
           newChatLabel={t("chat.new")}
-          onNewChat={newSingle}
+          onNewChat={onNewSingle}
           chats={singleChats}
-          activeChatId={mode === "single" ? activeChatId : null}
+          activeChatId={singleActiveId}
           loading={loading}
           error={error}
           histOpen={histSingleOpen}
           onHistToggle={() => setHistSingleOpen((o) => !o)}
           nowMs={nowMs}
-          notice={mode === "single" ? limitNotice : null}
+          notice={singleNotice}
           onPickChat={pickSingle}
           onRename={rename}
           onRemove={remove}
@@ -177,15 +150,15 @@ export default function Sidebar() {
           open={compareOpen}
           onToggle={() => setCompareOpen((o) => !o)}
           newChatLabel={t("chat.new")}
-          onNewChat={newCompare}
+          onNewChat={onNewCompare}
           chats={compareChats}
-          activeChatId={mode === "compare" ? activeChatId : null}
+          activeChatId={compareActiveId}
           loading={loading}
           error={error}
           histOpen={histCompareOpen}
           onHistToggle={() => setHistCompareOpen((o) => !o)}
           nowMs={nowMs}
-          notice={mode === "compare" ? limitNotice : null}
+          notice={compareNotice}
           onPickChat={pickCompare}
           onRename={rename}
           onRemove={remove}

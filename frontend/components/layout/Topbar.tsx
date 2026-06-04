@@ -9,7 +9,8 @@
 
 "use client";
 
-import { IconGear, IconMenu, IconSparkle, IconUsers } from "@/components/icons/Icons";
+import { IconGear, IconSparkle, IconUsers } from "@/components/icons/Icons";
+import MobileModeBar from "@/components/layout/MobileModeBar";
 import AccountMenu from "@/components/topbar/AccountMenu";
 import LangMenu from "@/components/topbar/LangMenu";
 import ThemeToggle from "@/components/topbar/ThemeToggle";
@@ -19,29 +20,18 @@ import { useAuth } from "@/store/AuthContext";
 import { useI18n } from "@/store/LanguageContext";
 import { useReports } from "@/store/ReportsContext";
 import { useSettings } from "@/store/SettingsContext";
-import { useSidebar } from "@/store/SidebarContext";
 
 export default function Topbar() {
   const { t } = useI18n();
   const { user } = useAuth();
-  const { mobileOpen, openMobile } = useSidebar();
   const { open: openAdmin } = useAdminView();
   const { close: closeReports } = useReports();
   const { open: openSettings } = useSettings();
 
   return (
     <header className="cc-top">
-      <button
-        type="button"
-        className="cc-burger"
-        onClick={openMobile}
-        aria-label={t("sidebar.openMenu")}
-        aria-expanded={mobileOpen}
-        title={t("sidebar.openMenu")}
-      >
-        <IconMenu size={20} />
-      </button>
-
+      {/* PH37/M4: the mobile burger is gone — on phones the MobileModeBar (under
+          the topbar) replaces the off-canvas sidebar drawer entirely. */}
       <div className="cc-brand" aria-hidden="true">
         <IconSparkle size={19} />
       </div>
@@ -49,6 +39,11 @@ export default function Topbar() {
         <b>{t("app.name")}</b>
         <span>{t("topbar.tier")}</span>
       </div>
+
+      {/* PH37: on phones the two mode dropdowns live inside the topbar (left of
+          the utility cluster), filling the space the burger used to occupy.
+          Mobile-only — `.cc-mmbar` is display:none ≥769px. */}
+      <MobileModeBar />
 
       <div className="cc-spacer" />
 
@@ -70,7 +65,7 @@ export default function Topbar() {
       {user?.is_admin && (
         <button
           type="button"
-          className="cc-iconbtn"
+          className="cc-iconbtn cc-admin-btn"
           onClick={() => {
             closeReports();
             openAdmin();

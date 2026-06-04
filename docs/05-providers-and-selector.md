@@ -41,16 +41,16 @@ async def generate_stream(self, message: str) -> AsyncGenerator[str, None]
 
 ## Реальні провайдери
 
-### Відповідачі (у `ProviderService.providers`) — три **різні** родини (PH16/D-11)
+### Відповідачі (у `ProviderService.providers`) — три **різні** родини (PH16/D-11; ростер оновлено PH35/D-25)
 
 | Провайдер | `api_model_id` (env) | `display_name` | Бюджет | Контекст | SDK |
 |---|---|---|---|---|---|
 | `groq` ✅ | `llama-3.3-70b-versatile` | Llama 3.3 70B | 2048 | 128 000 | `groq` |
-| `cerebras` ✅ | `zai-glm-4.7` | GLM-4.7 | 4096 (reasoning) | 8 192 | OpenAI-compat |
-| `sambanova` ✅ | `DeepSeek-V3.1` | DeepSeek V3.1 | 2048 | 128 000 | OpenAI-compat |
+| `mistral` ✅ | `mistral-small-latest` | Mistral Small | 2048 | 32 000 | OpenAI-compat (`api.mistral.ai/v1`) |
+| `scout` ✅ | `meta-llama/llama-4-scout-17b-16e-instruct` | Llama 4 Scout | 2048 | 128 000 | `groq` (другий Groq-слот) |
 
-Три родини (Llama / GLM / DeepSeek) → у Compare три **по-справжньому різні** відповіді; жодна не збігається з суддею (Qwen) → без self-bias. Бюджети: глобальний `RESPONDER_MAX_TOKENS=2048`, Cerebras (reasoning-модель) — `CEREBRAS_MAX_TOKENS=4096`. Доступність моделей звірено live у API провайдерів (рекомендована `llama-4-scout` була недоступна в Cerebras → обрано найсильнішу доступну відмінну GLM-4.7).
-Дефолтний набір для Compare: `["groq", "cerebras", "sambanova"]`. Дефолтний провайдер: `groq`.
+Бюджет — глобальний `RESPONDER_MAX_TOKENS=2048` для всіх (не reasoning-моделі з обовʼязковим headroom). **PH35/D-25:** Cerebras (5 req/min) і SambaNova (20 req/добу) були занадто rate-limited; NVIDIA NIM — ненадійний → Mistral + Gemini. **PH36/D-26:** free-тариф Gemini Flash **геоблоковано в ЄС** (`429 RESOURCE_EXHAUSTED`, free-ліміт = 0) → слот 3 переведено на **другий Groq-слот `scout` = Llama 4 Scout** (`SCOUT_MODEL`, переюзає `GROQ_API_KEY`; заміряно ~30 000 ток/хв ≈ 10–15 запитів/хв, 1000/добу — працює в Польщі). Слоти 1 і 3 тепер обидва Llama (різні покоління); суддя Qwen ≠ Llama → **без self-bias**. **Gemini лишився ТІЛЬКИ для RAG-embeddings**; `providers/gemini_responder.py` видалено, новий `providers/scout_provider.py` (Groq-клієнт). Легасі `GeminiProvider` (genai SDK, опційний суддя при `SELECTOR_PROVIDER="gemini"`, неактивний) — без змін.
+Дефолтний набір для Compare: `["groq", "mistral", "scout"]`. Дефолтний провайдер: `groq`.
 
 ### Суддя (окремо, НЕ в словнику відповідачів) — D-9
 
@@ -58,7 +58,7 @@ async def generate_stream(self, message: str) -> AsyncGenerator[str, None]
 |---|---|---|
 | `groq` ✅ | `qwen/qwen3-32b` | AI Selector (суддя), будується через `ProviderService.build_judge` |
 
-> ❗ Реально відповідають Groq/Cerebras/SambaNova, а суддя — **нейтральна Qwen на Groq** (D-9; перенесено з Gemini через ліміт 20/добу). **Gemini лишається лише для RAG-embeddings.** Qwen не збігається з жодним відповідачем → без self-bias. Див. [10-open-decisions.md](10-open-decisions.md) (D-1, D-9, D-11).
+> ❗ Реально відповідають Groq/Mistral/Scout (Llama 4 Scout на Groq) (PH36/D-26; раніше Groq/Mistral/Gemini у PH35, ще раніше Groq/Cerebras/SambaNova), а суддя — **нейтральна Qwen на Groq** (D-9). **Gemini тепер ТІЛЬКИ для RAG-embeddings** (free-тариф Gemini-відповідача геоблоковано в ЄС). Qwen-суддя не збігається з жодним відповідачем (Llama/Mistral) → без self-bias. Див. [10-open-decisions.md](10-open-decisions.md) (D-1, D-9, D-11, D-25, D-26).
 
 ---
 

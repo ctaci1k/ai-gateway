@@ -55,7 +55,7 @@ def test_root(client):
 def test_providers_list_is_public(client):
     response = client.get("/providers")
     assert response.status_code == 200
-    assert set(response.json()["providers"]) == {"groq", "cerebras", "sambanova"}
+    assert set(response.json()["providers"]) == {"groq", "mistral", "scout"}
 
 
 def test_chat_requires_auth(client):

@@ -1,6 +1,6 @@
 # backend/providers/openai_compatible.py
 """Shared provider implementation for any SDK exposing the OpenAI-style
-``client.chat.completions.create`` interface (Groq, Cerebras, SambaNova).
+``client.chat.completions.create`` interface (Groq, Mistral, NVIDIA NIM).
 
 All blocking SDK calls run in worker threads so ``asyncio.gather`` over several
 providers yields real concurrency (B4), and JSON parsing is centralised via
@@ -142,7 +142,7 @@ class OpenAICompatibleProvider(BaseProvider):
             )
             # Ask the server to emit a final usage chunk (empty choices + ``usage``)
             # so Single streams record real token counts (PH27/B1, D-18). Some
-            # native provider SDKs (Groq/Cerebras/SambaNova) reject the unknown
+            # native provider SDKs (e.g. Groq) reject the unknown
             # ``stream_options`` kwarg with a TypeError; fall back to a plain
             # stream — tokens then come from the estimate (B2).
             try:

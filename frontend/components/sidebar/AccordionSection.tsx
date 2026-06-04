@@ -134,6 +134,11 @@ interface AccordionSectionProps {
   onPickChat: (chat: ChatSummary) => void;
   onRename: (id: number, title: string) => void;
   onRemove: (id: number) => void;
+  // Headless mode (PH37/M2): used inside the mobile MobileModeBar popover, where
+  // the dropdown trigger already names the section. Skips the head row and always
+  // renders the body (ignores `open`/`onToggle`). Default false → desktop sidebar
+  // is unchanged.
+  headless?: boolean;
 }
 
 export default function AccordionSection({
@@ -155,21 +160,29 @@ export default function AccordionSection({
   onPickChat,
   onRename,
   onRemove,
+  headless = false,
 }: AccordionSectionProps) {
   const { t } = useI18n();
+  const bodyOpen = headless || open;
 
   return (
-    <div className={open ? "cc-acc is-open" : "cc-acc"}>
-      <button type="button" className="cc-acc-head" onClick={onToggle} aria-expanded={open}>
-        <span className="ic">{icon}</span>
-        <span className="lab">
-          {label}
-          <small>{sub}</small>
-        </span>
-        <IconChevron size={16} className="chev" />
-      </button>
+    <div
+      className={["cc-acc", headless ? "cc-acc--headless" : "", bodyOpen ? "is-open" : ""]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {!headless && (
+        <button type="button" className="cc-acc-head" onClick={onToggle} aria-expanded={open}>
+          <span className="ic">{icon}</span>
+          <span className="lab">
+            {label}
+            <small>{sub}</small>
+          </span>
+          <IconChevron size={16} className="chev" />
+        </button>
+      )}
 
-      {open && (
+      {bodyOpen && (
         <div className="cc-acc-body">
           <button type="button" className="cc-newchat" onClick={onNewChat}>
             <IconPlus size={15} />

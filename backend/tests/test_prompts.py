@@ -56,16 +56,16 @@ def test_provider_system_prompts():
 def test_builder_without_personalization():
     prompt, label_to_slot = SelectorPromptBuilder.build_selector_prompt(
         user_message="Hello?",
-        responses={"groq": "Hi", "cerebras": "Hello there"},
+        responses={"groq": "Hi", "mistral": "Hello there"},
     )
     assert "Hello?" in prompt
     # Responses are shown under neutral, brand-free AI labels (PH22), mapped back
     # to real slots by the caller.
     assert "AI 1" in prompt and "AI 2" in prompt
     assert "Hi" in prompt and "Hello there" in prompt
-    assert set(label_to_slot.values()) == {"groq", "cerebras"}
+    assert set(label_to_slot.values()) == {"groq", "mistral"}
     # Brand names are never leaked to the judge.
-    assert "groq" not in prompt and "cerebras" not in prompt
+    assert "groq" not in prompt and "mistral" not in prompt
     assert "USER PERSONALIZATION PROFILE" not in prompt
 
 
@@ -75,7 +75,7 @@ def test_builder_with_personalization():
         responses={"groq": "Hi"},
         personalization_context={
             "preferred_models": {"groq": 3},
-            "manual_model_selections": {"cerebras": 2},
+            "manual_model_selections": {"mistral": 2},
         },
     )
     assert "USER PERSONALIZATION PROFILE" in prompt
@@ -127,7 +127,7 @@ def test_response_ordering_is_deterministic_but_not_position_fixed():
     # Anti-positional bias (PH16/E): ordering is stable for a given request but
     # the first-listed provider varies across requests, so "first = winner"
     # drift no longer tracks the insertion order.
-    responses = {"groq": "a", "cerebras": "b", "sambanova": "c"}
+    responses = {"groq": "a", "mistral": "b", "scout": "c"}
     first = SelectorPromptBuilder._ordered_responses("hello", responses)
     again = SelectorPromptBuilder._ordered_responses("hello", responses)
     assert first == again  # deterministic per request

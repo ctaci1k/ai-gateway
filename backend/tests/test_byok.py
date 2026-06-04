@@ -75,8 +75,8 @@ def _make_limited_user(client, username, per_minute=50, per_day=50):
 
 
 _GROQ_BYOK = {"slot": "groq", "api_key": "user-key", "model_id": "my-llama"}
-_CEREBRAS_BYOK = {"slot": "cerebras", "api_key": "user-key", "model_id": "my-glm"}
-_SAMBANOVA_BYOK = {"slot": "sambanova", "api_key": "user-key", "model_id": "my-ds"}
+_MISTRAL_BYOK = {"slot": "mistral", "api_key": "user-key", "model_id": "my-glm"}
+_SCOUT_BYOK = {"slot": "scout", "api_key": "user-key", "model_id": "my-ds"}
 _JUDGE_BYOK = {"api_key": "user-key", "model_id": "my-qwen"}
 
 
@@ -85,14 +85,14 @@ _JUDGE_BYOK = {"api_key": "user-key", "model_id": "my-qwen"}
 
 def test_resolve_responders_mixes_byok_and_defaults():
     resolved = ProviderService.resolve_responders(
-        ["groq", "cerebras", "sambanova"],
+        ["groq", "mistral", "scout"],
         [_GROQ_BYOK],
     )
     # groq runs on the user's transient key; the rest on built-in singletons.
     assert isinstance(resolved["groq"], TransientProvider)
     assert resolved["groq"].model_name == "my-llama"
-    assert not isinstance(resolved["cerebras"], TransientProvider)
-    assert not isinstance(resolved["sambanova"], TransientProvider)
+    assert not isinstance(resolved["mistral"], TransientProvider)
+    assert not isinstance(resolved["scout"], TransientProvider)
 
 
 def test_custom_slot_without_base_url_is_rejected():
@@ -120,7 +120,7 @@ def test_validate_keys_reports_per_slot(client, monkeypatch):
         json={
             "entries": [
                 {"slot": "groq", "api_key": "good", "model_id": "ok-model"},
-                {"slot": "cerebras", "api_key": "user-key", "model_id": "bad-model"},
+                {"slot": "mistral", "api_key": "user-key", "model_id": "bad-model"},
                 {
                     "slot": "byok-judge",
                     "api_key": "k",
@@ -134,9 +134,9 @@ def test_validate_keys_reports_per_slot(client, monkeypatch):
     assert resp.status_code == 200, resp.text
     results = {r["slot"]: r for r in resp.json()["results"]}
     assert results["groq"]["ok"] is True
-    assert results["cerebras"]["ok"] is False
+    assert results["mistral"]["ok"] is False
     # The key must never be echoed back in the error (NQ5).
-    assert "user-key" not in (results["cerebras"]["error"] or "")
+    assert "user-key" not in (results["mistral"]["error"] or "")
     assert results["byok-judge"]["ok"] is True
 
 
@@ -152,8 +152,8 @@ def test_validate_requires_auth_and_csrf(client):
 
 # Save entries carry a ``slot`` (the judge slot id is "byok-judge").
 _GROQ_SAVE = {"slot": "groq", "api_key": "user-key-1234", "model_id": "my-llama"}
-_CEREBRAS_SAVE = {"slot": "cerebras", "api_key": "user-key-5678", "model_id": "my-glm"}
-_SAMBANOVA_SAVE = {"slot": "sambanova", "api_key": "user-key-9012", "model_id": "my-ds"}
+_MISTRAL_SAVE = {"slot": "mistral", "api_key": "user-key-5678", "model_id": "my-glm"}
+_SCOUT_SAVE = {"slot": "scout", "api_key": "user-key-9012", "model_id": "my-ds"}
 _JUDGE_SAVE = {"slot": "byok-judge", "api_key": "user-key-3456", "model_id": "my-qwen"}
 # A user-added (custom) responder — AI 4/5 in the UI — needs a base_url (D-19).
 _CUSTOM_SAVE = {
@@ -226,12 +226,12 @@ def test_put_failing_key_is_not_stored(client, monkeypatch):
 def test_delete_removes_slot(client, monkeypatch):
     _ok_validate(monkeypatch)
     headers = _csrf(_register(client, "del"))
-    _store(client, headers, [_GROQ_SAVE, _CEREBRAS_SAVE])
+    _store(client, headers, [_GROQ_SAVE, _MISTRAL_SAVE])
 
     resp = client.delete("/keys/groq", headers=headers)
     assert resp.status_code == 200, resp.text
     slots = {k["slot"] for k in resp.json()["keys"]}
-    assert slots == {"cerebras"}
+    assert slots == {"mistral"}
 
 
 def test_keys_are_isolated_per_account(client, monkeypatch):
@@ -243,8 +243,8 @@ def test_keys_are_isolated_per_account(client, monkeypatch):
     b_headers = _csrf(_register(client, "bob"))
     assert client.get("/keys").json()["keys"] == []
     # Bob storing his own slot doesn't leak alice's.
-    _store(client, b_headers, [_CEREBRAS_SAVE])
-    assert {k["slot"] for k in client.get("/keys").json()["keys"]} == {"cerebras"}
+    _store(client, b_headers, [_MISTRAL_SAVE])
+    assert {k["slot"] for k in client.get("/keys").json()["keys"]} == {"mistral"}
 
 
 def test_put_reuses_stored_key_when_changing_model(client, monkeypatch):
@@ -406,7 +406,7 @@ def test_compare_free_only_when_all_participants_byok(client, monkeypatch):
 
     base = {
         "message": "hi",
-        "providers": ["groq", "cerebras", "sambanova"],
+        "providers": ["groq", "mistral", "scout"],
         "compare_mode": True,
         "selector_enabled": True,
     }
@@ -421,7 +421,7 @@ def test_compare_free_only_when_all_participants_byok(client, monkeypatch):
     assert client.get("/auth/me").json()["used_today"] == 2
 
     # All participants BYOK (3 responders + judge) → free.
-    _store(client, headers, [_CEREBRAS_SAVE, _SAMBANOVA_SAVE, _JUDGE_SAVE])
+    _store(client, headers, [_MISTRAL_SAVE, _SCOUT_SAVE, _JUDGE_SAVE])
     client.post("/chat", json=base, headers=headers)
     assert client.get("/auth/me").json()["used_today"] == 2
 
@@ -469,16 +469,16 @@ def test_selected_key_fingerprint_attributes_by_slot():
         judge=ByokJudge(api_key="judgekey-9999", model_id="my-qwen"),
         responders=[
             ByokResponder(slot="groq", api_key="groqkey-1111", model_id="my-llama"),
-            ByokResponder(slot="cerebras", api_key="cerbkey-2222", model_id="my-glm"),
+            ByokResponder(slot="mistral", api_key="cerbkey-2222", model_id="my-glm"),
         ],
     )
     # Compare: the winning responder slot → its own key's mask.
     assert _selected_key_fingerprint(byok, "groq") == "groq••••1111"
-    assert _selected_key_fingerprint(byok, "cerebras") == "cerb••••2222"
+    assert _selected_key_fingerprint(byok, "mistral") == "cerb••••2222"
     # Single on the judge slot (NQ6) → the judge key's mask.
     assert _selected_key_fingerprint(byok, "byok-judge") == "judg••••9999"
     # A built-in slot (no stored key) or no config → None (app key).
-    assert _selected_key_fingerprint(byok, "sambanova") is None
+    assert _selected_key_fingerprint(byok, "scout") is None
     assert _selected_key_fingerprint(None, "groq") is None
     assert _selected_key_fingerprint(byok, None) is None
 
@@ -558,7 +558,7 @@ def test_single_turn_on_judge_slot_records_fingerprint(client, monkeypatch):
 def test_compare_own_key_winner_records_fingerprint(client, monkeypatch):
     """B9a (PH34): a Compare turn whose WINNER ran on the user's own key (here the
     built-in ``groq`` slot overridden with a stored key) attributes the mask, not
-    NULL. The built-in 'cerebras'/'sambanova' losers are not recorded (one row per
+    NULL. The built-in 'mistral'/'scout' losers are not recorded (one row per
     turn = the winner, D-18)."""
     monkeypatch.setattr(
         OrchestratorService, "process_chat", staticmethod(_fake_process_chat)
@@ -570,7 +570,7 @@ def test_compare_own_key_winner_records_fingerprint(client, monkeypatch):
         "/chat",
         json={
             "message": "hi",
-            "providers": ["groq", "cerebras", "sambanova"],
+            "providers": ["groq", "mistral", "scout"],
             "compare_mode": True,
             "selector_enabled": True,
         },
@@ -621,7 +621,7 @@ def test_compare_turn_records_winning_real_model(client, monkeypatch):
         "/chat",
         json={
             "message": "hi",
-            "providers": ["groq", "cerebras", "sambanova"],
+            "providers": ["groq", "mistral", "scout"],
             "compare_mode": True,
             "selector_enabled": True,
         },

@@ -18,8 +18,8 @@ import { responderLabel } from "@/utils/models";
 // A short, stable accent color per built-in slot (chip background only).
 const SLOT_COLOR: Record<string, string> = {
   groq: "#f0663c",
-  cerebras: "#3b9d6e",
-  sambanova: "#3b6fd4",
+  mistral: "#fa520f",
+  scout: "#2563eb",
 };
 
 export default function SingleModelPicker() {

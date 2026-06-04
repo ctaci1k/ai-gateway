@@ -1,10 +1,12 @@
 # backend/config/models_config.py
 """Single source of truth for the responder model roster (PH16, D-11).
 
-Each responder provider runs a *distinct*, truthfully-named model so Compare
-shows three genuinely different answers (different model families) and the judge
-(Qwen, ``config/selector_config.py``) shares no family with any responder — no
-self-bias. The API model id is overridable via env (a deployment can swap a
+Each responder provider runs a truthfully-named model so Compare shows three
+answers. The judge (Qwen, ``config/selector_config.py``) shares no family with
+any responder — no self-bias. (Slots 1 and 3 are both Groq Llama models since
+PH36/D-26 — Llama 3.3 70B and Llama 4 Scout — chosen for reliable EU free-tier
+throughput; the judge is still neutral.) The API model id is overridable via env
+(a deployment can swap a
 model without code changes); the ``display_name`` is the truthful, human label
 shown in the UI and ``/providers/info`` (no vendor fiction). ``max_tokens`` is
 the per-provider output budget — reasoning models need more headroom or they
@@ -33,16 +35,16 @@ def get_model_registry() -> dict[str, ModelSpec]:
             display_name="Llama 3.3 70B",
             max_tokens=settings.responder_max_tokens,
         ),
-        "cerebras": ModelSpec(
-            provider="cerebras",
-            api_model_id=settings.cerebras_model,
-            display_name="GLM-4.7",
-            max_tokens=settings.cerebras_max_tokens,
+        "mistral": ModelSpec(
+            provider="mistral",
+            api_model_id=settings.mistral_model,
+            display_name="Mistral Small",
+            max_tokens=settings.responder_max_tokens,
         ),
-        "sambanova": ModelSpec(
-            provider="sambanova",
-            api_model_id=settings.sambanova_model,
-            display_name="DeepSeek V3.1",
+        "scout": ModelSpec(
+            provider="scout",
+            api_model_id=settings.scout_model,
+            display_name="Llama 4 Scout",
             max_tokens=settings.responder_max_tokens,
         ),
     }

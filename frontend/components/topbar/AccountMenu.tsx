@@ -9,13 +9,16 @@
 "use client";
 
 import Dropdown from "@/components/common/Dropdown";
+import LanguageToggle from "@/components/common/LanguageToggle";
 import {
   IconChevron,
   IconLogout,
   IconReport,
   IconShield,
   IconUser,
+  IconUsers,
 } from "@/components/icons/Icons";
+import CreatorCard from "@/components/sidebar/CreatorCard";
 import Avatar from "@/components/topbar/Avatar";
 import { useAdminView } from "@/store/AdminViewContext";
 import { useAuth } from "@/store/AuthContext";
@@ -27,8 +30,8 @@ export default function AccountMenu() {
   const { t } = useI18n();
   const { user, logout } = useAuth();
   const { open: openStub } = useComingSoon();
-  const { open: openReports } = useReports();
-  const { close: closeAdmin } = useAdminView();
+  const { open: openReports, close: closeReports } = useReports();
+  const { open: openAdmin, close: closeAdmin } = useAdminView();
 
   const name = user?.username ?? t("profile.title");
   const role = user?.is_admin ? t("admin.roleAdmin") : t("admin.roleUser");
@@ -102,6 +105,38 @@ export default function AccountMenu() {
             <IconShield size={16} />
             <span className="lab">{t("account.security")}</span>
           </button>
+          {/* PH37/M5: on mobile the Admin entry and the language switch move here
+              (they leave the topbar ≤768px). Mirrors the cc-menu-creator pattern —
+              hidden ≥769px so the desktop topbar keeps Admin + LangMenu. */}
+          <div className="cc-menu-mobileonly">
+            <div className="cc-menu-sep" />
+            {user?.is_admin && (
+              <button
+                type="button"
+                role="menuitem"
+                className="cc-menu-item"
+                onClick={() => {
+                  closeReports();
+                  openAdmin();
+                  close();
+                }}
+              >
+                <IconUsers size={16} />
+                <span className="lab">{t("admin.title")}</span>
+              </button>
+            )}
+            <div className="cc-menu-cap">{t("sidebar.language")}</div>
+            <div className="cc-menu-lang">
+              <LanguageToggle />
+            </div>
+          </div>
+          {/* PH35/S13: on mobile the creator card moves here (between Security and
+              Logout, fenced by separators). One CreatorCard reused via variant;
+              CSS hides the sidebar copy ≤768px so it never duplicates. */}
+          <div className="cc-menu-creator">
+            <div className="cc-menu-sep" />
+            <CreatorCard variant="menu" />
+          </div>
           <div className="cc-menu-sep" />
           <button
             type="button"

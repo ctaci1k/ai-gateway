@@ -19,7 +19,7 @@ import {
 describe("stateFromMetadata", () => {
   it("always yields the 3 built-in slots (unstored when absent) + judge", () => {
     const state = stateFromMetadata([]);
-    expect(state.responders.map((r) => r.slot)).toEqual(["groq", "cerebras", "sambanova"]);
+    expect(state.responders.map((r) => r.slot)).toEqual(["groq", "mistral", "scout"]);
     expect(state.responders.every((r) => !r.stored && !r.custom)).toBe(true);
     expect(state.judge.stored).toBe(false);
   });

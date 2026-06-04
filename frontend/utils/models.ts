@@ -8,8 +8,8 @@
 
 export const RESPONDER_LABELS: Readonly<Record<string, string>> = {
   groq: "Llama 3.3 70B",
-  cerebras: "GLM-4.7",
-  sambanova: "DeepSeek V3.1",
+  mistral: "Mistral Small",
+  scout: "Llama 4 Scout",
 };
 
 // Friendly label for a responder provider key; falls back to the raw key for

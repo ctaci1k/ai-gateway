@@ -37,7 +37,7 @@ def test_single_stream_persists_to_rolling_history(auth_client, monkeypatch):
 
     resp = client.post(
         "/chat/stream",
-        json={"message": "hi", "provider": "cerebras"},
+        json={"message": "hi", "provider": "mistral"},
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
@@ -50,7 +50,7 @@ def test_single_stream_persists_to_rolling_history(auth_client, monkeypatch):
     record = memory[0]
     assert record["user_message"] == "hi"
     assert record["best_response"] == "Hello world"
-    assert record["selected_model"] == "cerebras"
+    assert record["selected_model"] == "mistral"
     assert record["selector_used"] is False
     assert record["compare_mode"] is False
 

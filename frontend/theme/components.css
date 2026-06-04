@@ -2742,6 +2742,24 @@ html {
   background: var(--border);
   margin: 5px 2px;
 }
+/* Mobile-only creator card inside the account menu (PH35/S13). Hidden on desktop
+   — the sidebar keeps its own copy there; enabled ≤768px (where the sidebar copy
+   is hidden in turn), so the card never duplicates. */
+.cc-menu-creator {
+  display: none;
+}
+.cc-creator--menu {
+  margin-top: 0;
+}
+/* Mobile-only account-menu section (PH37/M5): Admin entry + language switch that
+   leave the topbar on phones. Hidden on desktop (topbar keeps them); enabled
+   ≤768px below — mirrors the cc-menu-creator pattern. */
+.cc-menu-mobileonly {
+  display: none;
+}
+.cc-menu-lang {
+  padding: 4px 8px 6px;
+}
 .cc-acct-head {
   display: flex;
   align-items: center;
@@ -3075,6 +3093,92 @@ html {
   background: rgba(var(--accent-rgb), 0.12);
   border: 1px solid rgba(var(--accent-rgb), 0.3);
 }
+/* Mobile-only mode bar (PH37/M3). Two side-by-side "column dropdowns" (Single /
+   Compare) that replace the burger drawer + flat ModeSwitch on phones. Hidden on
+   desktop — there the sidebar accordions are the switcher. Enabled inside
+   @media (max-width:768px) below. Each trigger pill mirrors the accordion head
+   (icon tile + title + sub + chevron); the popover body reuses AccordionSection. */
+.cc-mmbar {
+  display: none;
+}
+.cc-mmbar-col {
+  flex: 1;
+  min-width: 0;
+}
+.cc-mmbar-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border-radius: 13px;
+  background: var(--soft);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  text-align: left;
+}
+.cc-mmbar-trigger:hover {
+  background: var(--card);
+  border-color: var(--border-strong);
+}
+.cc-mmbar-trigger.is-open {
+  background: var(--card);
+  border-color: var(--border-strong);
+}
+.cc-mmbar-trigger .ic {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--softer);
+  color: var(--muted);
+}
+.cc-mmbar-trigger.is-open .ic {
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--accent);
+}
+.cc-mmbar-trigger .lab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  font-size: 13px;
+  font-weight: 700;
+}
+.cc-mmbar-trigger .lab small {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cc-mmbar-trigger .chev {
+  flex-shrink: 0;
+  color: var(--subtle);
+  transition: transform 0.25s;
+}
+.cc-mmbar-trigger.is-open .chev {
+  transform: rotate(180deg);
+}
+/* Inside the popover the headless accordion needs no card frame (the popover is
+   the frame) and no extra body padding. The popover scrolls when the history is
+   long; the global thin themed scrollbar (D-24/B10) applies automatically. */
+.cc-mmbar .cc-acc--headless {
+  border: none;
+  background: transparent;
+}
+.cc-mmbar .cc-acc--headless .cc-acc-body {
+  padding: 0;
+}
+.cc-mmbar-col .cc-menu {
+  max-height: calc(100vh - 84px);
+  overflow-y: auto;
+}
 .cc-modelchip-wrap {
   position: relative;
   display: inline-flex;
@@ -3248,25 +3352,8 @@ html {
   border-style: dashed;
 }
 
-/* ---- topbar burger (mobile only) + drawer scrim ---- */
-.cc-burger {
-  display: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  background: var(--soft);
-  border: 1px solid var(--border);
-}
-.cc-burger:hover {
-  color: var(--fg);
-  background: var(--softer);
-}
-.cc-backdrop {
-  display: none;
-}
+/* PH37/M4: the mobile burger + off-canvas drawer scrim were removed (the
+   MobileModeBar replaces them). The backdrop element is no longer rendered. */
 
 /* focus-visible rings on new interactive chrome (a11y) */
 .cc-iconbtn:focus-visible,
@@ -3274,7 +3361,7 @@ html {
 .cc-langpill:focus-visible,
 .cc-usage:focus-visible,
 .cc-userbtn:focus-visible,
-.cc-burger:focus-visible,
+.cc-mmbar-trigger:focus-visible,
 .cc-menu-item:focus-visible,
 .cc-acc-head:focus-visible,
 .cc-newchat:focus-visible,
@@ -3499,27 +3586,10 @@ html {
 }
 
 @media (max-width: 768px) {
-  .cc-burger {
-    display: inline-flex;
-  }
+  /* PH37/M4: no burger and no off-canvas drawer on phones — the sidebar is hidden
+     entirely and its content lives in the MobileModeBar under the topbar. */
   .cc-side {
-    position: fixed;
-    top: 64px;
-    bottom: 0;
-    left: 0;
-    z-index: 40;
-    transform: translateX(-100%);
-    box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.55);
-  }
-  .cc-side--mobile-open {
-    transform: translateX(0);
-  }
-  .cc-backdrop {
-    display: block;
-    position: fixed;
-    inset: 64px 0 0 0;
-    z-index: 35;
-    background: rgba(0, 0, 0, 0.5);
+    display: none;
   }
   .cc-userbtn-tx {
     display: none;
@@ -3550,6 +3620,55 @@ html {
   }
   .cc-stage {
     padding: 10px;
+  }
+  /* The two column-dropdowns live inside the topbar now (left of the utility
+     cluster), filling the space the burger used to occupy. The spacer collapses
+     so the bar takes that width; the two triggers split it evenly. */
+  .cc-spacer {
+    flex: 0;
+  }
+  .cc-mmbar {
+    display: flex;
+    gap: 8px;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* Compact trigger that fits the 64px topbar: no sub-caption, smaller icon,
+     single-line title with ellipsis so it never overflows on 360px. */
+  .cc-mmbar-trigger {
+    min-height: 40px;
+    padding: 6px 9px;
+    gap: 8px;
+  }
+  .cc-mmbar-trigger .ic {
+    width: 26px;
+    height: 26px;
+  }
+  .cc-mmbar-trigger .lab {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+  }
+  .cc-mmbar-trigger .lab small {
+    display: none;
+  }
+  /* The creator card moves from the sidebar into the account menu (S13). */
+  .cc-side .cc-creator {
+    display: none;
+  }
+  .cc-menu-creator {
+    display: block;
+  }
+  /* Admin + language move into the account menu; remove them from the topbar
+     (PH37/M5). Theme + Settings (gear) stay in the topbar. */
+  .cc-menu-mobileonly {
+    display: block;
+  }
+  .cc-dd-lang,
+  .cc-admin-btn {
+    display: none;
   }
   /* Settings & menus go full-width and stack their section list. */
   .settings-dialog {
@@ -3599,8 +3718,7 @@ html {
   .cc-usage {
     display: none;
   }
-  .cc-iconbtn,
-  .cc-burger {
+  .cc-iconbtn {
     width: 40px;
     height: 40px;
   }

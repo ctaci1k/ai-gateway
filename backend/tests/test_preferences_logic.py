@@ -32,12 +32,12 @@ def test_apply_message_increments_counters():
 def test_apply_manual_selection_agreement_and_disagreement():
     prefs = pl.default_preferences()
     pl.apply_manual_selection(prefs, selected_model="groq", selector_model="groq")
-    pl.apply_manual_selection(prefs, selected_model="cerebras", selector_model="groq")
+    pl.apply_manual_selection(prefs, selected_model="mistral", selector_model="groq")
     interactions = prefs["response_interactions"]
     assert interactions["manual_selections"] == 2
     assert interactions["selector_agreements"] == 1
     assert interactions["selector_disagreements"] == 1
-    assert prefs["manual_model_selections"] == {"groq": 1, "cerebras": 1}
+    assert prefs["manual_model_selections"] == {"groq": 1, "mistral": 1}
 
 
 def test_personalization_profile_subset():

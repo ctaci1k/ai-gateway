@@ -45,7 +45,7 @@ class StreamError extends Error {
 }
 
 // Built-in responder models available for Single (mirrors the backend roster).
-export const SINGLE_PROVIDERS = ["groq", "cerebras", "sambanova"] as const;
+export const SINGLE_PROVIDERS = ["groq", "mistral", "scout"] as const;
 // A Single selection can also be a BYOK custom slot or the judge slot (NQ6).
 export type SingleProvider = string;
 
@@ -185,6 +185,11 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
           setError({ messageKey: "errors.lengthExceeded" });
         } else if (reason === "empty_response") {
           setError({ messageKey: "errors.emptyResponse" });
+        } else if (reason === "rate_limited") {
+          // Built-in (app-key) rate limit: the free model hit its per-minute
+          // provider limit. Distinct from own-key (handled above) and from our
+          // account quota. Friendly, reassuring copy (R2, plan 035).
+          setError({ messageKey: "errors.rateLimited" });
         } else {
           setError({ message: err instanceof Error ? err.message : undefined });
         }

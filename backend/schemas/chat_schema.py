@@ -11,7 +11,7 @@ _MAX_MESSAGE_LENGTH = get_settings().max_message_length
 class ByokResponder(BaseModel):
     """One responder slot on a user's own API key (BYOK, PH17).
 
-    ``slot`` matches a built-in responder ("groq"/"cerebras"/"sambanova") or a
+    ``slot`` matches a built-in responder ("groq"/"mistral"/"scout") or a
     custom added slot id. Default slots take the provider's fixed endpoint, so
     ``base_url`` is optional there; custom slots must supply it. Keys are used
     transiently for the request and never stored or logged (NQ5)."""

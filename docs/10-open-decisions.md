@@ -245,6 +245,91 @@
 - **(B11) Текст автора повернено.** Картка автора рендерить `author.tagline`: «Full-Stack Developer — зроблено самотужки, від початку до кінця, **з використанням AI**» (без «Junior»); прибрано мертвий `author.rights`. Паритет uk/pl/en. **Ревізія власника (2026-06-04):** додано «з використанням AI» — це про ПРОЦЕС розробки (інструменти AI), а не продуктовий клейм «AI orchestration» (той лишається прибраним); прибрано «повністю», щоб не суперечило «самостійно».
 ↪ **Реалізовано (PH34, 2026-06-03):** код (FE `components/keys/KeysForm.tsx`, `components/sidebar/CreatorCard.tsx`, `components/reports/{ByModelTab,BreakdownTab,ActivityLogTab}.tsx`, `types/api.ts`, `theme/components.css`, `i18n`; BE `db/models.py`, `migrations/0011_usage_judge_byok`, `memory/{usage_repository,usage_report_repository}.py`, `routes/{chat,reports}.py`, `schemas/reports.py`) + тести (BE `test_byok.py` +3, `test_reports.py` +6). Деталі — [08-current-state.md](08-current-state.md) (PH34); контракти — [03-api-contracts.md](03-api-contracts.md); дані — [04-data-models.md](04-data-models.md). **Owner-action:** нема нового env; **є Alembic-міграція `0011`** (авто на деплої). Гейти: BE 216 + ruff/black; FE tsc/eslint/prettier/vitest(39)/build.
 
+## D-25 ✅ Заміна провайдерів-відповідачів (Cerebras/SambaNova → Mistral/Gemini) + мобільний UX (план 034)
+
+**Рішення (2026-06-04):** дослідження лімітів показало, що Cerebras (**5 req/min**) і
+SambaNova (**20 req/добу**) — занадто вузькі для двох із трьох слотів-відповідачів. Власник
+делегував архітектору підняти найслабші ланки, **лишивши Groq-відповідач і Groq-Qwen суддю
+незмінними**. **Уточнює D-1/D-11** (ростер відповідачів) і **D-9** (суддя — без змін);
+безпеку D-20/D-21/D-22 не чіпано.
+
+- **Слот 2 `cerebras`→`mistral`** (Mistral, `https://api.mistral.ai/v1`, `MISTRAL_API_KEY`/
+  `MISTRAL_MODEL=mistral-small-latest` — безкоштовний Experiment-tier, ~300 req/min).
+- **Слот 3 `sambanova`→`gemini`** (Google Gemini через OpenAI-сумісний ендпоінт
+  `https://generativelanguage.googleapis.com/v1beta/openai/`, `GEMINI_API_KEY`/
+  `GEMINI_MODEL=gemini-2.0-flash`). **Спершу обрали NVIDIA NIM, але власник повідомив про
+  постійні проблеми з його доступом/реєстрацією → відкинули.** Gemini обрано бо: вирішальний
+  критерій власника — **хороші ліміти і за хвилину, і за добу** (free Gemini Flash = 15 req/min +
+  **1500 req/добу**, на порядок краще за OpenRouter ~50/добу чи GitHub Models); **новий ключ не
+  потрібен** — переюзаємо наявний `GEMINI_API_KEY`. Embeddings і responder на Gemini — **різні
+  моделі → окремі rate-buckets** (не конкурують).
+- **Slot-responder `gemini` (`providers/gemini_responder.py`, OpenAI-compat) ОКРЕМИЙ** від
+  легасі `GeminiProvider` (genai SDK — лише опційний суддя при `SELECTOR_PROVIDER="gemini"`,
+  неактивний; D-9 переніс суддю на Groq). Два класи з `provider_name="gemini"` не конфліктують —
+  у `providers` dict лише responder.
+- **Різноманіття збережено:** Llama / Mistral / Gemini — три різні родини; суддя Qwen ні з
+  ким не збігається → без self-bias. **Суддя Groq·`qwen/qwen3-32b` — без змін.**
+- **`CEREBRAS_MAX_TOKENS` прибрано:** нові слоти не reasoning-моделі з обовʼязковим headroom
+  (як GLM-4.7) → беруть `responder_max_tokens`.
+- **Truthful naming зберігає коректність історії:** старі cerebras/sambanova-рядки у звітах
+  лишаються з «GLM-4.7 / DeepSeek V3.1» (саме ці моделі тоді й відповідали, межа D-21/D-22) —
+  це правильно, не баг. Слот лишається стабільним групувальником, не валідується проти живого
+  ростера.
+- **Мобільний UX:** перемикач режимів на телефоні (≤768px) — дві окремі кнопки замість бару;
+  картка автора переноситься в меню акаунта. Десктоп незмінний; golden rules (t()-паритет,
+  токени) дотримано.
+- **Orphan BYOK-рядки** зі слотом cerebras/sambanova — нешкідливі (зашифровані, не
+  використовуються); окрема чистка — поза планом.
+↪ **Реалізовано (PH35, 2026-06-04):** код (BE `core/config.py`, `providers/{mistral_provider,gemini_responder}.py`,
+`config/{models_config,selector_config}.py`, `services/provider_service.py`, докстрінги
+`schemas/chat_schema.py`/`db/models.py`/`providers/openai_compatible.py`; FE `utils/{models,byokEndpoints}.ts`,
+`store/{ComposerContext,KeysContext}.tsx`, `components/chat/SingleModelPicker.tsx`, мобільні
+компоненти `ModeSwitch.tsx`/`CreatorCard`/`AccountMenu`, `i18n`) + тести (BE
+`test_legacy_slot_rows_survive_provider_swap` + оновлені; FE оновлені). Деталі —
+[08-current-state.md](08-current-state.md) (PH35). **Owner-action:** завести `MISTRAL_API_KEY`
+у прод-секрети (Gemini-ключ уже є), опційно `MISTRAL_MODEL`/`GEMINI_MODEL`, прибрати
+`CEREBRAS_*`/`SAMBANOVA_*`; **міграцій БД немає**. Гейти: BE 222 + ruff/black; FE tsc/eslint/vitest(40)/prettier.
+
+## D-26 ✅ Слот-3 відповідач: Gemini → другий Groq-слот (Llama 4 Scout) — gemini-слот геоблоковано в ЄС
+
+**Рішення (2026-06-04):** після переходу слота 3 на Gemini (D-25, **не задеплоєно**)
+live-перевірка власним ключем показала, що **безкоштовний тариф Gemini Flash геоблоковано в
+ЄС/EEA**: API повертає `429 RESOURCE_EXHAUSTED` з `generate_content_free_tier_requests
+limit: 0` для `gemini-2.0-flash` — тобто free-ліміт = **0**, падає з першого ж запиту (не
+«вичерпали»). Власник у Польщі → слот непрацездатний. Вимога власника: стабільні **10–15
+запитів/хв** під 3+ одночасних користувачів, провайдер що **працює в Польщі**. **Уточнює
+D-25** (ростер) і **D-1/D-11**; суддю (D-9), безпеку D-20/D-21/D-22, квоти/`billable`/ledger —
+не чіпано.
+
+- **Слот 3 `gemini` → `scout` (Groq · Llama 4 Scout, `meta-llama/llama-4-scout-17b-16e-instruct`).**
+  Це **другий Groq-слот** поряд зі слотом 1 (Llama 3.3 70B). Переюзає наявний `GROQ_API_KEY`
+  (новий ключ НЕ потрібен; `SCOUT_MODEL` перевизначає id). Ендпоінт слота = Groq.
+- **Чому Scout, а не gpt-oss/інше:** заміряно реальні rate-limit заголовки Groq власним
+  ключем. Groq лімітує за хвилину **токенами**: Scout = **30 000 ток/хв** (≈ 10–15 запитів/хв)
+  проти gpt-oss-120b **8 000 ток/хв** (≈ 3) і llama-3.1-8b **6 000**. Усі = **1000 запитів/добу**.
+  Тільки Scout дає потрібну хвилинну пропускну здатність. `gemma2-9b-it` — **decommissioned**
+  на Groq (400 `model_decommissioned`), тому відпав разом із Gemini.
+- **Свідома втрата різноманіття родин:** слоти 1 і 3 тепер обидва **Llama** (3.3 70B vs 4 Scout —
+  різні покоління/архітектури, відповіді відрізняються). Власник обрав **пропускну здатність
+  понад різноманіття родин**. **Суддя Qwen ≠ Llama → self-bias відсутній** (D-9 збережено).
+- **Gemini лишається ТІЛЬКИ для RAG-embeddings** (`GEMINI_API_KEY` зберігається; інша, набагато
+  більша квота). У BYOK-каталозі Google Gemini переміщено з «вбудованих» у «сторонні
+  сумісні» — користувач зі **своїм** (платним) ключем може ним користуватися.
+- **Slot-rename `gemini`→`scout` (а не key="gemini" на Groq):** PH35 **не комітнуто/не
+  задеплоєно** → немає легасі-рядків зі слотом `gemini`, тож переіменування чисте, без
+  orphan-даних; зберігає **truthful naming** (D-22: slot — стабільний групувальник, але не має
+  брехати, що Llama-модель — це «gemini»). Історичні cerebras/sambanova-рядки — без змін
+  (фолбек на real-model, межа D-21/D-22).
+↪ **Реалізовано (PH36, 2026-06-04):** код (BE `core/config.py` `scout_model`/`SCOUT_MODEL`,
+`providers/scout_provider.py` (новий, Groq-клієнт), видалено `providers/gemini_responder.py`,
+`config/{models_config,selector_config}.py`, `services/provider_service.py`, докстрінги
+`schemas/chat_schema.py`/`db/models.py`; FE `utils/{models,byokEndpoints}.ts`,
+`store/{KeysContext,ComposerContext}.tsx`, `components/chat/SingleModelPicker.tsx`, `i18n`
+(`picker.desc.scout`)) + оновлені тести (BE slot `gemini`→`scout`; FE `models.test.ts`/
+`KeysContext.test.ts`) + env-приклади. Деталі — [08-current-state.md](08-current-state.md)
+(PH36). **Owner-action:** жодного нового ключа (Scout на `GROQ_API_KEY`); опційно `SCOUT_MODEL`;
+**міграцій БД немає**. Гейти: BE 222 + ruff/black; FE tsc/eslint/vitest(40)/prettier.
+
 ## Нові підтверджені вимоги (від власника, 2026-05-29)
 
 Окрім днів 10–14, додано до обсягу:

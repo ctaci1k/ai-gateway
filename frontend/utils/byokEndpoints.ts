@@ -4,8 +4,8 @@
 // <select> (PH29 / plan 027; reworked PH30). The base URL is a pick-from-list
 // value — no free-text entry.
 //
-// PH30 UX fix: the built-in providers (Groq/Cerebras/SambaNova) are now part of
-// the catalogue and SELECTABLE, so the dropdown matches the "where to get keys"
+// PH30 UX fix: the built-in providers (Groq/Mistral; slot 3 is a second Groq
+// model since PH36/D-26) are part of the catalogue and SELECTABLE, so the dropdown matches the "where to get keys"
 // directory. For each built-in slot its OWN provider is the named DEFAULT option
 // (empty value → that provider's endpoint, e.g. "Groq · default endpoint"); the
 // other two built-ins + all compatibles are listed as override targets
@@ -59,19 +59,11 @@ export const BUILTIN_BASE_URLS: readonly ByokEndpoint[] = [
     needsKey: true,
   },
   {
-    id: "cerebras",
-    label: "Cerebras",
-    url: "https://api.cerebras.ai/v1",
-    keysUrl: "https://cloud.cerebras.ai",
-    modelsUrl: "https://inference-docs.cerebras.ai/api-reference/models",
-    needsKey: true,
-  },
-  {
-    id: "sambanova",
-    label: "SambaNova",
-    url: "https://api.sambanova.ai/v1",
-    keysUrl: "https://cloud.sambanova.ai/apis",
-    modelsUrl: "https://docs.sambanova.ai/cloud/docs/get-started/supported-models",
+    id: "mistral",
+    label: "Mistral",
+    url: "https://api.mistral.ai/v1",
+    keysUrl: "https://console.mistral.ai/api-keys",
+    modelsUrl: "https://docs.mistral.ai/getting-started/models/models_overview/",
     needsKey: true,
   },
 ];
@@ -119,14 +111,6 @@ export const BYOK_BASE_URLS: readonly ByokEndpoint[] = [
     needsKey: true,
   },
   {
-    id: "mistral",
-    label: "Mistral",
-    url: "https://api.mistral.ai/v1",
-    keysUrl: "https://console.mistral.ai/api-keys",
-    modelsUrl: "https://docs.mistral.ai/getting-started/models/models_overview/",
-    needsKey: true,
-  },
-  {
     id: "xai",
     label: "xAI (Grok)",
     url: "https://api.x.ai/v1",
@@ -135,19 +119,22 @@ export const BYOK_BASE_URLS: readonly ByokEndpoint[] = [
     needsKey: true,
   },
   {
-    id: "gemini",
-    label: "Google Gemini (OpenAI-compatible)",
-    url: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    keysUrl: "https://aistudio.google.com/apikey",
-    modelsUrl: "https://ai.google.dev/gemini-api/docs/models",
-    needsKey: true,
-  },
-  {
     id: "perplexity",
     label: "Perplexity",
     url: "https://api.perplexity.ai",
     keysUrl: "https://www.perplexity.ai/settings/api",
     modelsUrl: "https://docs.perplexity.ai/getting-started/models",
+    needsKey: true,
+  },
+  {
+    // Gemini's OpenAI-compatible endpoint. No longer a built-in slot (its free
+    // tier is geo-blocked in the EEA, PH36/D-26), but still offered for BYOK so a
+    // user with their own (paid) Gemini key can use it.
+    id: "gemini",
+    label: "Google Gemini",
+    url: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    keysUrl: "https://aistudio.google.com/apikey",
+    modelsUrl: "https://ai.google.dev/gemini-api/docs/models",
     needsKey: true,
   },
 ];
@@ -186,7 +173,10 @@ export function isKnownUrl(url: string): boolean {
 // the judge (Groq). Returns null for custom slots. Its base URL is the slot's
 // "default endpoint" (an empty stored base_url resolves to it server-side).
 export function builtinForSlot(slot: string): ByokEndpoint | null {
-  if (slot === "byok-judge") return BUILTIN_BASE_URLS.find((e) => e.id === "groq") ?? null;
+  // The judge and slot 3 (scout, a second Groq model — PH36/D-26) both default to
+  // Groq's endpoint; their slot id is not itself a catalogue entry.
+  if (slot === "byok-judge" || slot === "scout")
+    return BUILTIN_BASE_URLS.find((e) => e.id === "groq") ?? null;
   return BUILTIN_BASE_URLS.find((e) => e.id === slot) ?? null;
 }
 

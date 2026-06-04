@@ -6,7 +6,16 @@ describe("modelDisplay (PH32, D-22)", () => {
   it("shows the friendly slot label for a built-in slot (not BYOK)", () => {
     // The real model is irrelevant when the turn ran on the app's built-in key.
     expect(modelDisplay("groq", "llama-3.3-70b-versatile", false)).toBe("Llama 3.3 70B");
-    expect(modelDisplay("cerebras", null, false)).toBe("GLM-4.7");
+    expect(modelDisplay("mistral", null, false)).toBe("Mistral Small");
+    expect(modelDisplay("scout", null, false)).toBe("Llama 4 Scout");
+  });
+
+  it("survives a legacy slot retired by PH35/PH36 (cerebras/sambanova/nvidia/gemini)", () => {
+    // The retired slot is no longer in RESPONDER_LABELS; a historical row falls
+    // back to the stored real model when present, else the raw slot — no crash.
+    expect(modelDisplay("cerebras", "GLM-4.7", true)).toBe("GLM-4.7");
+    expect(responderLabel("sambanova")).toBe("sambanova");
+    expect(responderLabel("gemini")).toBe("gemini");
   });
 
   it("shows the real model id when the slot ran on the user's own key", () => {

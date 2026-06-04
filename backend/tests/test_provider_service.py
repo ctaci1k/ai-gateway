@@ -54,7 +54,7 @@ class _FailProvider(_FakeProvider):
 
 @pytest.fixture
 def patched_providers(monkeypatch):
-    mapping = {"groq": _OkProvider(), "cerebras": _FailProvider()}
+    mapping = {"groq": _OkProvider(), "mistral": _FailProvider()}
     monkeypatch.setattr(
         ProviderService, "get_provider", staticmethod(lambda name: mapping.get(name))
     )
@@ -63,7 +63,7 @@ def patched_providers(monkeypatch):
 
 async def test_execute_many_aggregates_success_and_failure(patched_providers):
     result = await ProviderService.execute_many(
-        message="ping", provider_names=["groq", "cerebras"]
+        message="ping", provider_names=["groq", "mistral"]
     )
 
     assert "groq" in result["all_responses"]
@@ -71,7 +71,7 @@ async def test_execute_many_aggregates_success_and_failure(patched_providers):
 
     failed = result["failed_providers"]
     assert len(failed) == 1
-    assert failed[0]["provider"] == "cerebras"
+    assert failed[0]["provider"] == "mistral"
     # PH13: each failed provider carries a reason code for the UI.
     assert failed[0]["reason"] == "unavailable"
 
@@ -98,7 +98,7 @@ async def test_providers_run_concurrently(monkeypatch):
     )
     start = time.perf_counter()
     result = await ProviderService.execute_many(
-        message="ping", provider_names=["groq", "cerebras", "sambanova"]
+        message="ping", provider_names=["groq", "mistral", "scout"]
     )
     elapsed = time.perf_counter() - start
     assert result["execution_summary"]["successful_models"] == 3
@@ -150,32 +150,32 @@ async def test_execute_many_marks_is_byok_and_real_model():
 
     byok.generate_full = ok_full
 
-    cerebras = _OkProvider()  # built-in singleton → is_byok False
-    failing = _transient("sambanova", "claude-x")
+    mistral = _OkProvider()  # built-in singleton → is_byok False
+    failing = _transient("scout", "claude-x")
 
     async def boom(message):
         raise RuntimeError("boom")
 
     failing.generate_full = boom
 
-    providers_map = {"groq": byok, "cerebras": cerebras, "sambanova": failing}
+    providers_map = {"groq": byok, "mistral": mistral, "scout": failing}
     result = await ProviderService.execute_many(
         message="ping", providers_map=providers_map
     )
 
     assert result["all_responses"]["groq"]["is_byok"] is True
     assert result["all_responses"]["groq"]["model"] == "gpt-4o"
-    assert result["all_responses"]["cerebras"]["is_byok"] is False
+    assert result["all_responses"]["mistral"]["is_byok"] is False
 
     failed = {f["provider"]: f for f in result["failed_providers"]}
     # A failed BYOK responder still carries its real model id + key source.
-    assert failed["sambanova"]["is_byok"] is True
-    assert failed["sambanova"]["model"] == "claude-x"
+    assert failed["scout"]["is_byok"] is True
+    assert failed["scout"]["model"] == "claude-x"
 
     meta = {m["provider"]: m for m in result["execution_metadata"]}
     assert meta["groq"]["is_byok"] is True
-    assert meta["sambanova"]["is_byok"] is True
-    assert meta["cerebras"]["is_byok"] is False
+    assert meta["scout"]["is_byok"] is True
+    assert meta["mistral"]["is_byok"] is False
 
 
 # --- Response language directive (PH33/B3b, D-23) ----------------------------
@@ -216,7 +216,7 @@ def test_interaction_record_preserves_is_byok():
             "groq": {"response": "a", "model": "gpt-4o", "is_byok": True},
         },
         failed_providers=[
-            {"provider": "cerebras", "model": "claude-x", "is_byok": True},
+            {"provider": "mistral", "model": "claude-x", "is_byok": True},
         ],
         selected_model="groq",
     )

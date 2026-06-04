@@ -35,7 +35,7 @@ import {
 import { useAuth } from "@/store/AuthContext";
 
 // Built-in responder slots (mirror the backend roster / models_config.py).
-export const DEFAULT_RESPONDER_SLOTS = ["groq", "cerebras", "sambanova"] as const;
+export const DEFAULT_RESPONDER_SLOTS = ["groq", "mistral", "scout"] as const;
 // The judge slot id (matches backend JUDGE_BYOK_SLOT).
 export const JUDGE_SLOT = "byok-judge";
 // Total responder cap including the 3 built-ins (NQ1): 3 default + up to 2 custom.

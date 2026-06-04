@@ -4,7 +4,7 @@
 from selector.response_selector import ResponseSelector
 from services.provider_service import ProviderService
 
-RESPONSES = {"groq": "answer A", "cerebras": "answer B"}
+RESPONSES = {"groq": "answer A", "mistral": "answer B"}
 
 
 def _judge_returning(payload):
@@ -101,16 +101,16 @@ async def test_valid_high_confidence_selection(monkeypatch):
         staticmethod(
             _judge_returning(
                 {
-                    "selected_model": "cerebras",
+                    "selected_model": "mistral",
                     "confidence": 0.9,
                     "reason": "best",
-                    "scores": {"groq": 70, "cerebras": 90},
+                    "scores": {"groq": 70, "mistral": 90},
                 }
             )
         ),
     )
     result = await ResponseSelector.select_best_response("q", RESPONSES)
-    assert result["selected_model"] == "cerebras"
+    assert result["selected_model"] == "mistral"
     assert result["fallback_used"] is False
     assert result["best_response"] == "answer B"
 
@@ -146,8 +146,8 @@ async def test_judge_exception_falls_back(monkeypatch):
 
 
 async def test_manual_preference_shifts_near_tie_selection(monkeypatch):
-    # Judge narrowly prefers groq; the user has manually chosen cerebras several
-    # times → the final pick shifts to cerebras (PH16/E, D-11).
+    # Judge narrowly prefers groq; the user has manually chosen mistral several
+    # times → the final pick shifts to mistral (PH16/E, D-11).
     monkeypatch.setattr(
         ProviderService,
         "execute_selector_ai",
@@ -157,7 +157,7 @@ async def test_manual_preference_shifts_near_tie_selection(monkeypatch):
                     "selected_model": "groq",
                     "confidence": 0.9,
                     "reason": "slightly better",
-                    "scores": {"groq": 80, "cerebras": 78},
+                    "scores": {"groq": 80, "mistral": 78},
                 }
             )
         ),
@@ -165,9 +165,9 @@ async def test_manual_preference_shifts_near_tie_selection(monkeypatch):
     result = await ResponseSelector.select_best_response(
         "q",
         RESPONSES,
-        personalization_profile={"manual_model_selections": {"cerebras": 4}},
+        personalization_profile={"manual_model_selections": {"mistral": 4}},
     )
-    assert result["selected_model"] == "cerebras"
+    assert result["selected_model"] == "mistral"
     assert result["best_response"] == "answer B"
     assert result["preference_weighting"]["applied"] is True
     assert result["fallback_used"] is False
@@ -186,7 +186,7 @@ async def test_explicit_criteria_disable_preference_nudge(monkeypatch):
                     "selected_model": "groq",
                     "confidence": 0.9,
                     "reason": "best by the user's criteria",
-                    "scores": {"groq": 80, "cerebras": 78},
+                    "scores": {"groq": 80, "mistral": 78},
                 }
             )
         ),
@@ -194,7 +194,7 @@ async def test_explicit_criteria_disable_preference_nudge(monkeypatch):
     result = await ResponseSelector.select_best_response(
         "q",
         RESPONSES,
-        personalization_profile={"manual_model_selections": {"cerebras": 4}},
+        personalization_profile={"manual_model_selections": {"mistral": 4}},
         judge_prompt_override="Prioritise factual correctness above all else.",
     )
     assert result["selected_model"] == "groq"
@@ -214,7 +214,7 @@ async def test_manual_preference_does_not_override_clear_winner(monkeypatch):
                     "selected_model": "groq",
                     "confidence": 0.9,
                     "reason": "much better",
-                    "scores": {"groq": 95, "cerebras": 78},
+                    "scores": {"groq": 95, "mistral": 78},
                 }
             )
         ),
@@ -222,7 +222,7 @@ async def test_manual_preference_does_not_override_clear_winner(monkeypatch):
     result = await ResponseSelector.select_best_response(
         "q",
         RESPONSES,
-        personalization_profile={"manual_model_selections": {"cerebras": 10}},
+        personalization_profile={"manual_model_selections": {"mistral": 10}},
     )
     assert result["selected_model"] == "groq"
     assert result["preference_weighting"]["applied"] is False

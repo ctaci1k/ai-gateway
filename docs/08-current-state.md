@@ -6,8 +6,8 @@
 
 **Backend**
 - FastAPI-застосунок (`backend/main.py`) з CORS і роутером.
-- `POST /chat` — Compare: паралельні запити до `groq`/`cerebras`/`sambanova`, збір `all_responses`, метадані виконання.
-- `POST /chat/stream` — Single: стрімінг NDJSON від обраної моделі (groq/cerebras/sambanova); підтримує `rag_enabled` (термінальна подія `sources`); після стріму пише хід у rolling-історію (PH13) **і — якщо переданий `chat_id` — у збережений Single-чат** (`chat_messages`, PH24/D-17).
+- `POST /chat` — Compare: паралельні запити до `groq`/`mistral`/`scout` (PH36/D-26: слот 3 = другий Groq-слот Llama 4 Scout, бо Gemini free геоблоковано в ЄС; раніше cerebras/sambanova — занадто жорсткі ліміти, NVIDIA NIM — ненадійний), збір `all_responses`, метадані виконання.
+- `POST /chat/stream` — Single: стрімінг NDJSON від обраної моделі (groq/mistral/scout); підтримує `rag_enabled` (термінальна подія `sources`); після стріму пише хід у rolling-історію (PH13) **і — якщо переданий `chat_id` — у збережений Single-чат** (`chat_messages`, PH24/D-17).
 - `POST /chat/structured` — структурований (JSON) вивід.
 - AI Selector: **Groq-суддя**, нейтральна модель `qwen/qwen3-32b` (не збігається з жодним відповідачем → без self-bias) + rule-based fallback. Перенесено з Gemini у PH13 через ліміт Gemini 20/добу (D-9); Gemini лишається для RAG-embeddings. Причина fallback (`fallback_reason`) і ручний перевибір тепер показуються правдиво й оборотні. Провайдер, що впав, показується окремою карткою з причиною (`failed_providers[].reason`: rate_limited/timeout/empty_response/length_exceeded/unavailable).
 - Персоналізація: накопичення `user_preferences` + `personalization_profile`, трекінг ручних виборів.
@@ -42,6 +42,68 @@
 - **Rate limiting** (per-IP, mutating-методи) + конфігуровані ліміти запиту (`MAX_MESSAGE_LENGTH`).
 - **Структуроване логування** (`core/logging.py`): запити, помилки провайдерів, рішення судді.
 - **Базові тести** (`backend/tests/`, pytest): ChatBuffer, rule-based selector, агрегація провайдерів, ретраї/мін-впевненість селектора, `extract_json`, API-кейси (помилки/rate-limit).
+
+## ✅ PH36 — Слот-3 Gemini → Llama 4 Scout (другий Groq-слот); rate-limit UX (D-26)
+
+**Контекст:** перехід слота 3 на Gemini (PH35/D-25) **не задеплоєно**; live-перевірка показала,
+що **free-тариф Gemini Flash геоблоковано в ЄС** — API повертає `429 RESOURCE_EXHAUSTED` з
+`free_tier_requests limit: 0`, тобто падає з першого запиту. Власник у Польщі → слот мертвий.
+
+- **Слот 3 `gemini` → `scout` = Groq · Llama 4 Scout** (`meta-llama/llama-4-scout-17b-16e-instruct`,
+  `providers/scout_provider.py` на Groq-клієнті; `gemini_responder.py` видалено). Другий Groq-слот
+  поряд зі слотом 1 (Llama 3.3 70B); переюзає `GROQ_API_KEY` (новий ключ не потрібен; `SCOUT_MODEL`
+  перевизначає). Заміряно реальні Groq-ліміти власним ключем: Scout = **30 000 ток/хв ≈ 10–15
+  запитів/хв**, 1000 запитів/добу (gpt-oss-120b лише 8 000 ток/хв ≈ 3; `gemma2-9b-it`
+  decommissioned). Власник обрав пропускну здатність понад різноманіття родин (слоти 1+3 — обидва
+  Llama; суддя Qwen ≠ Llama → self-bias немає). Gemini лишається **тільки** для RAG-embeddings;
+  у BYOK-каталозі переміщено у «сторонні сумісні». Деталі/обґрунтування — D-26.
+- **Rate-limit UX (план 035, R1–R4):** «червоне» повідомлення впалого вбудованого (app-key)
+  responder'а через rate-limit переписано на дружнє пояснення (`compare.fail.rateLimited` +
+  Single-банер `errors.rateLimited`, паритет uk/pl/en): тимчасовий хвилинний ліміт безкоштовної
+  моделі, зачекати, це обмеження провайдера безкоштовного API (не нашого сервісу). Own-key BYOK
+  (`ownKeyRateLimited`) і наш `quota_exceeded` — не чіпано. План —
+  [plans/035-ratelimit-ux-and-deploy.md](plans/035-ratelimit-ux-and-deploy.md).
+
+Безпеку D-20/D-21/D-22, суддю (D-9), квоти/`billable`/one-row-per-turn ledger/winner-логіку — не
+чіпано. Міграцій БД немає. Гейти: BE 222 + ruff/black; FE tsc/eslint/vitest(40)/prettier.
+
+## ✅ PH35 — Заміна провайдерів (Mistral + Gemini) + мобільний UX (D-25)
+
+Слоти-відповідачі Cerebras (5 req/min) і SambaNova (20 req/**добу**) були занадто
+rate-limited → замінено на **Mistral** і **Gemini 2.0 Flash**. (NVIDIA NIM спершу
+розглядався, але виявився ненадійним — постійні проблеми з доступом/реєстрацією — тож
+відкинутий на користь Gemini за фідбеком власника.) **Groq-відповідач і Groq-Qwen суддя —
+незмінні.** Безпеку D-20/D-21/D-22 не чіпано; квоти/`billable`/one-row-per-turn ledger/
+winner-логіку — без змін. План — [plans/034-providers-swap-and-mobile-ux.md](plans/034-providers-swap-and-mobile-ux.md).
+
+- **(Backend) Слоти `cerebras`→`mistral`, `sambanova`→`gemini`.** Нові провайдер-класи
+  `MistralProvider` (`api.mistral.ai/v1`) і `GeminiResponder` (Gemini OpenAI-сумісний ендпоінт
+  `generativelanguage.googleapis.com/v1beta/openai/`), обидва `OpenAICompatibleProvider`.
+  `GeminiResponder` **окремий** від легасі `GeminiProvider` (genai SDK — лише опційний суддя при
+  `SELECTOR_PROVIDER="gemini"`, неактивний). Config: `MISTRAL_API_KEY`/`MISTRAL_MODEL`
+  (default `mistral-small-latest`), **`GEMINI_API_KEY` переюзається** (той самий, що й
+  embeddings) + новий `GEMINI_MODEL` (default `gemini-2.0-flash`; free 15 req/min + 1500 req/добу;
+  окремий rate-bucket від `EMBEDDING_MODEL`). Прибрано `CEREBRAS_MAX_TOKENS` — нові слоти не
+  reasoning-моделі, беруть `responder_max_tokens`. `models_config` display_name: «Mistral Small» /
+  «Gemini 2.0 Flash». `provider_service` (`providers` dict, `DEFAULT_BASE_URLS`, дефолтний ростер),
+  `selector_config.ALLOWED_MODELS` оновлено. Суддя (`build_judge` → Groq·qwen3-32b) **не чіпано**.
+- **Різноманіття:** Llama (Meta) / Mistral / Gemini — три різні родини; суддя Qwen ні з ким
+  не збігається → без self-bias (як раніше).
+- **Зворотна сумісність:** історичні `usage_events`/збережені чати зі слотами cerebras/sambanova
+  аґреґуються правдиво — слот лишається стабільним групувальником, не валідується проти
+  живого ростера; показується збережений `model_name` (truthful naming, D-21/D-22). Тест
+  `test_legacy_slot_rows_survive_provider_swap`.
+- **(Frontend)** `RESPONDER_LABELS`/`SINGLE_PROVIDERS`/`DEFAULT_RESPONDER_SLOTS`/`SLOT_COLOR`
+  оновлено на mistral/gemini; BYOK built-in endpoints (`byokEndpoints.ts` — Gemini тепер built-in,
+  прибрано дубль із сумісних); i18n `picker.desc.mistral`/`picker.desc.gemini` (паритет uk/pl/en);
+  легасі-слоти мають FE-fallback (`responderLabel`).
+- **(Мобільний UX)** Перемикач режимів на телефоні (≤768px) — **дві окремі кнопки** «Одиночна
+  модель» / «Порівняння» замість бару, що погано виглядав; десктоп незмінний. Картка «хто
+  створив» на телефоні переноситься в меню акаунта (між Security і Logout, відокремлена лініями).
+- **Owner-action:** завести `MISTRAL_API_KEY` у `.env.production` (Gemini-ключ уже є); опційно
+  `MISTRAL_MODEL`/`GEMINI_MODEL`; прибрати `CEREBRAS_*`/`SAMBANOVA_*`. Міграцій БД немає
+  (схема не змінювалась).
+- **Гейти:** BE pytest **222** + ruff/black; FE tsc/eslint/vitest(**40**)/prettier; i18n паритет.
 
 ## ✅ PH34 — UX-поліш 2 + атрибуція ключа B7–B11 (D-24)
 

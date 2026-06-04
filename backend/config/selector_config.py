@@ -3,8 +3,8 @@
 # Single source of truth for the responder models the judge may pick from.
 ALLOWED_MODELS = [
     "groq",
-    "cerebras",
-    "sambanova",
+    "mistral",
+    "scout",
 ]
 
 # Judge runs on Groq (PH13): Gemini free tier caps generate_content at 20/day,
@@ -13,8 +13,10 @@ ALLOWED_MODELS = [
 # larger quota).
 #
 # The judge model is *neutral* — qwen3-32b shares no family with any responder
-# in the registry (config/models_config.py: Llama / GLM / DeepSeek), so there is
-# no self-bias toward any answer. It is served by Groq on the same key.
+# in the registry (config/models_config.py: Llama 3.3 / Mistral / Llama 4 Scout),
+# so there is no self-bias toward any answer. (Two responders are Llama-family
+# since PH36/D-26, but Qwen ≠ Llama, so the judge stays neutral.) It is served by
+# Groq on the same key.
 SELECTOR_PROVIDER = "groq"
 
 SELECTOR_MODEL = "qwen/qwen3-32b"

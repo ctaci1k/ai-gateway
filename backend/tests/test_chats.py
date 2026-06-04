@@ -168,7 +168,7 @@ def test_chat_with_chat_id_persists_turn(auth_client, monkeypatch):
         "/chat",
         json={
             "message": "compare this",
-            "providers": ["groq", "cerebras", "sambanova"],
+            "providers": ["groq", "mistral", "scout"],
             "compare_mode": True,
             "selector_enabled": True,
             "chat_id": chat_id,

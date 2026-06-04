@@ -200,7 +200,7 @@ class UsageEvent(Base):
 
     # PH32 (D-22): the REAL model that answered/won this turn, denormalized at
     # record time. ``selected_model`` stays the SLOT (stable grouper: groq /
-    # cerebras / sambanova / byok-judge / custom); when a user points their own
+    # mistral / scout / byok-judge / custom); when a user points their own
     # key at a built-in slot (e.g. groq → gpt-4o), the slot label would lie, so
     # the true model id is carried here. Compare = the winning slot's
     # ``all_responses[slot]["model"]``; Single = the streamed ``model_name``.

@@ -8,7 +8,7 @@ from core.prompts import default_judge_prompt
 from selector.selector_prompt import SelectorPromptBuilder
 from tests.conftest import TEST_REGISTRATION_CODE
 
-_RESPONSES = {"groq": "answer A", "cerebras": "answer B"}
+_RESPONSES = {"groq": "answer A", "mistral": "answer B"}
 
 # The override is now just judging criteria — free text, no placeholders.
 _VALID_OVERRIDE = "Prefer concise answers; reward concrete code examples."

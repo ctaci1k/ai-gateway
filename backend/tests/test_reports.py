@@ -95,7 +95,7 @@ async def test_summary_aggregates(env):
         env.alice,
         created_at=_BASE + timedelta(hours=1),
         mode="compare",
-        model="cerebras",
+        model="mistral",
         tokens=20,
         estimated=True,
     )
@@ -131,7 +131,7 @@ async def test_by_model(env):
     await _add(
         env.alice,
         created_at=_BASE + timedelta(minutes=2),
-        model="cerebras",
+        model="mistral",
         tokens=7,
         success=False,
     )
@@ -141,10 +141,40 @@ async def test_by_model(env):
     assert by["groq"]["requests"] == 2
     assert by["groq"]["total_tokens"] == 15
     assert by["groq"]["successful"] == 2
-    assert by["cerebras"]["requests"] == 1
-    assert by["cerebras"]["successful"] == 0
+    assert by["mistral"]["requests"] == 1
+    assert by["mistral"]["successful"] == 0
     # Busiest first.
     assert models[0]["model"] == "groq"
+
+
+async def test_legacy_slot_rows_survive_provider_swap(env):
+    """Backward compat (PH35, D-25): historical ledger rows recorded with the
+    retired slots (cerebras/sambanova) must keep aggregating truthfully — the
+    slot is just a stable grouper, not validated against the live roster. The
+    stored model_name is surfaced; nothing crashes on an unknown slot."""
+    await _add(
+        env.alice,
+        created_at=_BASE,
+        model="cerebras",
+        model_name="GLM-4.7",
+        tokens=12,
+    )
+    await _add(
+        env.alice,
+        created_at=_BASE + timedelta(minutes=1),
+        model="sambanova",
+        model_name="DeepSeek V3.1",
+        tokens=8,
+    )
+
+    by = {
+        m["model"]: m
+        for m in await UsageReportRepository(env.alice).by_model(None, None)
+    }
+    assert by["cerebras"]["requests"] == 1
+    assert by["cerebras"]["model_name"] == "GLM-4.7"
+    assert by["sambanova"]["requests"] == 1
+    assert by["sambanova"]["model_name"] == "DeepSeek V3.1"
 
 
 # --- Key-source attribution (PH31, D-21) ------------------------------------
@@ -458,7 +488,7 @@ async def test_breakdown_tree_shape(env):
         title="Chat A", mode="single", model="groq"
     )
     cid = chat["id"]
-    # app key → groq → Chat A (x2) + ad-hoc (x1); own key → cerebras → ad-hoc (x1)
+    # app key → groq → Chat A (x2) + ad-hoc (x1); own key → mistral → ad-hoc (x1)
     await _add(
         env.alice, created_at=_BASE, billable=True, model="groq", chat_id=cid, tokens=10
     )
@@ -482,7 +512,7 @@ async def test_breakdown_tree_shape(env):
         env.alice,
         created_at=_BASE + timedelta(minutes=3),
         billable=False,
-        model="cerebras",
+        model="mistral",
         chat_id=None,
         tokens=7,
     )
@@ -741,7 +771,7 @@ def test_compare_byok_judge_recorded_and_in_csv(client, monkeypatch):
         "/chat",
         json={
             "message": "hi",
-            "providers": ["groq", "cerebras", "sambanova"],
+            "providers": ["groq", "mistral", "scout"],
             "compare_mode": True,
             "selector_enabled": True,
         },

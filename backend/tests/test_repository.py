@@ -61,9 +61,9 @@ async def test_clear_resets_history_and_preferences(repo):
 
 
 async def test_track_manual_selection(repo):
-    await repo.track_manual_selection(selected_model="cerebras", selector_model="groq")
+    await repo.track_manual_selection(selected_model="mistral", selector_model="groq")
     prefs = await repo.get_user_preferences()
-    assert prefs["manual_model_selections"]["cerebras"] == 1
+    assert prefs["manual_model_selections"]["mistral"] == 1
     assert prefs["response_interactions"]["selector_disagreements"] == 1
 
 

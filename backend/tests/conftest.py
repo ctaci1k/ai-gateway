@@ -12,8 +12,9 @@ import tempfile
 _TEST_DB = os.path.join(tempfile.gettempdir(), "ai_gateway_test.db")
 
 os.environ.setdefault("GROQ_API_KEY", "test-groq")
-os.environ.setdefault("CEREBRAS_API_KEY", "test-cerebras")
-os.environ.setdefault("SAMBANOVA_API_KEY", "test-sambanova")
+os.environ.setdefault("MISTRAL_API_KEY", "test-mistral")
+# Slot 3 (scout) runs on Groq (GROQ_API_KEY above). Gemini now backs only RAG
+# embeddings (PH36/D-26).
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini")
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_TEST_DB}")
 # Ephemeral (in-process) vector store so RAG tests never touch disk or network.

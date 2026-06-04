@@ -51,7 +51,7 @@ def test_wrong_slot_fails_authentication():
     )
     with pytest.raises(InvalidTag):
         secret_box.decrypt_secret(
-            ciphertext, nonce, user_id=7, slot="cerebras", key_version=version
+            ciphertext, nonce, user_id=7, slot="mistral", key_version=version
         )
 
 

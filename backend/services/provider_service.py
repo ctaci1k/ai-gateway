@@ -9,11 +9,11 @@ from config.models_config import get_model_spec
 from config.selector_config import SELECTOR_MODEL, SELECTOR_PROVIDER, SELECTOR_TIMEOUT
 from core.logging import get_logger, log_event
 from providers.base_provider import BaseProvider, StreamUsage
-from providers.cerebras_provider import CerebrasProvider
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
+from providers.mistral_provider import MistralProvider
 from providers.openai_compatible import OpenAICompatibleProvider
-from providers.sambanova_provider import SambaNovaProvider
+from providers.scout_provider import ScoutProvider
 
 logger = get_logger("provider")
 
@@ -22,8 +22,9 @@ logger = get_logger("provider")
 # endpoint stays the provider's own. Custom (4th/5th) slots must carry base_url.
 DEFAULT_BASE_URLS = {
     "groq": "https://api.groq.com/openai/v1",
-    "cerebras": "https://api.cerebras.ai/v1",
-    "sambanova": "https://api.sambanova.ai/v1",
+    "mistral": "https://api.mistral.ai/v1",
+    # Slot 3 (scout) is a second Groq-hosted model → Groq's endpoint (PH36/D-26).
+    "scout": "https://api.groq.com/openai/v1",
 }
 # The judge defaults to Groq's endpoint (the built-in judge runs Qwen on Groq).
 JUDGE_BYOK_SLOT = "byok-judge"
@@ -113,8 +114,8 @@ class ProviderService:
 
     providers = {
         "groq": GroqProvider(),
-        "cerebras": CerebrasProvider(),
-        "sambanova": SambaNovaProvider(),
+        "mistral": MistralProvider(),
+        "scout": ScoutProvider(),
     }
 
     @staticmethod
@@ -219,7 +220,7 @@ class ProviderService:
 
             if not provider_names:
 
-                provider_names = ["groq", "cerebras", "sambanova"]
+                provider_names = ["groq", "mistral", "scout"]
 
             unique_provider_names = list(dict.fromkeys(provider_names))
 

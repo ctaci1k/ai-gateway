@@ -1,6 +1,6 @@
 # backend/tests/test_responders.py
 """Responder behaviour (PH13 / E): explicit max_tokens and empty-content
-handling for OpenAI-compatible providers (Groq / Cerebras / SambaNova)."""
+handling for OpenAI-compatible providers (Groq / Mistral / Llama 4 Scout)."""
 
 import types
 
@@ -81,7 +81,7 @@ async def test_stream_empty_is_provider_failure():
 
 class _NoStreamOptsProvider(OpenAICompatibleProvider):
     """A provider whose SDK rejects the ``stream_options`` kwarg (like the native
-    Groq/Cerebras/SambaNova SDKs)."""
+    Groq SDK)."""
 
     provider_name = "fake"
     model_name = "fake-model"
@@ -125,13 +125,20 @@ def test_registry_per_provider_budget_overrides_global():
     assert provider.display_name == "M"
 
 
-def test_cerebras_registry_budget_matches_settings():
-    """The Cerebras spec uses the dedicated reasoning budget (OD-1)."""
+def test_responder_registry_budgets_match_settings():
+    """The Mistral/Scout specs use the global responder budget (PH36, D-26):
+    neither is a reasoning model with mandatory headroom, so no per-provider
+    override — they fall back to RESPONDER_MAX_TOKENS."""
     from config.models_config import get_model_spec
 
-    spec = get_model_spec("cerebras")
-    assert spec.max_tokens == get_settings().cerebras_max_tokens
-    assert spec.api_model_id == get_settings().cerebras_model
+    settings = get_settings()
+    mistral = get_model_spec("mistral")
+    assert mistral.max_tokens == settings.responder_max_tokens
+    assert mistral.api_model_id == settings.mistral_model
+
+    scout = get_model_spec("scout")
+    assert scout.max_tokens == settings.responder_max_tokens
+    assert scout.api_model_id == settings.scout_model
 
 
 # --- B3a: robust content parse (Mistral-style reasoning side-channel) --------
