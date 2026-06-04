@@ -9,7 +9,6 @@
 "use client";
 
 import Dropdown from "@/components/common/Dropdown";
-import LanguageToggle from "@/components/common/LanguageToggle";
 import {
   IconChevron,
   IconLogout,
@@ -105,12 +104,13 @@ export default function AccountMenu() {
             <IconShield size={16} />
             <span className="lab">{t("account.security")}</span>
           </button>
-          {/* PH37/M5: on mobile the Admin entry and the language switch move here
-              (they leave the topbar ≤768px). Mirrors the cc-menu-creator pattern —
-              hidden ≥769px so the desktop topbar keeps Admin + LangMenu. */}
-          <div className="cc-menu-mobileonly">
-            <div className="cc-menu-sep" />
-            {user?.is_admin && (
+          {/* PH37/M5: on mobile the Admin entry moves here (it leaves the topbar
+              ≤768px). Mirrors the cc-menu-creator pattern — hidden ≥769px so the
+              desktop topbar keeps Admin. PH38: the language switch is no longer
+              here — it lives in Settings (third section) on every viewport. */}
+          {user?.is_admin && (
+            <div className="cc-menu-mobileonly">
+              <div className="cc-menu-sep" />
               <button
                 type="button"
                 role="menuitem"
@@ -124,12 +124,8 @@ export default function AccountMenu() {
                 <IconUsers size={16} />
                 <span className="lab">{t("admin.title")}</span>
               </button>
-            )}
-            <div className="cc-menu-cap">{t("sidebar.language")}</div>
-            <div className="cc-menu-lang">
-              <LanguageToggle />
             </div>
-          </div>
+          )}
           {/* PH35/S13: on mobile the creator card moves here (between Security and
               Logout, fenced by separators). One CreatorCard reused via variant;
               CSS hides the sidebar copy ≤768px so it never duplicates. */}

@@ -2492,44 +2492,6 @@ html {
   color: var(--subtle);
 }
 
-/* language pill */
-.cc-langpill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 40px;
-  padding: 0 12px;
-  border-radius: 11px;
-  background: var(--soft);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-  transition: 0.15s;
-  flex-shrink: 0;
-}
-.cc-langpill:hover {
-  color: var(--fg);
-  background: var(--softer);
-}
-.cc-langpill .cc-flag {
-  font-size: 16px;
-  /* line-height:1 + flex centering so the flag glyph (or its "UA"/"EN" letter
-   * fallback on systems without flag emoji) sits centered, not low (PH26). */
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-}
-.cc-langpill b {
-  color: var(--fg);
-  font-weight: 700;
-}
-.cc-langpill.is-open {
-  border-color: rgba(var(--accent-rgb), 0.5);
-  background: rgba(var(--accent-rgb), 0.1);
-  color: var(--fg);
-}
-
 /* usage pill */
 .cc-usage {
   display: inline-flex;
@@ -2677,9 +2639,6 @@ html {
   right: auto;
   left: 0;
 }
-.cc-dd-lang .cc-menu {
-  width: 228px;
-}
 .cc-dd-acct .cc-menu {
   width: 266px;
 }
@@ -2717,18 +2676,8 @@ html {
   background: var(--softer);
   color: var(--fg);
 }
-.cc-menu-item.is-sel {
-  background: rgba(var(--accent-rgb), 0.12);
-  color: var(--fg);
-}
 .cc-menu-item .lab {
   flex: 1;
-}
-.cc-menu-item .chk {
-  color: var(--accent);
-}
-.cc-menu-flag {
-  font-size: 16px;
 }
 .cc-menu-danger {
   color: #f0738a;
@@ -2751,14 +2700,12 @@ html {
 .cc-creator--menu {
   margin-top: 0;
 }
-/* Mobile-only account-menu section (PH37/M5): Admin entry + language switch that
-   leave the topbar on phones. Hidden on desktop (topbar keeps them); enabled
-   ≤768px below — mirrors the cc-menu-creator pattern. */
+/* Mobile-only account-menu section (PH37/M5): the Admin entry that leaves the
+   topbar on phones. Hidden on desktop (topbar keeps it); enabled ≤768px below —
+   mirrors the cc-menu-creator pattern. PH38: the language switch is no longer
+   here (it moved into Settings). */
 .cc-menu-mobileonly {
   display: none;
-}
-.cc-menu-lang {
-  padding: 4px 8px 6px;
 }
 .cc-acct-head {
   display: flex;
@@ -3358,7 +3305,6 @@ html {
 /* focus-visible rings on new interactive chrome (a11y) */
 .cc-iconbtn:focus-visible,
 .cc-theme:focus-visible,
-.cc-langpill:focus-visible,
 .cc-usage:focus-visible,
 .cc-userbtn:focus-visible,
 .cc-mmbar-trigger:focus-visible,
@@ -3525,6 +3471,50 @@ html {
   min-width: 0;
 }
 
+/* language list (Settings → Language, PH38). Flag + native name on the left, a
+   check on the active row; mirrors the settings-nav-item look on tokens. */
+.settings-lang-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.settings-lang-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  transition: 0.12s;
+}
+.settings-lang-item:hover {
+  background: var(--soft);
+}
+.settings-lang-item.is-sel {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+.settings-lang-flag {
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.settings-lang-name {
+  flex: 1;
+  min-width: 0;
+}
+.settings-lang-chk {
+  color: var(--accent);
+}
+
 /* keys form (BYOK) inside Settings */
 .keys-form-actions {
   display: flex;
@@ -3661,12 +3651,12 @@ html {
   .cc-menu-creator {
     display: block;
   }
-  /* Admin + language move into the account menu; remove them from the topbar
-     (PH37/M5). Theme + Settings (gear) stay in the topbar. */
+  /* Admin moves into the account menu; remove it from the topbar (PH37/M5).
+     Theme + Settings (gear) stay in the topbar. PH38: the language switch is no
+     longer in the topbar/menu — it lives in Settings. */
   .cc-menu-mobileonly {
     display: block;
   }
-  .cc-dd-lang,
   .cc-admin-btn {
     display: none;
   }
@@ -3698,8 +3688,8 @@ html {
 }
 
 /* Phones / large phones: drop the brand mark + dividers so the utility cluster
- * (theme · language · settings · admin · account) fits in one row without
- * crowding or overflowing onto each other (PH26). */
+ * (theme · settings · admin · account) fits in one row without crowding or
+ * overflowing onto each other (PH26). */
 @media (max-width: 560px) {
   .cc-top {
     gap: 7px;
@@ -3723,9 +3713,6 @@ html {
     height: 40px;
   }
   /* .cc-theme is already a 40px round button below 768px (see above). */
-  .cc-langpill {
-    padding: 0 9px;
-  }
 }
 
 /* ===========================================================================

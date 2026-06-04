@@ -166,6 +166,14 @@ export const IconGear = (p: IconProps) => (
   </Ico>
 );
 
+export const IconGlobe = (p: IconProps) => (
+  <Ico {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18" />
+    <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z" />
+  </Ico>
+);
+
 export const IconShield = (p: IconProps) => (
   <Ico {...p}>
     <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z" />

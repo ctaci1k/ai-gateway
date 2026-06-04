@@ -11,9 +11,10 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
-import { IconClose, IconGear, IconSparkle } from "@/components/icons/Icons";
+import { IconClose, IconGear, IconGlobe, IconSparkle } from "@/components/icons/Icons";
 import ApiKeysSection from "@/components/settings/ApiKeysSection";
 import JudgePromptSection from "@/components/settings/JudgePromptSection";
+import LanguageSection from "@/components/settings/LanguageSection";
 import { useI18n } from "@/store/LanguageContext";
 import { useSettings, type SettingsSection } from "@/store/SettingsContext";
 
@@ -68,6 +69,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   const sections: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
     { id: "judge", label: t("settings.nav.judge"), icon: <IconSparkle size={16} /> },
     { id: "keys", label: t("settings.nav.keys"), icon: <IconGear size={16} /> },
+    { id: "language", label: t("settings.nav.language"), icon: <IconGlobe size={16} /> },
   ];
 
   return (
@@ -114,6 +116,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
           <div className="settings-content thin-scroll">
             {section === "judge" && <JudgePromptSection />}
             {section === "keys" && <ApiKeysSection />}
+            {section === "language" && <LanguageSection />}
           </div>
         </div>
       </div>

@@ -8,7 +8,7 @@
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
-export type SettingsSection = "judge" | "keys";
+export type SettingsSection = "judge" | "keys" | "language";
 
 interface SettingsValue {
   isOpen: boolean;

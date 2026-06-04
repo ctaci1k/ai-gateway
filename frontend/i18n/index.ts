@@ -18,13 +18,16 @@ export const dictionaries: Record<LocaleCode, Messages> = { uk, pl, en };
 export interface LocaleMeta {
   code: LocaleCode;
   label: string;
+  flag: string;
+  nativeName: string;
 }
 
-// Order shown in the language switcher.
+// Order shown in the language switcher. Single source of truth for the flag and
+// the native language name (used by the Settings → Language section).
 export const LOCALES: LocaleMeta[] = [
-  { code: "en", label: "EN" },
-  { code: "pl", label: "PL" },
-  { code: "uk", label: "UA" },
+  { code: "en", label: "EN", flag: "🇬🇧", nativeName: "English" },
+  { code: "pl", label: "PL", flag: "🇵🇱", nativeName: "Polski" },
+  { code: "uk", label: "UA", flag: "🇺🇦", nativeName: "Українська" },
 ];
 
 export type Translator = (key: string, vars?: Record<string, string | number>) => string;

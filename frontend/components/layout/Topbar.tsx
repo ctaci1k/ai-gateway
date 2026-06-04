@@ -1,8 +1,10 @@
 // frontend/components/layout/Topbar.tsx
 //
 // Classic Console top bar (PH24, A2 + D; PH25). Full-width chrome above the body:
-//   brand · spacer · theme toggle · language menu · usage pill · | · settings ·
+//   brand · spacer · theme toggle · usage pill · | · settings ·
 //   admin (admin only) · | · account menu.
+// PH38: the language switch moved into Settings (third section), so it is no
+// longer on the topbar nor in the account menu.
 // PH25: Reports moved into the account menu (off the topbar); the Admin button
 // uses a "users" icon (managing users), not the shield (which reads as security).
 // The mobile burger (left) opens the sidebar drawer (kept from PH23).
@@ -12,7 +14,6 @@
 import { IconGear, IconSparkle, IconUsers } from "@/components/icons/Icons";
 import MobileModeBar from "@/components/layout/MobileModeBar";
 import AccountMenu from "@/components/topbar/AccountMenu";
-import LangMenu from "@/components/topbar/LangMenu";
 import ThemeToggle from "@/components/topbar/ThemeToggle";
 import UsagePill from "@/components/topbar/UsagePill";
 import { useAdminView } from "@/store/AdminViewContext";
@@ -48,7 +49,6 @@ export default function Topbar() {
       <div className="cc-spacer" />
 
       <ThemeToggle />
-      <LangMenu />
       <UsagePill />
 
       <div className="cc-divider" />
