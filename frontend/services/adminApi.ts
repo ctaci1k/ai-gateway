@@ -42,3 +42,10 @@ export async function updateUser(
   });
   return parseJsonResponse<AdminUserSummary>(response);
 }
+
+// Delete an account and all its data (PH34). The backend forbids deleting your
+// own account or the primary admin (throws ApiError → the caller surfaces it).
+export async function deleteUser(userId: number): Promise<void> {
+  const response = await apiFetch(`/admin/users/${userId}`, { method: "DELETE" });
+  await parseJsonResponse<{ deleted: boolean; id: number }>(response);
+}

@@ -156,6 +156,62 @@ def test_admin_can_list_create_and_update_users(client):
     assert patched.json()["max_requests_per_day"] == 3
 
 
+def test_admin_can_delete_user(client):
+    """PH34: an admin deletes an account; it's removed and can no longer log in."""
+    admin_csrf = _make_admin(client)
+    uid = client.post(
+        "/admin/users",
+        json={"username": "victim", "password": "password123"},
+        headers=admin_csrf,
+    ).json()["id"]
+
+    # Missing CSRF on the mutation → 403 even for the admin.
+    assert client.delete(f"/admin/users/{uid}").status_code == 403
+
+    resp = client.delete(f"/admin/users/{uid}", headers=admin_csrf)
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"deleted": True, "id": uid}
+
+    # Gone from the list and can no longer authenticate.
+    usernames = {u["username"] for u in client.get("/admin/users").json()["users"]}
+    assert "victim" not in usernames
+    assert (
+        client.post(
+            "/auth/login", json={"username": "victim", "password": "password123"}
+        ).status_code
+        == 401
+    )
+
+
+def test_admin_delete_unknown_user_is_404(client):
+    admin_csrf = _make_admin(client)
+    assert client.delete("/admin/users/999999", headers=admin_csrf).status_code == 404
+
+
+def test_admin_cannot_delete_self(client):
+    admin_csrf = _make_admin(client)
+    me = client.get("/auth/me").json()
+    resp = client.delete(f"/admin/users/{me['id']}", headers=admin_csrf)
+    assert resp.status_code == 403
+
+
+def test_primary_admin_cannot_be_deleted_by_another_admin(client):
+    """The ADMIN_USERNAME account is undeletable so admins can't lock it out."""
+    admin_csrf = _make_admin(client)
+    primary = client.get("/auth/me").json()
+    client.post(
+        "/admin/users",
+        json={"username": "admin2", "password": "password123", "is_admin": True},
+        headers=admin_csrf,
+    )
+    s2 = _csrf(
+        client.post(
+            "/auth/login", json={"username": "admin2", "password": "password123"}
+        )
+    )
+    assert client.delete(f"/admin/users/{primary['id']}", headers=s2).status_code == 403
+
+
 # --- Quota enforcement (D-10) ----------------------------------------------
 
 

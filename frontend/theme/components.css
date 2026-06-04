@@ -1537,6 +1537,19 @@ html {
   background: var(--accent);
   border-color: transparent;
 }
+/* Destructive admin action (PH34): delete account. Outline-danger that fills on
+   hover/active for a clear, readable warning in both themes. */
+.admin-btn--danger {
+  color: var(--danger);
+  background: var(--danger-surface);
+  border-color: var(--danger);
+}
+.admin-btn--danger:not(:disabled):hover,
+.admin-btn--danger:not(:disabled):active {
+  color: var(--accent-contrast);
+  background: var(--danger);
+  border-color: var(--danger);
+}
 .admin-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);

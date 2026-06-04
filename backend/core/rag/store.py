@@ -99,6 +99,15 @@ def delete_document(user_id: int, document_id: int) -> None:
     )
 
 
+def delete_user(user_id: int) -> None:
+    """Purge every chunk embedding belonging to a user (account deletion, PH34).
+
+    The relational ``Document`` rows are removed by the user's FK cascade; this
+    drops the matching vectors so the store doesn't keep orphaned embeddings."""
+    collection = _get_collection()
+    collection.delete(where={"user_id": user_id})
+
+
 def reset_vector_store_for_tests() -> None:
     """Drop the collection so each test starts empty.
 

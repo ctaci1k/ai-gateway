@@ -8,9 +8,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import { IconClose } from "@/components/icons/Icons";
 import * as adminApi from "@/services/adminApi";
 import { useAdminView } from "@/store/AdminViewContext";
+import { useAuth } from "@/store/AuthContext";
 import { useI18n } from "@/store/LanguageContext";
 import type { AdminUserSummary, AdminUserUsage } from "@/types/api";
 import { responderLabel } from "@/utils/models";
@@ -221,13 +223,19 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
 
 function UserRow({ user, onChanged }: { user: AdminUserSummary; onChanged: () => Promise<void> }) {
   const { t } = useI18n();
+  const { user: me } = useAuth();
   const unlimited = t("admin.unlimited");
+  // You can't delete your own account (the backend enforces this too); hide the
+  // action on your own row so the option never appears.
+  const isSelf = me?.id === user.id;
 
   const [editing, setEditing] = useState(false);
   const [perMinute, setPerMinute] = useState("");
   const [perDay, setPerDay] = useState("");
   const [saving, setSaving] = useState(false);
   const [rowError, setRowError] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [usage, setUsage] = useState<AdminUserUsage | null>(null);
   const [usageOpen, setUsageOpen] = useState(false);
@@ -254,6 +262,21 @@ function UserRow({ user, onChanged }: { user: AdminUserSummary; onChanged: () =>
       setRowError(true);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function doDelete() {
+    setDeleting(true);
+    setRowError(false);
+    try {
+      await adminApi.deleteUser(user.id);
+      setConfirming(false);
+      await onChanged();
+    } catch {
+      setRowError(true);
+      setConfirming(false);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -351,10 +374,29 @@ function UserRow({ user, onChanged }: { user: AdminUserSummary; onChanged: () =>
               >
                 {usageOpen ? t("admin.hideUsage") : t("admin.viewUsage")}
               </button>
+              {!isSelf && (
+                <button
+                  className="admin-btn admin-btn--danger"
+                  type="button"
+                  onClick={() => setConfirming(true)}
+                >
+                  {t("admin.delete")}
+                </button>
+              )}
             </>
           )}
         </td>
       </tr>
+
+      <ConfirmDialog
+        open={confirming}
+        title={t("admin.deleteTitle")}
+        message={t("admin.deleteConfirm", { username: user.username })}
+        confirmLabel={deleting ? t("admin.deleting") : t("admin.deleteConfirmBtn")}
+        cancelLabel={t("admin.cancel")}
+        onConfirm={doDelete}
+        onCancel={() => setConfirming(false)}
+      />
 
       {rowError && (
         <tr>

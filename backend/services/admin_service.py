@@ -11,10 +11,11 @@ from sqlalchemy import func, select
 
 from core.config import get_settings
 from core.db import session_scope
-from core.errors import NotFoundError
+from core.errors import ForbiddenError, NotFoundError
 from db.models import UsageEvent, User
 from services.auth_service import AuthService
 from services.quota_service import QuotaService
+from services.rag_service import RagService
 
 # Cap the per-user audit detail so a heavy account can't return an unbounded list.
 _MAX_USAGE_EVENTS = 500
@@ -141,6 +142,26 @@ class AdminService:
             max_requests_per_day=per_day,
         )
         return await AdminService._summary(user)
+
+    @staticmethod
+    async def delete_user(acting_admin_id: int, user_id: int) -> None:
+        """Delete an account and all its data (PH34): chats/messages, saved Single
+        chats, rolling history, usage ledger, BYOK credentials, preferences and
+        sessions all go via the user's FK cascades; RAG vectors are purged after.
+
+        Two guards keep an admin from locking themselves out: you can't delete
+        your **own** account, and the **primary** admin (``ADMIN_USERNAME``) can
+        never be deleted. Both raise 403; an unknown id raises 404."""
+        settings = get_settings()
+        async with session_scope() as session:
+            user = await AdminService._get_user(session, user_id)
+            if user.id == acting_admin_id:
+                raise ForbiddenError("You cannot delete your own account")
+            if user.username == settings.admin_username:
+                raise ForbiddenError("The primary admin account cannot be deleted")
+            await session.delete(user)
+        # Relational rows are gone via cascade; drop the user's vectors too.
+        RagService.delete_user_vectors(user_id)
 
     @staticmethod
     async def update_user(user_id: int, changes: dict[str, Any]) -> dict[str, Any]:

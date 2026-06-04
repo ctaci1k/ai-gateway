@@ -110,6 +110,14 @@ class RagService:
         store.delete_document(user_id, document_id)
 
     @staticmethod
+    def delete_user_vectors(user_id: int) -> None:
+        """Drop all of a user's chunk embeddings (admin account deletion, PH34).
+
+        The ``documents`` rows are removed by the user's FK cascade; this purges
+        the matching vectors so no orphaned embeddings remain in the store."""
+        store.delete_user(user_id)
+
+    @staticmethod
     async def retrieve(
         user_id: int, query_text: str, top_k: int | None = None
     ) -> list[dict[str, Any]]:

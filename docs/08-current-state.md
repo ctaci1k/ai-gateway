@@ -94,7 +94,16 @@
   «Junior»). Ревізія власника 2026-06-04: «з використанням AI» — про процес розробки
   (інструменти), не як продуктовий клейм «AI orchestration» (той лишається прибраним).
   Паритет uk/pl/en.
-- **Гейти:** BE pytest **216** + ruff/black; FE tsc/eslint/prettier/vitest(**39**)/build;
+- **(Додатково, на запит власника) Видалення акаунта в адмінпанелі.** Новий
+  `DELETE /admin/users/{id}` (CSRF, admin-gated) → видаляє акаунт і **всі** його дані
+  (FK-каскади: чати/повідомлення, Single-чати, rolling-історія, ledger, BYOK, налаштування,
+  сесії) + очищення RAG-векторів (`RagService.delete_user_vectors`). Гарди: не можна
+  видалити власний акаунт і первинного адміна (`ADMIN_USERNAME`) → `403` (щоб не
+  заблокувати себе); невідомий → `404`. FE: кнопка «Видалити» в рядку користувача
+  (`AdminPanel`) з `ConfirmDialog`; на власному рядку кнопки нема; `admin-btn--danger`,
+  i18n `admin.delete*` (uk/pl/en). Тести `test_admin_quotas.py` (+4): видалення, 404,
+  заборона self/первинного адміна.
+- **Гейти:** BE pytest **220** + ruff/black; FE tsc/eslint/prettier/vitest(**39**)/build;
   i18n паритет. **Owner-action:** нема нового env; **є Alembic-міграція `0011`** (авто на
   деплої). Контракти — [03](03-api-contracts.md) (`role`/judge-поля у `/reports/*`+CSV); дані
   — [04](04-data-models.md) (`judge_model_name`/`judge_key_fingerprint`); рішення —

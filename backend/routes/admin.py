@@ -7,7 +7,8 @@ mutating endpoints additionally require the CSRF token.
 
 from fastapi import APIRouter, Depends
 
-from core.auth import require_admin, require_csrf
+from core.auth import current_user, require_admin, require_csrf
+from db.models import User
 from schemas.admin import (
     AdminUserList,
     AdminUserSummary,
@@ -60,3 +61,11 @@ async def update_user(user_id: int, payload: UpdateUserRequest):
             user_id, payload.model_dump(exclude_unset=True)
         )
     )
+
+
+@router.delete("/users/{user_id}", dependencies=[Depends(require_csrf)])
+async def delete_user(user_id: int, admin: User = Depends(current_user)):
+    """Delete an account and all its data (PH34). Guards in the service forbid
+    deleting your own account or the primary admin (403); unknown id → 404."""
+    await AdminService.delete_user(admin.id, user_id)
+    return {"deleted": True, "id": user_id}
