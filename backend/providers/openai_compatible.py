@@ -76,10 +76,20 @@ class OpenAICompatibleProvider(BaseProvider):
             "(model produced no visible content)"
         )
 
-    async def generate_full(self, message: str) -> dict:
+    @staticmethod
+    def _build_messages(message: str, history: list[dict] | None) -> list[dict]:
+        """Prepend prior dialogue turns (P3/PH40) before the current message so
+        the responder remembers earlier context within the chat. ``history`` is
+        already clamped/truncated by the route and carries raw role/content
+        pairs (no RAG/language wrapping). Empty/None → just the current turn."""
+        return [*(history or []), {"role": "user", "content": message}]
+
+    async def generate_full(
+        self, message: str, history: list[dict] | None = None
+    ) -> dict:
         response = await asyncio.to_thread(
             self._create,
-            messages=[{"role": "user", "content": message}],
+            messages=self._build_messages(message, history),
             max_tokens=self._max_tokens(),
         )
         choice = response.choices[0]
@@ -96,8 +106,8 @@ class OpenAICompatibleProvider(BaseProvider):
             total_tokens = getattr(usage, "total_tokens", None)
         return {"text": content, "total_tokens": total_tokens}
 
-    async def generate(self, message: str) -> str:
-        return (await self.generate_full(message))["text"]
+    async def generate(self, message: str, history: list[dict] | None = None) -> str:
+        return (await self.generate_full(message, history))["text"]
 
     async def validate_credentials(self) -> None:
         """Lightweight live check that the key/model/endpoint work (BYOK, PH17).
@@ -132,11 +142,11 @@ class OpenAICompatibleProvider(BaseProvider):
         return sorted(i for i in ids if i)
 
     async def generate_stream(
-        self, message: str
+        self, message: str, history: list[dict] | None = None
     ) -> AsyncGenerator[str | StreamUsage, None]:
         def make_iter():
             base = dict(
-                messages=[{"role": "user", "content": message}],
+                messages=self._build_messages(message, history),
                 stream=True,
                 max_tokens=self._max_tokens(),
             )

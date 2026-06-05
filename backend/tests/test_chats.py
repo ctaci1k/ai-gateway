@@ -315,7 +315,7 @@ def test_single_stream_persists_into_named_chat(auth_client, monkeypatch):
     mirroring Compare's chat_id persistence."""
     from services.provider_service import ProviderService
 
-    async def _fake_stream(message, provider_name, provider=None):
+    async def _fake_stream(message, provider_name, provider=None, history=None):
         yield {"type": "token", "content": "hello ", "model": "m", "provider": "groq"}
         yield {"type": "token", "content": "world", "model": "m", "provider": "groq"}
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from core.auth import current_user, require_csrf
+from core.config import get_settings
 from core.logging import get_logger, log_event
 from core.prompts import render_prompt, with_language_directive
 from core.tokens import estimate_tokens
@@ -16,7 +17,7 @@ from memory.chats_repository import SavedChatRepository
 from memory.repository import get_chat_repository
 from memory.usage_repository import UsageRepository
 from schemas.chat_response import ChatResponse, RagSource, StructuredChatResponse
-from schemas.chat_schema import ByokConfig, ChatRequest
+from schemas.chat_schema import ByokConfig, ChatRequest, ChatTurn
 from services.orchestrator_service import OrchestratorService
 from services.provider_service import (
     JUDGE_BYOK_SLOT,
@@ -30,6 +31,27 @@ from services.rag_service import RagService
 router = APIRouter(tags=["chat"])
 
 logger = get_logger("chat")
+
+# In-chat dialogue context budget (P3/PH40). Keep only the last N turns of
+# (user + assistant) so responders remember the thread without blowing the token
+# budget; each message is also truncated to the per-message length. History is
+# transit-only (sent by the frontend), never persisted beyond the per-turn
+# records the gateway already keeps.
+_HISTORY_MAX_TURNS = 10
+
+
+def _clamp_history(turns: list[ChatTurn]) -> list[dict]:
+    """Clamp transient dialogue history to a safe context budget (P3/PH40).
+
+    Keeps the last ``_HISTORY_MAX_TURNS`` turns (≈ 2 messages each) and truncates
+    each message to the configured per-message length, returning OpenAI-style
+    ``{role, content}`` dicts ready to prepend to the responder messages. Empty
+    list when there is no history (a new chat → fresh context)."""
+    if not turns:
+        return []
+    max_len = get_settings().max_message_length
+    recent = turns[-(_HISTORY_MAX_TURNS * 2) :]
+    return [{"role": turn.role, "content": turn.content[:max_len]} for turn in recent]
 
 
 def _build_byok_judge(byok: ByokConfig | None):
@@ -122,6 +144,7 @@ async def chat(request: ChatRequest, user: User = Depends(current_user)):
         judge_label=judge_label,
         judge_prompt_override=judge_prompt_override,
         response_locale=request.locale,
+        history=_clamp_history(request.history),
     )
 
     selector_metadata = result["selector_metadata"]
@@ -307,6 +330,11 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
     # language (fallback = UI locale). The judge isn't involved in Single mode.
     responder_message = with_language_directive(responder_message, request.locale)
 
+    # In-chat history (P3/PH40): prior turns of THIS Single chat, clamped, so the
+    # model remembers context. Raw role/content — only the current message gets
+    # the RAG/language wrapping above.
+    history = _clamp_history(request.history)
+
     async def generate():
         parts: list[str] = []
         model_name: str | None = None
@@ -317,6 +345,7 @@ async def chat_stream(request: ChatRequest, user: User = Depends(current_user)):
                 message=responder_message,
                 provider_name=request.provider,
                 provider=byok_provider,
+                history=history,
             ):
                 event_type = event.get("type")
                 if event_type == "token":

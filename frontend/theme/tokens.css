@@ -32,9 +32,11 @@
   --accent-rgb: 139, 92, 246;
   --accent-contrast: #ffffff;
   --success: var(--green-500);
+  --success-surface: rgba(47, 210, 122, 0.12);
   --danger: var(--red-400);
   --danger-surface: rgba(248, 113, 113, 0.12);
   --warning: var(--amber-500);
+  --warning-surface: rgba(234, 179, 8, 0.12);
 
   /* neutral fills used by the Classic Console chrome (PH24) — subtle slate
      tints layered over surfaces (hover states, icon chips, pills). */

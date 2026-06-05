@@ -1,11 +1,30 @@
 # backend/schemas/chat_schema.py
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from core.config import get_settings
 
 # Configurable upper bound on a single user message (D-5 / limits).
 _MAX_MESSAGE_LENGTH = get_settings().max_message_length
+
+# Hard schema-level cap on transient dialogue history (P3/PH40) — a DoS guard on
+# the request size. The route clamps further to the last N turns and truncates
+# each message (see routes/chat.py); this is only the outer bound.
+_MAX_HISTORY_MESSAGES = 100
+
+
+class ChatTurn(BaseModel):
+    """One prior message of the in-chat dialogue history (P3/PH40).
+
+    Transit-only context the frontend replays so responders remember earlier
+    turns within the SAME chat: for Compare the assistant turn is the winning
+    answer the user saw. Never stored beyond the per-turn records the gateway
+    already keeps; the route clamps the count and truncates each content."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1)
 
 
 class ByokResponder(BaseModel):
@@ -75,6 +94,17 @@ class ChatRequest(BaseModel):
 
     # RAG (PH10): ground responders in the user's uploaded documents.
     rag_enabled: bool = False
+
+    # In-chat dialogue context (P3/PH40): prior turns of THIS chat the responders
+    # should remember. Transit-only — the frontend assembles it from its own
+    # state (Compare → the winning answer per turn). The route keeps only the
+    # last N turns and truncates each message; new chat → empty. RAG/language
+    # wrapping applies to the current message only, never to history; the judge
+    # never receives it.
+    history: list[ChatTurn] = Field(
+        default_factory=list,
+        max_length=_MAX_HISTORY_MESSAGES,
+    )
 
     # UI locale (PH33/B3b, D-23): fallback language for the response when the
     # message language is ambiguous. Responders answer in the message language;

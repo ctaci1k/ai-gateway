@@ -39,7 +39,7 @@ async def _fake_process_chat(**kwargs):
     }
 
 
-async def _fake_stream(message, provider_name="groq", provider=None):
+async def _fake_stream(message, provider_name="groq", provider=None, history=None):
     yield {"type": "token", "content": "hi", "provider": provider_name, "model": "m"}
 
 
@@ -639,7 +639,9 @@ def test_byok_override_records_real_model_not_slot(client, monkeypatch):
     (PH32, D-22) — the core fix: the slot label no longer lies."""
     _ok_validate(monkeypatch)
 
-    async def stream_real_model(message, provider_name="groq", provider=None):
+    async def stream_real_model(
+        message, provider_name="groq", provider=None, history=None
+    ):
         # The transient BYOK provider reports its own model_id (e.g. gpt-4o).
         model = provider.model_name if provider is not None else provider_name
         yield {

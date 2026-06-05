@@ -20,6 +20,7 @@ class OrchestratorService:
         judge_label: dict | None = None,
         judge_prompt_override: str | None = None,
         response_locale: str | None = None,
+        history: list[dict] | None = None,
     ):
 
         if personalization_profile is None:
@@ -41,10 +42,14 @@ class OrchestratorService:
 
         # BYOK (PH17): when a providers_map is supplied the responders run on the
         # user's transient keys; otherwise the built-in singletons are used.
+        # In-chat history (P3/PH40) is prepended to each responder's messages —
+        # raw and unwrapped (no RAG/language directive); the judge below still
+        # only sees the current `message`.
         execution_result = await ProviderService.execute_many(
             message=responder_message,
             provider_names=provider_names,
             providers_map=providers_map,
+            history=history,
         )
 
         all_responses = execution_result["all_responses"]

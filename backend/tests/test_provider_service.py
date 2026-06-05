@@ -18,13 +18,13 @@ class _FakeProvider(BaseProvider):
     providers behave when they don't report usage (PH15).
     """
 
-    async def generate(self, message):
+    async def generate(self, message, history=None):
         raise NotImplementedError
 
     async def generate_structured(self, message):
         return {}
 
-    async def generate_stream(self, message):
+    async def generate_stream(self, message, history=None):
         yield ""
 
 
@@ -33,7 +33,7 @@ class _BlockingProvider(_FakeProvider):
 
     model_name = "slow-model"
 
-    async def generate(self, message):
+    async def generate(self, message, history=None):
         await asyncio.to_thread(time.sleep, 0.15)
         return "done"
 
@@ -41,14 +41,14 @@ class _BlockingProvider(_FakeProvider):
 class _OkProvider(_FakeProvider):
     model_name = "fake-model"
 
-    async def generate(self, message):
+    async def generate(self, message, history=None):
         return f"echo:{message}"
 
 
 class _FailProvider(_FakeProvider):
     model_name = "broken-model"
 
-    async def generate(self, message):
+    async def generate(self, message, history=None):
         raise RuntimeError("boom")
 
 
@@ -145,7 +145,7 @@ async def test_execute_many_marks_is_byok_and_real_model():
     slot is ``is_byok=False`` — and the failed responder is self-describing too."""
     byok = _transient("groq", "gpt-4o")
 
-    async def ok_full(message):
+    async def ok_full(message, history=None):
         return {"text": "hi", "total_tokens": 5}
 
     byok.generate_full = ok_full
@@ -153,7 +153,7 @@ async def test_execute_many_marks_is_byok_and_real_model():
     mistral = _OkProvider()  # built-in singleton → is_byok False
     failing = _transient("scout", "claude-x")
 
-    async def boom(message):
+    async def boom(message, history=None):
         raise RuntimeError("boom")
 
     failing.generate_full = boom
@@ -224,3 +224,48 @@ def test_interaction_record_preserves_is_byok():
     assert record["all_responses"]["groq"]["model"] == "gpt-4o"
     assert record["failed_providers"][0]["is_byok"] is True
     assert record["failed_providers"][0]["model"] == "claude-x"
+
+
+def test_build_messages_prepends_history():
+    """OpenAI-compatible providers prepend in-chat history before the current
+    message so responders remember the thread (P3/PH40)."""
+    from providers.openai_compatible import OpenAICompatibleProvider
+
+    history = [
+        {"role": "user", "content": "first?"},
+        {"role": "assistant", "content": "answer."},
+    ]
+    assert OpenAICompatibleProvider._build_messages("now", history) == [
+        {"role": "user", "content": "first?"},
+        {"role": "assistant", "content": "answer."},
+        {"role": "user", "content": "now"},
+    ]
+    # No history → just the current turn (a fresh chat).
+    assert OpenAICompatibleProvider._build_messages("now", None) == [
+        {"role": "user", "content": "now"},
+    ]
+
+
+async def test_execute_many_forwards_history_to_providers():
+    """execute_many threads in-chat history through to every responder (P3/PH40)."""
+    captured = {}
+
+    class _CapturingProvider(_FakeProvider):
+        model_name = "cap-model"
+
+        async def generate_full(self, message, history=None):
+            captured["message"] = message
+            captured["history"] = history
+            return {"text": "ok", "total_tokens": None}
+
+    history = [
+        {"role": "user", "content": "prev q"},
+        {"role": "assistant", "content": "prev a"},
+    ]
+    result = await ProviderService.execute_many(
+        message="now", providers_map={"groq": _CapturingProvider()}, history=history
+    )
+
+    assert result["all_responses"]["groq"]["response"] == "ok"
+    assert captured["message"] == "now"
+    assert captured["history"] == history

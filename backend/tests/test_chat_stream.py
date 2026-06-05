@@ -11,7 +11,9 @@ from tests.test_rag import FakeEmbeddingClient
 
 
 def _fake_stream_factory(chunks):
-    async def _fake_generate_stream(message, provider_name="groq", provider=None):
+    async def _fake_generate_stream(
+        message, provider_name="groq", provider=None, history=None
+    ):
         for chunk in chunks:
             yield {
                 "type": "token",
@@ -77,7 +79,9 @@ def test_single_stream_error_carries_reason(auth_client, monkeypatch):
     the UI can show a BYOK-specific message (PH18/8, D-13)."""
     client, headers = auth_client
 
-    async def _failing_stream(message, provider_name="groq", provider=None):
+    async def _failing_stream(
+        message, provider_name="groq", provider=None, history=None
+    ):
         raise RuntimeError("429 Too Many Requests: rate limit exceeded")
         yield  # pragma: no cover  (makes this an async generator)
 
@@ -101,7 +105,9 @@ def test_single_stream_rag_emits_sources(auth_client, monkeypatch):
     monkeypatch.setattr(rag_service, "embedding_client", lambda: FakeEmbeddingClient())
     captured = {}
 
-    async def _fake_generate_stream(message, provider_name="groq", provider=None):
+    async def _fake_generate_stream(
+        message, provider_name="groq", provider=None, history=None
+    ):
         captured["message"] = message
         yield {
             "type": "token",
@@ -140,3 +146,30 @@ def test_single_stream_rag_emits_sources(auth_client, monkeypatch):
     # Grounding context was injected into the streamed prompt.
     assert "penguins" in captured["message"]
     assert "antarctica" in captured["message"]
+
+
+def test_clamp_history_keeps_last_turns_and_truncates():
+    """_clamp_history keeps only the last N turns and truncates each message to
+    the per-message length (P3/PH40)."""
+    from core.config import get_settings
+    from routes.chat import _HISTORY_MAX_TURNS, _clamp_history
+    from schemas.chat_schema import ChatTurn
+
+    assert _clamp_history([]) == []
+
+    max_len = get_settings().max_message_length
+    # Build more turns than the cap; each content over the length limit.
+    turns = []
+    for _ in range(_HISTORY_MAX_TURNS + 5):
+        turns.append(ChatTurn(role="user", content="q" * (max_len + 10)))
+        turns.append(ChatTurn(role="assistant", content="a" * (max_len + 10)))
+
+    clamped = _clamp_history(turns)
+
+    # Only the last N turns (≈ 2 messages each) survive.
+    assert len(clamped) == _HISTORY_MAX_TURNS * 2
+    # Every surviving message is truncated to the per-message length.
+    assert all(len(m["content"]) == max_len for m in clamped)
+    # Order/roles preserved, ending on the most recent assistant turn.
+    assert clamped[0]["role"] == "user"
+    assert clamped[-1]["role"] == "assistant"

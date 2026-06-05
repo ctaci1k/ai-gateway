@@ -214,6 +214,7 @@ class ProviderService:
         message: str,
         provider_names: list[str] | None = None,
         providers_map: dict[str, BaseProvider] | None = None,
+        history: list[dict] | None = None,
     ):
 
         if providers_map is None:
@@ -231,7 +232,7 @@ class ProviderService:
 
         tasks = [
             ProviderService._safe_generate(
-                slot=slot, provider=provider, message=message
+                slot=slot, provider=provider, message=message, history=history
             )
             for slot, provider in providers_map.items()
         ]
@@ -336,7 +337,9 @@ class ProviderService:
         }
 
     @staticmethod
-    async def _safe_generate(slot: str, provider, message: str):
+    async def _safe_generate(
+        slot: str, provider, message: str, history: list[dict] | None = None
+    ):
 
         start_time = time.perf_counter()
 
@@ -358,7 +361,7 @@ class ProviderService:
                     "is_byok": False,
                 }
 
-            result = await provider.generate_full(message)
+            result = await provider.generate_full(message, history=history)
 
             execution_time = round(time.perf_counter() - start_time, 2)
 
@@ -402,7 +405,12 @@ class ProviderService:
             }
 
     @staticmethod
-    async def generate_stream(message: str, provider_name: str = "groq", provider=None):
+    async def generate_stream(
+        message: str,
+        provider_name: str = "groq",
+        provider=None,
+        history: list[dict] | None = None,
+    ):
 
         # An explicit provider (e.g. a transient BYOK instance) takes precedence
         # over the named singleton (PH17); otherwise resolve by name.
@@ -414,7 +422,7 @@ class ProviderService:
 
             provider = ProviderService.get_default_provider()
 
-        async for chunk in provider.generate_stream(message):
+        async for chunk in provider.generate_stream(message, history=history):
 
             # A terminal usage marker (PH27/B1) carries real token counts; map it
             # to a usage event the route records (not forwarded to the client).

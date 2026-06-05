@@ -84,6 +84,15 @@ export default function UsagePill() {
   const primaryMax = perMinute != null ? perMinute : (perDay ?? 0);
   const exhausted = primaryRemaining <= 0;
 
+  // P4/PH40: tri-color frame by % of TODAY's remaining quota (works for any
+  // daily cap). Falls back to the exhausted→danger cue when there is no daily
+  // limit (minute-only). The own-key (--ok) pill is a separate branch above.
+  let toneClass = exhausted ? "cc-usage--danger" : "";
+  if (perDay != null && perDay > 0) {
+    const pct = (remainingDay / perDay) * 100;
+    toneClass = pct >= 70 ? "cc-usage--good" : pct >= 40 ? "cc-usage--warn" : "cc-usage--danger";
+  }
+
   return (
     <Dropdown
       label={t("usage.title")}
@@ -91,7 +100,7 @@ export default function UsagePill() {
       renderTrigger={(open, toggle) => (
         <button
           type="button"
-          className={"cc-usage" + (exhausted ? " cc-usage--danger" : "") + (open ? " is-open" : "")}
+          className={["cc-usage", toneClass, open ? "is-open" : ""].filter(Boolean).join(" ")}
           onClick={toggle}
           aria-haspopup="menu"
           aria-expanded={open}

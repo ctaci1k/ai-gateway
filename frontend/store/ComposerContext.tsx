@@ -22,6 +22,7 @@ import { useChats } from "@/store/ChatsContext";
 import { useKeys } from "@/store/KeysContext";
 import { useI18n } from "@/store/LanguageContext";
 import { useRagDocuments } from "@/store/RagContext";
+import { buildChatHistory } from "@/utils/chatHistory";
 import { deriveChatTitle } from "@/utils/chatTitle";
 import type { FailureReason, RagSource, StreamEvent } from "@/types/api";
 
@@ -75,7 +76,7 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
   // BYOK keys are loaded server-side from storage (PH30, D-20); the client no
   // longer sends them. byokModelId is still used to localize an own-key error.
   const { byokModelId } = useKeys();
-  const { activeChatId, createActiveChat, reloadActive } = useChats();
+  const { activeChatId, activeChat, createActiveChat, reloadActive } = useChats();
   // UI locale → response-language fallback when the message language is
   // ambiguous (PH33/B3b).
   const { lang } = useI18n();
@@ -109,6 +110,11 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setStreamingMessage("");
 
+      // In-chat context (P3/PH40): the prior persisted turns of THIS chat, so the
+      // model remembers earlier messages. Snapshot before the optimistic turn is
+      // added; a fresh chat (no saved turns) → empty history.
+      const history = buildChatHistory(activeChat);
+
       // First message of a draft creates the saved Single chat (titled after it,
       // bound to the chosen model). Subsequent messages append to the same chat.
       let chatId = activeChatId;
@@ -129,6 +135,7 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
           ragEnabled,
           chatId,
           locale: lang,
+          history,
         });
         const reader = res.body?.getReader();
         if (!reader) {
@@ -199,7 +206,16 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     },
-    [singleProvider, ragEnabled, byokModelId, activeChatId, createActiveChat, reloadActive, lang],
+    [
+      singleProvider,
+      ragEnabled,
+      byokModelId,
+      activeChatId,
+      activeChat,
+      createActiveChat,
+      reloadActive,
+      lang,
+    ],
   );
 
   const value = useMemo<ComposerValue>(

@@ -13,10 +13,12 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 
+import { useAdminView } from "@/store/AdminViewContext";
 import { useChatMode, type ChatMode } from "@/store/ChatModeContext";
 import { useChats } from "@/store/ChatsContext";
 import { useComposer } from "@/store/ComposerContext";
 import { useI18n } from "@/store/LanguageContext";
+import { useReports } from "@/store/ReportsContext";
 import type { ChatSummary } from "@/types/api";
 
 // Refresh relative timestamps roughly every 30s without re-rendering on every
@@ -62,6 +64,8 @@ export function useChatNav(): ChatNav {
     notice,
   } = useChats();
   const { openSingle } = useComposer();
+  const reports = useReports();
+  const adminView = useAdminView();
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -69,24 +73,37 @@ export function useChatNav(): ChatNav {
     return () => clearInterval(id);
   }, []);
 
+  // P1 (M1): returning to the chat surface dismisses any open Reports/Admin
+  // overlay. Idempotent — closing an already-closed overlay is a no-op. Only the
+  // four navigation entries below call this; the author card and the chat area
+  // deliberately leave overlays untouched.
+  function leaveOverlays() {
+    reports.close();
+    adminView.close();
+  }
+
   function newSingle() {
+    leaveOverlays();
     setMode("single");
     void newChat(); // clears active chat → draft
     openSingle(null); // → model picker
   }
 
   function newCompare() {
+    leaveOverlays();
     setMode("compare");
     void newChat();
   }
 
   function pickSingle(chat: ChatSummary) {
+    leaveOverlays();
     setMode("single");
     void selectChat(chat.id);
     openSingle(chat.model); // bind composer to this chat's fixed model
   }
 
   function pickCompare(chat: ChatSummary) {
+    leaveOverlays();
     setMode("compare");
     void selectChat(chat.id);
   }

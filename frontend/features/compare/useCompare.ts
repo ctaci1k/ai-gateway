@@ -5,9 +5,11 @@
 import { useCallback, useState } from "react";
 
 import { compareChat } from "@/services/compareApi";
+import { useChats } from "@/store/ChatsContext";
 import { DEFAULT_RESPONDER_SLOTS, useKeys } from "@/store/KeysContext";
 import { useI18n } from "@/store/LanguageContext";
 import { useRagDocuments } from "@/store/RagContext";
+import { buildChatHistory } from "@/utils/chatHistory";
 
 export interface RunCompareOptions {
   chatId?: number | null;
@@ -30,6 +32,8 @@ export function useCompare(): UseCompareResult {
   // 4–5 columns. Keys are loaded server-side from storage (PH30, D-20) — no
   // longer sent in the request; only the slot list rides along.
   const { activeResponders } = useKeys();
+  // Prior turns of the active chat → in-chat context (P3/PH40).
+  const { activeChat } = useChats();
   // UI locale → response-language fallback (PH33/B3b).
   const { lang } = useI18n();
   const [loading, setLoading] = useState(false);
@@ -56,6 +60,9 @@ export function useCompare(): UseCompareResult {
           chatId: options.chatId ?? null,
           ragEnabled,
           locale: lang,
+          // The persisted turns of THIS chat (winning answer each) — empty for a
+          // new chat, so context stays fresh.
+          history: buildChatHistory(activeChat),
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
@@ -63,7 +70,7 @@ export function useCompare(): UseCompareResult {
         setLoading(false);
       }
     },
-    [ragEnabled, activeResponders, lang],
+    [ragEnabled, activeResponders, lang, activeChat],
   );
 
   return { loading, error, runCompare };

@@ -2535,6 +2535,18 @@ html {
   background: rgba(47, 210, 122, 0.12);
   border-color: rgba(47, 210, 122, 0.3);
 }
+/* Daily-quota tone (P4/PH40): tri-color frame by % of today's remaining quota —
+   green ≥70%, orange 40–70%, red <40%. Distinct from --ok (the own-key pill). */
+.cc-usage--good {
+  color: var(--success);
+  background: var(--success-surface);
+  border-color: var(--success);
+}
+.cc-usage--warn {
+  color: var(--warning);
+  background: var(--warning-surface);
+  border-color: var(--warning);
+}
 .cc-usage--danger {
   color: var(--danger);
   background: var(--danger-surface);
@@ -3644,6 +3656,12 @@ html {
     left: auto;
     right: auto;
   }
+  /* P4/PH40: on phones the theme toggle moves to the far right, AFTER the account
+     button. Pure CSS order — JSX stays as-is, so desktop is untouched. Every
+     other `.cc-top` child keeps the default order:0 and DOM order. */
+  .cc-theme {
+    order: 1;
+  }
   .cc-stage {
     padding: 10px;
   }
@@ -3741,8 +3759,10 @@ html {
     gap: 6px;
     padding: 0 8px;
   }
+  /* P4/PH40: keep the "X/N" pill visible on phones (was display:none). Trim its
+     horizontal padding so the utility cluster still fits the 360px row. */
   .cc-usage {
-    display: none;
+    padding: 0 9px;
   }
   .cc-iconbtn {
     width: 40px;

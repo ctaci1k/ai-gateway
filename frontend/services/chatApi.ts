@@ -1,6 +1,7 @@
 // frontend/services/chatApi.ts
 
 import { apiFetch, ensureOk } from "@/services/apiClient";
+import type { ChatTurn } from "@/types/api";
 
 export interface StreamChatParams {
   message: string;
@@ -13,6 +14,9 @@ export interface StreamChatParams {
   // UI locale (PH33/B3b): fallback language for the response when the message
   // language is ambiguous. The model answers in the message language otherwise.
   locale?: string;
+  // Prior turns of THIS chat so the model remembers context (P3/PH40). Empty for
+  // a new chat; the backend clamps + truncates.
+  history?: ChatTurn[];
 }
 
 // Single mode: returns the streaming Response (NDJSON) for the caller to read.
@@ -23,6 +27,7 @@ export async function streamChat({
   ragEnabled = false,
   chatId = null,
   locale,
+  history,
 }: StreamChatParams): Promise<Response> {
   const response = await apiFetch("/chat/stream", {
     method: "POST",
@@ -32,6 +37,7 @@ export async function streamChat({
       rag_enabled: ragEnabled,
       ...(chatId != null ? { chat_id: chatId } : {}),
       ...(locale ? { locale } : {}),
+      ...(history && history.length ? { history } : {}),
     },
   });
   return ensureOk(response);

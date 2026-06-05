@@ -110,24 +110,32 @@ class BaseProvider(ABC):
     max_context_window = 8192
 
     @abstractmethod
-    async def generate(self, message: str) -> str:
+    async def generate(self, message: str, history: list[dict] | None = None) -> str:
         pass
 
-    async def generate_full(self, message: str) -> dict[str, Any]:
+    async def generate_full(
+        self, message: str, history: list[dict] | None = None
+    ) -> dict[str, Any]:
         """Generate a response plus usage metadata (PH15, D-10).
 
         Returns ``{"text": str, "total_tokens": int | None}``. Default delegates
         to ``generate`` with unknown token usage; providers that expose usage
-        (see ``OpenAICompatibleProvider``) override this.
+        (see ``OpenAICompatibleProvider``) override this. ``history`` (P3/PH40)
+        carries prior in-chat turns to prepend before the current message.
         """
-        return {"text": await self.generate(message), "total_tokens": None}
+        return {
+            "text": await self.generate(message, history=history),
+            "total_tokens": None,
+        }
 
     @abstractmethod
     async def generate_structured(self, message: str) -> Any:
         pass
 
     @abstractmethod
-    async def generate_stream(self, message: str) -> AsyncGenerator[str, None]:
+    async def generate_stream(
+        self, message: str, history: list[dict] | None = None
+    ) -> AsyncGenerator[str, None]:
         pass
 
     async def generate_selector_response(self, message: str) -> Any:

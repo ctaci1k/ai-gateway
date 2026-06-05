@@ -147,6 +147,14 @@ export interface ChatMessageRecord {
   payload: SavedInteraction;
 }
 
+// One prior message of in-chat dialogue history sent back to the backend so
+// responders remember earlier turns within the SAME chat (P3/PH40). Transit-only
+// (assembled from the saved thread); the backend clamps + truncates it.
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 // PH24 (D-17): chats carry a mode; Single chats are bound to one model.
 export type ChatMode = "single" | "compare";
 
